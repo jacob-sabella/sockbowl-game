@@ -4,6 +4,9 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Controller;
 
+/**
+ * Controller for getting uptime status data from the server
+ */
 @Controller
 public class HeartbeatController {
 
