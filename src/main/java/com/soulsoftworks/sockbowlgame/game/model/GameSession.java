@@ -1,17 +1,26 @@
 package com.soulsoftworks.sockbowlgame.game.model;
 
-import lombok.AllArgsConstructor;
+import com.redis.om.spring.annotations.Document;
+import com.redis.om.spring.annotations.Indexed;
+import com.redis.om.spring.annotations.Searchable;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NonNull;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.redis.core.RedisHash;
-
-import java.util.UUID;
 
 @Data
-@RedisHash("GameSession")
-@AllArgsConstructor
-public class GameSession {
+@Document(timeToLive = 21600)
+@Builder
+public class GameSession{
+
     @Id
-    UUID sessionUuid;
-    GameSettings gameSettings;
+    private String id;
+
+    @Searchable
+    @Indexed
+    @NonNull
+    private String joinCode;
+
+    @NonNull
+    private GameSettings gameSettings;
 }
