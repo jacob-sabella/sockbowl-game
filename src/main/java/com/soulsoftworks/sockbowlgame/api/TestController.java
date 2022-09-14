@@ -1,21 +1,21 @@
 package com.soulsoftworks.sockbowlgame.api;
 
-import com.soulsoftworks.sockbowlgame.game.service.GameService;
+import com.soulsoftworks.sockbowlgame.game.service.SessionManagementService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController("/api/v1/")
 public class TestController {
 
-    private final GameService gameService;
+    private final SessionManagementService sessionManagementService;
 
-    public TestController(GameService gameService) {
-        this.gameService = gameService;
+    public TestController(SessionManagementService sessionManagementService) {
+        this.sessionManagementService = sessionManagementService;
     }
 
     @GetMapping("test")
     public void test(){
-        gameService.createNewGame();
+        sessionManagementService.createNewGame();
     }
 
 }

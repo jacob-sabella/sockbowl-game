@@ -1,12 +1,15 @@
 package com.soulsoftworks.sockbowlgame.redis;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
 
 @Configuration
-@ConfigurationProperties("redis")
+@ConfigurationProperties(prefix = "redis-game-cache")
+@Data
 public class RedisConfig {
 
     private String hostname;
@@ -17,6 +20,7 @@ public class RedisConfig {
 
     @Bean
     JedisConnectionFactory jedisConnectionFactory() {
-        return new JedisConnectionFactory();
+        RedisStandaloneConfiguration redisStandaloneConfiguration = new RedisStandaloneConfiguration(hostname, port);
+        return new JedisConnectionFactory(redisStandaloneConfiguration);
     }
 }

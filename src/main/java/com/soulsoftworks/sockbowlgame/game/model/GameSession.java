@@ -12,7 +12,6 @@ import org.springframework.data.annotation.Id;
 @Document(timeToLive = 21600)
 @Builder
 public class GameSession{
-
     @Id
     private String id;
 
