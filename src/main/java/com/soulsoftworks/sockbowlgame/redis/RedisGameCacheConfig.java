@@ -10,7 +10,7 @@ import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
 @Configuration
 @ConfigurationProperties(prefix = "redis-game-cache")
 @Data
-public class RedisConfig {
+public class RedisGameCacheConfig {
 
     private String hostname;
     private int port;

@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.websocket.controller;
+package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
