@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.messaging.converter.GsonMessageConverter;
+import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -67,10 +68,18 @@ class GameSessionControllerTest {
                 .get(1, SECONDS);
 
         // Send to app endpoint
-        stompSession.send(CREATE_NEW_GAME_SESSION_APP, new CreateGameRequest());
+        StompHeaders stompHeadersReq = new StompHeaders();
+        stompHeadersReq.setDestination(CREATE_NEW_GAME_SESSION_APP);
+        stompHeadersReq.setId("user-1");
+        stompHeadersReq.setAcceptVersion("1.1");
+        stompSession.send(stompHeadersReq, new CreateGameRequest());
 
         // Subscribe to response endpoint
-        stompSession.subscribe(GAME_SESSION_CREATED_TOPIC, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
+        StompHeaders stompHeadersSub = new StompHeaders();
+        stompHeadersSub.setDestination(GAME_SESSION_CREATED_TOPIC);
+        stompHeadersSub.setId("user-1");
+        stompHeadersSub.setAcceptVersion("1.1");
+        stompSession.subscribe(stompHeadersSub, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
 
         // Wait for value
         String response = completableFuture.get(10, SECONDS);
