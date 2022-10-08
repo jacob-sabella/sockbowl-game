@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.controller;
+package com.soulsoftworks.sockbowlgame.controller.helper;
 
 import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;

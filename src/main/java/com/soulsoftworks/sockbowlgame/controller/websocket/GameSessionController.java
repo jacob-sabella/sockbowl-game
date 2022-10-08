@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
@@ -29,12 +30,12 @@ public class GameSessionController {
      */
     @MessageMapping("/create-new-game-session")
     @SendToUser("/topic/game-session-created")
-    public String createNewGame(CreateGameRequest createGameRequest){
+    public GameSessionIdentifiers createNewGame(CreateGameRequest createGameRequest){
 
         GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
 
-        return gson.toJson(GameSessionIdentifiers.builder()
+        return GameSessionIdentifiers.builder()
                 .fromGameSession(gameSession)
-                .build());
+                .build();
     }
 }

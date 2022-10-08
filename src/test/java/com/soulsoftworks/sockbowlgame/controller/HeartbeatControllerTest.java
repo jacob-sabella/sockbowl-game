@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller;
 
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
+import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-import static com.soulsoftworks.sockbowlgame.controller.WebSocketUtils.createTransportClient;
+import static com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils.createTransportClient;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
