@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.websocket;
+package com.soulsoftworks.sockbowlgame.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;

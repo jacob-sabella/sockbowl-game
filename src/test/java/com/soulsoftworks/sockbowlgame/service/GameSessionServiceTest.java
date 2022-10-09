@@ -1,6 +1,8 @@
-package com.soulsoftworks.sockbowlgame.game.service;
+package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.game.model.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.GameSession;
+import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,10 +12,10 @@ import org.testcontainers.utility.DockerImageName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
-class SessionManagementServiceTest {
+class GameSessionServiceTest {
 
     @Autowired
-    private SessionManagementService sessionManagementService;
+    private GameSessionService gameSessionService;
 
     static {
         GenericContainer<?> redisContainer =
@@ -26,11 +28,13 @@ class SessionManagementServiceTest {
 
     @Test
     public void createNewGame_returnedValueEqualRedisStoredValue(){
+        CreateGameRequest createGameRequest = new CreateGameRequest();
+
         // Create new session in Redis and get it back from the method call
-        GameSession gameSession = sessionManagementService.createNewGame();
+        GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
 
         // Get game session out of redis using the ID from createNewGame()
-        GameSession gameSessionFromRedis = sessionManagementService.getGameSessionById(gameSession.getId());
+        GameSession gameSessionFromRedis = gameSessionService.getGameSessionById(gameSession.getId());
 
         // Verify that objects are identical
         assertEquals(gameSession, gameSessionFromRedis);

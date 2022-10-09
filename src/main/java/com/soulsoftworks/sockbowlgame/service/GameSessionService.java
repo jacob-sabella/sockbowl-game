@@ -1,18 +1,24 @@
-package com.soulsoftworks.sockbowlgame.game.service;
+package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.game.model.GameSession;
-import com.soulsoftworks.sockbowlgame.game.model.GameSettings;
-import com.soulsoftworks.sockbowlgame.redis.repository.GameSessionRepository;
+import com.soulsoftworks.sockbowlgame.model.game.GameSession;
+import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
+import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
-public record SessionManagementService(GameSessionRepository gameSessionRepository) {
+public class GameSessionService {
+    private final GameSessionRepository gameSessionRepository;
 
-    public GameSession createNewGame() {
+    public GameSessionService(GameSessionRepository gameSessionRepository) {
+        this.gameSessionRepository = gameSessionRepository;
+    }
+
+    public GameSession createNewGame(CreateGameRequest createGameRequest) {
         // Create a new join code
         String joinCode = generateJoinCode();
 
@@ -23,7 +29,7 @@ public record SessionManagementService(GameSessionRepository gameSessionReposito
 
         // Build a new game session
         GameSession gameSession = GameSession.builder()
-                .gameSettings(new GameSettings())
+                .gameSettings(createGameRequest.getGameSettings())
                 .joinCode(joinCode)
                 .build();
 
@@ -55,4 +61,28 @@ public record SessionManagementService(GameSessionRepository gameSessionReposito
         //TODO Replace this with a pool of pre-populated join codes
         return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
     }
+
+    public GameSessionRepository gameSessionRepository() {
+        return gameSessionRepository;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) return true;
+        if (obj == null || obj.getClass() != this.getClass()) return false;
+        var that = (GameSessionService) obj;
+        return Objects.equals(this.gameSessionRepository, that.gameSessionRepository);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(gameSessionRepository);
+    }
+
+    @Override
+    public String toString() {
+        return "GameSessionService[" +
+                "gameSessionRepository=" + gameSessionRepository + ']';
+    }
+
 }

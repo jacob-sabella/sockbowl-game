@@ -10,8 +10,6 @@ import org.springframework.context.annotation.PropertySource;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableAutoConfiguration
-@ComponentScan
 @EnableRedisDocumentRepositories
 @EnableConfigurationProperties
 public class SockbowlGameApplication {
