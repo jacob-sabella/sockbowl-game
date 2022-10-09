@@ -11,12 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 @Service
-public class GameSessionService {
-    private final GameSessionRepository gameSessionRepository;
-
-    public GameSessionService(GameSessionRepository gameSessionRepository) {
-        this.gameSessionRepository = gameSessionRepository;
-    }
+public record GameSessionService(GameSessionRepository gameSessionRepository) {
 
     public GameSession createNewGame(CreateGameRequest createGameRequest) {
         // Create a new join code
@@ -38,6 +33,17 @@ public class GameSessionService {
         return gameSession;
     }
 
+    public boolean addPlayerToGameSessionWithJoinCode(String joinCode){
+        GameSession gameSession = getGameSessionByJoinCode(joinCode);
+
+        if(gameSession == null){
+            return false;
+        }
+
+        return true;
+
+    }
+
     public void saveGameSession(GameSession gameSession) {
         gameSessionRepository.save(gameSession);
     }
@@ -52,7 +58,7 @@ public class GameSessionService {
         return gameSession.orElse(null);
     }
 
-    public boolean getGameSessionExistsByIdCode(String joinCode) {
+    public boolean isGameSessionExistsByIdCode(String joinCode) {
         Optional<GameSession> gameSession = gameSessionRepository.findGameSessionByJoinCode(joinCode);
         return gameSession.isPresent();
     }
@@ -60,10 +66,6 @@ public class GameSessionService {
     private String generateJoinCode() {
         //TODO Replace this with a pool of pre-populated join codes
         return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
-    }
-
-    public GameSessionRepository gameSessionRepository() {
-        return gameSessionRepository;
     }
 
     @Override

@@ -38,4 +38,16 @@ public class GameSessionController {
                 .fromGameSession(gameSession)
                 .build();
     }
+
+
+    /**
+     * Join a game with a join code
+     * @param joinCode Join code
+     */
+    @MessageMapping("/join-game-session-by-code")
+    @SendToUser("/topic/game-session-joined")
+    public void joinGameSession(String joinCode){
+
+    }
+
 }
