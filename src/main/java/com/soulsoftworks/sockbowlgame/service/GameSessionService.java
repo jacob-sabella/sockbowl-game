@@ -18,7 +18,7 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
         String joinCode = generateJoinCode();
 
         // Verify that the join code is unique
-        while (getGameSessionExistsByIdCode(joinCode)) {
+        while (isGameSessionExistsByIdCode(joinCode)) {
             joinCode = generateJoinCode();
         }
 
@@ -41,7 +41,6 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
         }
 
         return true;
-
     }
 
     public void saveGameSession(GameSession gameSession) {
@@ -64,7 +63,6 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
     }
 
     private String generateJoinCode() {
-        //TODO Replace this with a pool of pre-populated join codes
         return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
     }
 
@@ -79,12 +77,6 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
     @Override
     public int hashCode() {
         return Objects.hash(gameSessionRepository);
-    }
-
-    @Override
-    public String toString() {
-        return "GameSessionService[" +
-                "gameSessionRepository=" + gameSessionRepository + ']';
     }
 
 }
