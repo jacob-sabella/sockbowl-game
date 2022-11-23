@@ -1,6 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -33,14 +35,18 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
         return gameSession;
     }
 
-    public boolean addPlayerToGameSessionWithJoinCode(String joinCode){
-        GameSession gameSession = getGameSessionByJoinCode(joinCode);
+    /**
+     * For a given JoinGameRequest, find the session with the given join code
+     * @param joinGameRequest
+     */
+    public JoinStatus addPlayerToGameSessionWithJoinCode(JoinGameRequest joinGameRequest){
+        GameSession gameSession = getGameSessionByJoinCode(joinGameRequest.getJoinCode());
 
-        if(gameSession == null){
-            return false;
+        if(gameSession != null){
+            gameSession.addPlayer(joinGameRequest);
+            return JoinStatus.SUCCESS;
         }
-
-        return true;
+        return JoinStatus.GAME_DOES_NOT_EXIST;
     }
 
     public void saveGameSession(GameSession gameSession) {
@@ -63,6 +69,7 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
     }
 
     private String generateJoinCode() {
+        //TODO Replace this with a pool of pre-populated join codes
         return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
     }
 
@@ -77,6 +84,12 @@ public record GameSessionService(GameSessionRepository gameSessionRepository) {
     @Override
     public int hashCode() {
         return Objects.hash(gameSessionRepository);
+    }
+
+    @Override
+    public String toString() {
+        return "GameSessionService[" +
+                "gameSessionRepository=" + gameSessionRepository + ']';
     }
 
 }
