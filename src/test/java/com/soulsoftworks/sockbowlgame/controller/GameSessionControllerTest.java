@@ -18,6 +18,8 @@ import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 import org.springframework.web.socket.sockjs.client.SockJsClient;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -51,6 +53,15 @@ class GameSessionControllerTest {
         completableFuture = new CompletableFuture<>();
     }
 
+    static {
+        GenericContainer<?> redisContainer =
+                new GenericContainer<>(DockerImageName.parse("redislabs/redisearch:latest"))
+                        .withExposedPorts(6379);
+        redisContainer.start();
+        System.setProperty("redis-game-cache.host", redisContainer.getHost());
+        System.setProperty("redis-game-cache.port", redisContainer.getMappedPort(6379).toString());
+    }
+
     @Test
     void createNewGame_responseIsSentBackToSpecificSessions() throws ExecutionException, InterruptedException,
             TimeoutException {
@@ -71,7 +82,6 @@ class GameSessionControllerTest {
         StompSession stompSession = stompClient.connect(url, new StompSessionHandlerAdapter(){})
                 .get(1, SECONDS);
 
-
         // Subscribe to response endpoint
         stompSession.subscribe(GAME_SESSION_CREATED_TOPIC, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
 
@@ -88,4 +98,43 @@ class GameSessionControllerTest {
 
         assertEquals(expectedGameSessionIdentifiers, gson.fromJson(response, GameSessionIdentifiers.class));
     }
+
+
+    /*@Test
+    void joinGame() throws ExecutionException, InterruptedException,
+            TimeoutException {
+
+        CreateGameRequest createGameRequest = new CreateGameRequest();
+
+        // Create new session in Redis and get it back from the method call
+        GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
+
+        // Get game session out of redis using the ID from createNewGame()
+        GameSession gameSessionFromRedis = gameSessionService.getGameSessionById(gameSession.getId());
+
+
+        // Setup web socket client
+        WebSocketStompClient stompClient = new WebSocketStompClient(new SockJsClient(createTransportClient()));
+        stompClient.setMessageConverter(new GsonMessageConverterWithStringResponse());
+        String url =  "ws://localhost:" + port + WebSocketConfig.STOMP_ENDPOINT;
+
+        StompSession stompSession = stompClient.connect(url, new StompSessionHandlerAdapter(){})
+                .get(1, SECONDS);
+
+        // Subscribe to response endpoint
+        stompSession.subscribe(GAME_SESSION_CREATED_TOPIC, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
+
+        // Send to app endpoint
+        stompSession.send(CREATE_NEW_GAME_SESSION_APP, new CreateGameRequest());
+
+        // Wait for value
+        String response = completableFuture.get(10, SECONDS);
+
+        // Assert that response is as we expected
+        GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()
+                .fromGameSession(gameSession)
+                .build();
+
+        assertEquals(expectedGameSessionIdentifiers, gson.fromJson(response, GameSessionIdentifiers.class));
+    }*/
 }
