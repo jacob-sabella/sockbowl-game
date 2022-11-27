@@ -1,6 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -12,6 +14,7 @@ import java.util.Optional;
 
 @Service
 public class GameSessionService {
+
     private final GameSessionRepository gameSessionRepository;
 
     public GameSessionService(GameSessionRepository gameSessionRepository) {
@@ -23,7 +26,7 @@ public class GameSessionService {
         String joinCode = generateJoinCode();
 
         // Verify that the join code is unique
-        while (getGameSessionExistsByIdCode(joinCode)) {
+        while (isGameSessionExistsByJoinCode(joinCode)) {
             joinCode = generateJoinCode();
         }
 
@@ -36,6 +39,29 @@ public class GameSessionService {
         // Persist game session in Redis
         saveGameSession(gameSession);
         return gameSession;
+    }
+
+    /**
+     * For a given JoinGameRequest, find the session with the given join code
+     *
+     * @param joinGameRequest
+     */
+    public JoinStatus addPlayerToGameSessionWithJoinCode(JoinGameRequest joinGameRequest) {
+        GameSession gameSession = getGameSessionByJoinCode(joinGameRequest.getJoinCode());
+
+        if (gameSession != null) {
+
+            if (gameSession.getPlayerList().size() == gameSession.getGameSettings().getNumPlayers()) {
+                return JoinStatus.SESSION_FULL;
+            }
+
+            gameSession.addPlayer(joinGameRequest);
+            saveGameSession(gameSession);
+
+            return JoinStatus.SUCCESS;
+        }
+
+        return JoinStatus.GAME_DOES_NOT_EXIST;
     }
 
     public void saveGameSession(GameSession gameSession) {
@@ -52,7 +78,7 @@ public class GameSessionService {
         return gameSession.orElse(null);
     }
 
-    public boolean getGameSessionExistsByIdCode(String joinCode) {
+    public boolean isGameSessionExistsByJoinCode(String joinCode) {
         Optional<GameSession> gameSession = gameSessionRepository.findGameSessionByJoinCode(joinCode);
         return gameSession.isPresent();
     }
@@ -61,28 +87,5 @@ public class GameSessionService {
         //TODO Replace this with a pool of pre-populated join codes
         return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
     }
-
-    public GameSessionRepository gameSessionRepository() {
-        return gameSessionRepository;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) return true;
-        if (obj == null || obj.getClass() != this.getClass()) return false;
-        var that = (GameSessionService) obj;
-        return Objects.equals(this.gameSessionRepository, that.gameSessionRepository);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(gameSessionRepository);
-    }
-
-    @Override
-    public String toString() {
-        return "GameSessionService[" +
-                "gameSessionRepository=" + gameSessionRepository + ']';
-    }
-
 }
+

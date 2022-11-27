@@ -2,10 +2,13 @@ package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
@@ -38,4 +41,17 @@ public class GameSessionController {
                 .fromGameSession(gameSession)
                 .build();
     }
+
+
+    /**
+     * Join a game with a join code
+     */
+    @MessageMapping("/join-game-session-by-code")
+    @SendToUser("/topic/game-session-joined")
+    public String joinGameSessionWithCode(@Header("simpSessionId") String sessionId,
+                                      JoinGameRequest joinGameRequest){
+        joinGameRequest.setSessionId(sessionId);
+        return String.valueOf(gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest));
+    }
+
 }
