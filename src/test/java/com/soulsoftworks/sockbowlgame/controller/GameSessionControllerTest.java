@@ -6,6 +6,7 @@ import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWith
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
@@ -108,10 +109,13 @@ class GameSessionControllerTest {
     void test() throws ExecutionException, InterruptedException,
             TimeoutException {
 
+        GameSettings gameSettings = new GameSettings();
+        gameSettings.setNumPlayers(1);
+
         GameSession gameSession = GameSession.builder()
                 .id("test")
                 .joinCode("TEST")
-                .gameSettings(new GameSettings())
+                .gameSettings(gameSettings)
                 .build();
 
         when(gameSessionService.getGameSessionByJoinCode(any(String.class))).thenReturn(gameSession);
@@ -142,11 +146,7 @@ class GameSessionControllerTest {
         String response = completableFuture.get(10, SECONDS);
 
         // Assert that response is as we expected
-        GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()
-                .fromGameSession(gameSession)
-                .build();
-
-        assertEquals(expectedGameSessionIdentifiers, gson.fromJson(response, GameSessionIdentifiers.class));
+        assertEquals(String.valueOf(JoinStatus.SUCCESS), response);
     }
 
 
