@@ -106,7 +106,7 @@ class GameSessionControllerTest {
     }
 
     @Test
-    void test() throws ExecutionException, InterruptedException,
+    void joinGameSessionWithCode_joiningGameSessionWithCodeSendsBackStatus() throws ExecutionException, InterruptedException,
             TimeoutException {
 
         GameSettings gameSettings = new GameSettings();

@@ -48,7 +48,7 @@ public class GameSessionController {
      */
     @MessageMapping("/join-game-session-by-code")
     @SendToUser("/topic/game-session-joined")
-    public String joinGameSession(@Header("simpSessionId") String sessionId,
+    public String joinGameSessionWithCode(@Header("simpSessionId") String sessionId,
                                       JoinGameRequest joinGameRequest){
         joinGameRequest.setSessionId(sessionId);
         return String.valueOf(gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest));
