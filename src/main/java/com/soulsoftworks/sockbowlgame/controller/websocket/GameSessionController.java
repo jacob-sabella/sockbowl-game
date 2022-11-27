@@ -48,10 +48,10 @@ public class GameSessionController {
      */
     @MessageMapping("/join-game-session-by-code")
     @SendToUser("/topic/game-session-joined")
-    public JoinStatus joinGameSession(@Header("simpSessionId") String sessionId,
+    public String joinGameSession(@Header("simpSessionId") String sessionId,
                                       JoinGameRequest joinGameRequest){
         joinGameRequest.setSessionId(sessionId);
-        return gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        return String.valueOf(gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest));
     }
 
 }

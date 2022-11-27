@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NonNull;
 import org.springframework.data.annotation.Id;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -19,14 +20,14 @@ public class GameSession{
     private String id;
 
     @Searchable
-    @Indexed
     @NonNull
     private String joinCode;
 
     @NonNull
     private GameSettings gameSettings;
 
-    private List<Player> playerList;
+    @Builder.Default
+    private List<Player> playerList = new ArrayList<>();
 
     public void addPlayer(JoinGameRequest joinGameRequest){
         Player player = new Player();

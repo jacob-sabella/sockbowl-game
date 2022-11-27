@@ -6,7 +6,9 @@ import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWith
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
 import com.soulsoftworks.sockbowlgame.model.game.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +46,9 @@ class GameSessionControllerTest {
 
     private static String GAME_SESSION_CREATED_TOPIC = "/user/topic/game-session-created";
     private static String CREATE_NEW_GAME_SESSION_APP = "/app/create-new-game-session";
+
+    private static String GAME_SESSION_JOINED_TOPIC = "/user/topic/game-session-joined";
+    private static String JOIN_GAME_SESSION_BY_CODE_APP = "/app/join-game-session-by-code";
 
     // Used for async
     private CompletableFuture<String> completableFuture;
@@ -99,19 +104,18 @@ class GameSessionControllerTest {
         assertEquals(expectedGameSessionIdentifiers, gson.fromJson(response, GameSessionIdentifiers.class));
     }
 
-
-    /*@Test
-    void joinGame() throws ExecutionException, InterruptedException,
+    @Test
+    void test() throws ExecutionException, InterruptedException,
             TimeoutException {
 
-        CreateGameRequest createGameRequest = new CreateGameRequest();
+        GameSession gameSession = GameSession.builder()
+                .id("test")
+                .joinCode("TEST")
+                .gameSettings(new GameSettings())
+                .build();
 
-        // Create new session in Redis and get it back from the method call
-        GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
-
-        // Get game session out of redis using the ID from createNewGame()
-        GameSession gameSessionFromRedis = gameSessionService.getGameSessionById(gameSession.getId());
-
+        when(gameSessionService.getGameSessionByJoinCode(any(String.class))).thenReturn(gameSession);
+        when(gameSessionService.addPlayerToGameSessionWithJoinCode(any(JoinGameRequest.class))).thenCallRealMethod();
 
         // Setup web socket client
         WebSocketStompClient stompClient = new WebSocketStompClient(new SockJsClient(createTransportClient()));
@@ -122,10 +126,17 @@ class GameSessionControllerTest {
                 .get(1, SECONDS);
 
         // Subscribe to response endpoint
-        stompSession.subscribe(GAME_SESSION_CREATED_TOPIC, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
+        stompSession.subscribe(GAME_SESSION_JOINED_TOPIC, new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
+
+        // Create join game request
+        JoinGameRequest joinGameRequest = new JoinGameRequest();
+        joinGameRequest.setJoinCode("TEST");
+        joinGameRequest.setSessionId("FAKE_SESSION_ID");
+        joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
+        joinGameRequest.setName("Jimmy");
 
         // Send to app endpoint
-        stompSession.send(CREATE_NEW_GAME_SESSION_APP, new CreateGameRequest());
+        stompSession.send(JOIN_GAME_SESSION_BY_CODE_APP, joinGameRequest);
 
         // Wait for value
         String response = completableFuture.get(10, SECONDS);
@@ -136,5 +147,7 @@ class GameSessionControllerTest {
                 .build();
 
         assertEquals(expectedGameSessionIdentifiers, gson.fromJson(response, GameSessionIdentifiers.class));
-    }*/
+    }
+
+
 }
