@@ -1,22 +1,25 @@
-package com.soulsoftworks.sockbowlgame.controller.websocket;
+package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.soulsoftworks.sockbowlgame.model.game.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
+import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
-import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import javax.servlet.http.HttpSession;
 
 /**
  * Controller for all game related messages
  */
 @Controller
+@RequestMapping("api/v1/session/")
 public class GameSessionController {
 
     private final GameSessionService gameSessionService;
@@ -31,8 +34,8 @@ public class GameSessionController {
      *
      * @param createGameRequest The settings to create the game with
      */
-    @MessageMapping("/create-new-game-session")
-    @SendToUser("/topic/game-session-created")
+    @PostMapping("/create-new-game-session")
+    @ResponseBody
     public GameSessionIdentifiers createNewGame(CreateGameRequest createGameRequest){
 
         GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
@@ -46,12 +49,20 @@ public class GameSessionController {
     /**
      * Join a game with a join code
      */
-    @MessageMapping("/join-game-session-by-code")
-    @SendToUser("/topic/game-session-joined")
-    public String joinGameSessionWithCode(@Header("simpSessionId") String sessionId,
-                                      JoinGameRequest joinGameRequest){
-        joinGameRequest.setSessionId(sessionId);
-        return String.valueOf(gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest));
+    @PostMapping("/join-game-session-by-code")
+    @ResponseBody
+    public JoinGameResponse joinGameSessionWithCode(HttpSession session, JoinGameRequest joinGameRequest){
+        joinGameRequest.setSessionId(session.getId());
+        JoinStatus joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+
+        JoinGameResponse joinGameResponse = new JoinGameResponse();
+        joinGameResponse.setJoinStatus(joinStatus);
+
+        if(joinStatus == JoinStatus.SUCCESS){
+            joinGameResponse.setSessionId(session.getId());
+        }
+
+        return joinGameResponse;
     }
 
 }
