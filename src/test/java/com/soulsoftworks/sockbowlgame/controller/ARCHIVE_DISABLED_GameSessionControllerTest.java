@@ -13,6 +13,7 @@ import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,7 +36,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class GameSessionControllerTest {
+@Disabled
+class ARCHIVE_DISABLED_GameSessionControllerTest {
 
     private final static Gson gson = new Gson();
 
