@@ -5,6 +5,7 @@ import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
+import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,9 +63,9 @@ class GameSessionServiceTest {
         joinGameRequest.setName("Jimmy");
 
         // Join game with service
-        JoinStatus joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        JoinGameResponse joinGameResponse = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
 
-        assertEquals(JoinStatus.SUCCESS, joinStatus);
+        assertEquals(JoinStatus.SUCCESS, joinGameResponse.getJoinStatus());
     }
 
     @Test
@@ -86,12 +87,12 @@ class GameSessionServiceTest {
         joinGameRequest.setName("Jimmy");
 
         // Join game with service. This should succeed because there is only 1 player allowed
-        JoinStatus joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
-        assertEquals(JoinStatus.SUCCESS, joinStatus);
+        JoinGameResponse joinGameResponse = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        assertEquals(JoinStatus.SUCCESS, joinGameResponse.getJoinStatus());
 
         // Join game again. This should fail because we maxed out the number of players
-        joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
-        assertEquals(JoinStatus.SESSION_FULL, joinStatus);
+        joinGameResponse = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        assertEquals(JoinStatus.SESSION_FULL, joinGameResponse.getJoinStatus());
     }
 
     @Test
@@ -113,8 +114,8 @@ class GameSessionServiceTest {
         joinGameRequest.setName("Jimmy");
 
         // Join game with service. This should succeed because there is only 1 player allowed
-        JoinStatus joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
-        assertEquals(JoinStatus.GAME_DOES_NOT_EXIST, joinStatus);
+        JoinGameResponse joinGameResponse = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        assertEquals(JoinStatus.GAME_DOES_NOT_EXIST, joinGameResponse.getJoinStatus());
     }
 
 }

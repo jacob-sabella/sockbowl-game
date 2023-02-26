@@ -1,21 +1,26 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
+import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestMapping;
 
-@RestController("/api/v1/")
+@Controller
+@RequestMapping("/api/v1/")
 public class TestController {
 
     private final GameSessionService gameSessionService;
+    private final PacketClient packetClient;
 
-    public TestController(GameSessionService gameSessionService) {
+    public TestController(GameSessionService gameSessionService, PacketClient packetClient) {
         this.gameSessionService = gameSessionService;
+        this.packetClient = packetClient;
     }
 
     @GetMapping("test")
     public void test(){
-        //gameSessionService.createNewGame();
+        System.out.println(packetClient.getPacketById(17));
     }
 
 }

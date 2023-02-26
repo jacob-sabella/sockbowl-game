@@ -40,7 +40,7 @@ public class GameSessionControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private Gson gson = new Gson();
+    private final Gson gson = new Gson();
 
     @MockBean
     private GameSessionService gameSessionService;
@@ -101,8 +101,13 @@ public class GameSessionControllerTest {
     @Test
     public void joinGameSessionWithCode_joiningGameSessionReturnExpectedResult() throws Exception {
 
+        // Mock join game response
+        JoinGameResponse joinGameResponse = new JoinGameResponse();
+        joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
+        joinGameResponse.setSessionId("1");
+
         // Return game session when asked via service
-        when(gameSessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(JoinStatus.SUCCESS);
+        when(gameSessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
 
         // Create expected output
         GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()

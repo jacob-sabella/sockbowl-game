@@ -52,17 +52,7 @@ public class GameSessionController {
     @PostMapping("/join-game-session-by-code")
     @ResponseBody
     public JoinGameResponse joinGameSessionWithCode(HttpSession session, JoinGameRequest joinGameRequest){
-        joinGameRequest.setSessionId(session.getId());
-        JoinStatus joinStatus = gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
-
-        JoinGameResponse joinGameResponse = new JoinGameResponse();
-        joinGameResponse.setJoinStatus(joinStatus);
-
-        if(joinStatus == JoinStatus.SUCCESS){
-            joinGameResponse.setSessionId(session.getId());
-        }
-
-        return joinGameResponse;
+        return gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
     }
 
 }

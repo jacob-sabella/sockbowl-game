@@ -1,7 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.game;
 
 import com.redis.om.spring.annotations.Document;
-import com.redis.om.spring.annotations.Indexed;
 import com.redis.om.spring.annotations.Searchable;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import lombok.Builder;
