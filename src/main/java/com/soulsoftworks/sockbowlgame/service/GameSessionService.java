@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
@@ -10,7 +10,6 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -67,7 +66,7 @@ public class GameSessionService {
         }
 
         if(joinGameResponse.getJoinStatus() == JoinStatus.SUCCESS){
-            joinGameResponse.setSessionId(gameSession.getId());
+            joinGameResponse.setGameSessionId(gameSession.getId());
         }
 
         return joinGameResponse;

@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game;
+package com.soulsoftworks.sockbowlgame.model.game.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

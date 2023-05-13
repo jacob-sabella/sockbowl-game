@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game;
+package com.soulsoftworks.sockbowlgame.model.game.config;
 
 import com.redis.om.spring.annotations.Document;
 import com.redis.om.spring.annotations.Searchable;
@@ -30,7 +30,7 @@ public class GameSession{
 
     public void addPlayer(JoinGameRequest joinGameRequest){
         Player player = new Player();
-        player.setSessionId(joinGameRequest.getSessionId());
+        player.setPlayerId(joinGameRequest.getPlayerSessionId());
         player.setName(joinGameRequest.getName());
         player.setPlayerMode(joinGameRequest.getPlayerMode());
         playerList.add(player);

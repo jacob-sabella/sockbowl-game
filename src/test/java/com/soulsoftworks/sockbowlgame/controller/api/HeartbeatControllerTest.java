@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.controller;
+package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;

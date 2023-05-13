@@ -4,10 +4,10 @@ import com.google.gson.Gson;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.GameSettings;
-import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
-import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.config.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
@@ -137,7 +137,7 @@ class ARCHIVE_DISABLED_GameSessionControllerTest {
         // Create join game request
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode("TEST");
-        joinGameRequest.setSessionId("FAKE_SESSION_ID");
+        joinGameRequest.setPlayerSessionId("FAKE_SESSION_ID");
         joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
         joinGameRequest.setName("Jimmy");
 

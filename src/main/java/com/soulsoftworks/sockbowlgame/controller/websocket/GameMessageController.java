@@ -1,31 +1,22 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
-import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
-import org.springframework.messaging.handler.annotation.Header;
+import com.soulsoftworks.sockbowlgame.service.GameMessageService;
+import org.springframework.messaging.handler.annotation.Headers;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
 
+import java.util.Map;
+
 @Controller
+@MessageMapping("game")
 public class GameMessageController {
-
-    private final GameSessionService gameSessionService;
-    private final Gson gson = new Gson();
-
-    public GameMessageController(GameSessionService gameSessionService) {
-        this.gameSessionService = gameSessionService;
+    private final GameMessageService gameMessageService;
+    public GameMessageController(GameMessageService gameMessageService) {
+        this.gameMessageService = gameMessageService;
+    }
+    @MessageMapping("/request-state")
+    public void getGameState(@Headers Map<String, Object> headers) throws Exception {
+        gameMessageService.sendGameStateToPlayer(headers.get("simpSessionId").toString());
     }
 
-    /**
-     * Join a game with a join code
-     */
-    @MessageMapping("/game-session-listen")
-    @SendToUser("/topic/game-session-message")
-    public String joinGameSessionWithCode(@Header("simpSessionId") String sessionId,
-                                          JoinGameRequest joinGameRequest){
-        joinGameRequest.setSessionId(sessionId);
-        return String.valueOf(gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest));
-    }
 }

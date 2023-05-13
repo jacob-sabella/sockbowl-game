@@ -1,12 +1,11 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
-import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.config.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +19,8 @@ class GameSessionServiceTest {
 
     @Autowired
     private GameSessionService gameSessionService;
+
+
 
     static {
         GenericContainer<?> redisContainer =
@@ -58,7 +59,7 @@ class GameSessionServiceTest {
         // Create join game request
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode(gameSessionFromRedis.getJoinCode());
-        joinGameRequest.setSessionId("FAKE_SESSION_ID");
+        joinGameRequest.setPlayerSessionId("FAKE_PLAYER_SESSION_ID");
         joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
         joinGameRequest.setName("Jimmy");
 
@@ -82,7 +83,7 @@ class GameSessionServiceTest {
         // Create join game request
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode(gameSessionFromRedis.getJoinCode());
-        joinGameRequest.setSessionId("FAKE_SESSION_ID");
+        joinGameRequest.setPlayerSessionId("FAKE_PLAYER_SESSION_ID");
         joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
         joinGameRequest.setName("Jimmy");
 
@@ -109,7 +110,7 @@ class GameSessionServiceTest {
         // Create join game request with invalid code
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode("AAAA");
-        joinGameRequest.setSessionId("FAKE_SESSION_ID");
+        joinGameRequest.setPlayerSessionId("FAKE_PLAYER_SESSION_ID");
         joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
         joinGameRequest.setName("Jimmy");
 

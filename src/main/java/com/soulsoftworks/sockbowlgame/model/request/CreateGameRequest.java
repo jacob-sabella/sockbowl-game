@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.request;
 
-import com.soulsoftworks.sockbowlgame.model.game.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSettings;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

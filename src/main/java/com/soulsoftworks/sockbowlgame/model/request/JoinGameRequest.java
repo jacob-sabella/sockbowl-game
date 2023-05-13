@@ -1,12 +1,18 @@
 package com.soulsoftworks.sockbowlgame.model.request;
 
-import com.soulsoftworks.sockbowlgame.model.game.PlayerMode;
+import com.soulsoftworks.sockbowlgame.model.game.config.PlayerMode;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class JoinGameRequest {
-    private String sessionId;
-    private String joinCode;
-    private String name;
-    private PlayerMode playerMode;
+    String playerSessionId;
+    String joinCode;
+    String name;
+    PlayerMode playerMode;
 }

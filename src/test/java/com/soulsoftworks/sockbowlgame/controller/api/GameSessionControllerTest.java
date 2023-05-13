@@ -3,10 +3,10 @@ package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.game.GameMode;
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.GameSettings;
-import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameMode;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
@@ -104,7 +104,7 @@ public class GameSessionControllerTest {
         // Mock join game response
         JoinGameResponse joinGameResponse = new JoinGameResponse();
         joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
-        joinGameResponse.setSessionId("1");
+        joinGameResponse.setGameSessionId("1");
 
         // Return game session when asked via service
         when(gameSessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
@@ -126,7 +126,7 @@ public class GameSessionControllerTest {
         JoinGameResponse response = objectMapper.readValue(contentAsString, JoinGameResponse.class);
 
         assertEquals(JoinStatus.SUCCESS, response.getJoinStatus());
-        assertEquals("1", response.getSessionId());
+        assertEquals("1", response.getGameSessionId());
     }
 
 }

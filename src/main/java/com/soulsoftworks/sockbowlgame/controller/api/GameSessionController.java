@@ -1,24 +1,21 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.game.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpSession;
 
 /**
  * Controller for all game related messages
  */
-@Controller
+@RestController
 @RequestMapping("api/v1/session/")
 public class GameSessionController {
 
@@ -35,8 +32,7 @@ public class GameSessionController {
      * @param createGameRequest The settings to create the game with
      */
     @PostMapping("/create-new-game-session")
-    @ResponseBody
-    public GameSessionIdentifiers createNewGame(CreateGameRequest createGameRequest){
+    public GameSessionIdentifiers createNewGame(@RequestBody CreateGameRequest createGameRequest){
 
         GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
 
@@ -45,13 +41,11 @@ public class GameSessionController {
                 .build();
     }
 
-
     /**
      * Join a game with a join code
      */
     @PostMapping("/join-game-session-by-code")
-    @ResponseBody
-    public JoinGameResponse joinGameSessionWithCode(HttpSession session, JoinGameRequest joinGameRequest){
+    public JoinGameResponse joinGameSessionWithCode(@RequestBody JoinGameRequest joinGameRequest){
         return gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
     }
 

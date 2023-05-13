@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game;
+package com.soulsoftworks.sockbowlgame.model.game.config;
 
 public enum JoinStatus {
     SUCCESS,
