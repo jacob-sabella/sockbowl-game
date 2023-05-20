@@ -1,34 +1,41 @@
 package com.soulsoftworks.sockbowlgame.service;
 
+import com.redis.testcontainers.RedisContainer;
 import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.game.config.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
+@Testcontainers
 class GameSessionServiceTest {
 
     @Autowired
     private GameSessionService gameSessionService;
 
+    @Container
+    private static final RedisContainer REDIS_CONTAINER =
+            new RedisContainer(DockerImageName.parse("redislabs/redisearch:latest")).withExposedPorts(6379);
 
-
-    static {
-        GenericContainer<?> redisContainer =
-                new GenericContainer<>(DockerImageName.parse("redislabs/redisearch:latest"))
-                        .withExposedPorts(6379);
-        redisContainer.start();
-        System.setProperty("redis-game-cache.host", redisContainer.getHost());
-        System.setProperty("redis-game-cache.port", redisContainer.getMappedPort(6379).toString());
+    @DynamicPropertySource
+    private static void registerRedisProperties(DynamicPropertyRegistry registry) {
+        registry.add("redis-game-cache.host", REDIS_CONTAINER::getHost);
+        registry.add("redis-game-cache.port", () -> REDIS_CONTAINER.getMappedPort(6379).toString());
     }
 
     @Test
