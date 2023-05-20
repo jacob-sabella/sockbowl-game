@@ -2,12 +2,13 @@ package com.soulsoftworks.sockbowlgame.service;
 
 import com.google.gson.Gson;
 import com.redis.testcontainers.RedisContainer;
+import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.config.Player;
-import com.soulsoftworks.sockbowlgame.model.game.config.PlayerMode;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.Player;
+import com.soulsoftworks.sockbowlgame.model.game.state.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.game.socket.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
@@ -58,13 +59,12 @@ class GameMessageServiceTest {
     private static final Gson gson = new Gson();
 
     @Container
-    private static final RedisContainer REDIS_CONTAINER =
-            new RedisContainer(DockerImageName.parse("redislabs/redisearch:latest")).withExposedPorts(6379);
+    private static final RedisContainer REDIS_CONTAINER = TestcontainersUtil.getRedisContainer();
 
     @DynamicPropertySource
     private static void registerRedisProperties(DynamicPropertyRegistry registry) {
-        registry.add("redis-game-cache.host", REDIS_CONTAINER::getHost);
-        registry.add("redis-game-cache.port", () -> REDIS_CONTAINER.getMappedPort(6379).toString());
+        registry.add("sockbowl.redis.game-cache.host", REDIS_CONTAINER::getHost);
+        registry.add("sockbowl.redis.game-cache.port", () -> REDIS_CONTAINER.getMappedPort(6379).toString());
     }
 
     @BeforeEach

@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.response;
 
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import lombok.Builder;
 import lombok.Data;
 

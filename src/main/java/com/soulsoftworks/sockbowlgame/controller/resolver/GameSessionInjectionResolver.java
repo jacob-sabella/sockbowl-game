@@ -1,8 +1,8 @@
 package com.soulsoftworks.sockbowlgame.controller.resolver;
 
 import com.soulsoftworks.sockbowlgame.controller.exception.PlayerVerificationException;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.config.Player;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.model.request.PlayerIdentifiers;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;

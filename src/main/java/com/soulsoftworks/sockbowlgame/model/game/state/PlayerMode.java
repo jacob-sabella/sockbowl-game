@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game.config;
+package com.soulsoftworks.sockbowlgame.model.game.state;
 
 public enum PlayerMode {
     BUZZER_ONLY,

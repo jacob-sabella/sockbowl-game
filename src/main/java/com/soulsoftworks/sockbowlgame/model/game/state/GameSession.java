@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game.config;
+package com.soulsoftworks.sockbowlgame.model.game.state;
 
 import com.redis.om.spring.annotations.Document;
 import com.redis.om.spring.annotations.Searchable;
