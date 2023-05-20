@@ -8,6 +8,7 @@ import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.config.GameSettings;
 import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -85,7 +87,8 @@ public class GameSessionControllerTest {
 
         // Run endpoint and get response
         ResultActions resultActions = this.mockMvc.perform(post("/api/v1/session/create-new-game-session")
-                        .content(gson.toJson(gameSettings)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(gson.toJson(createGameRequest)))
                 .andDo(print())
                 .andExpect(status().isOk());
 
@@ -106,6 +109,9 @@ public class GameSessionControllerTest {
         joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         joinGameResponse.setGameSessionId("1");
 
+        // Create join game request
+        JoinGameRequest joinGameRequest = new JoinGameRequest();
+
         // Return game session when asked via service
         when(gameSessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
 
@@ -116,7 +122,9 @@ public class GameSessionControllerTest {
 
         // Run endpoint and get response
         ResultActions resultActions = this.mockMvc.perform(post("/api/v1/session/join-game-session-by-code")
-                        .session(mockHttpSession))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .session(mockHttpSession)
+                        .content(gson.toJson(joinGameRequest)))
                 .andDo(print())
                 .andExpect(status().isOk());
 

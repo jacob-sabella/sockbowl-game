@@ -10,6 +10,7 @@ import org.springframework.data.annotation.Id;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @Document(timeToLive = 21600)
@@ -33,6 +34,13 @@ public class GameSession{
         player.setPlayerId(joinGameRequest.getPlayerSessionId());
         player.setName(joinGameRequest.getName());
         player.setPlayerMode(joinGameRequest.getPlayerMode());
+        player.setPlayerSecret(UUID.randomUUID().toString());
+
+        // First player to join is the game owner
+        if(playerList.size() == 0){
+            player.setGameOwner(true);
+        }
+
         playerList.add(player);
     }
 

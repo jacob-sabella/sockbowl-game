@@ -11,7 +11,7 @@ import org.springframework.stereotype.Controller;
 public class HeartbeatController {
 
     @MessageMapping("/heartbeat")
-    @SendTo("/topic/heartbeat")
+    @SendTo("/queue/heartbeat")
     public String heartbeat() throws Exception {
         return "Hello! I am alive!";
     }

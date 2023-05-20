@@ -26,7 +26,7 @@ class HeartbeatControllerTest {
     @Value("${local.server.port}")
     private int port;
 
-    private static String HEARTBEAT_TOPIC = "/topic/heartbeat";
+    private static String HEARTBEAT_TOPIC = "/queue/heartbeat";
     private static String HEARTBEAT_APP = "/app/heartbeat";
 
     // Used for async

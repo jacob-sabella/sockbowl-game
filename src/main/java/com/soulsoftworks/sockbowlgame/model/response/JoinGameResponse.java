@@ -7,4 +7,5 @@ import lombok.Data;
 public class JoinGameResponse {
     JoinStatus joinStatus;
     String gameSessionId;
+    String playerSecret;
 }

@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface GameSessionRepository extends RedisDocumentRepository<GameSession, String> {
     Optional<GameSession> findGameSessionByJoinCode(String joinCode);
+
+    Optional<GameSession> findGameSessionById(String id);
 }
