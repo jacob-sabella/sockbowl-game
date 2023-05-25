@@ -6,7 +6,7 @@ import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
-import com.soulsoftworks.sockbowlgame.model.game.socket.MessageQueues;
+import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;

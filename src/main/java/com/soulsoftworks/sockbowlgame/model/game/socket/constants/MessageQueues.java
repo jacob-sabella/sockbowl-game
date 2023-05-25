@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game.socket;
+package com.soulsoftworks.sockbowlgame.model.game.socket.constants;
 
 public class MessageQueues {
     public static final String GAME_STATE_QUEUE = "queue/state";

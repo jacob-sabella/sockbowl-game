@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.state.Team;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
@@ -35,6 +36,13 @@ public class GameSessionService {
                 .gameSettings(createGameRequest.getGameSettings())
                 .joinCode(joinCode)
                 .build();
+
+        // Add teams to game session
+        for(int i = 1; i <= gameSession.getGameSettings().getNumTeams(); i++){
+            Team team = new Team();
+            team.setTeamName("Team " + (i));
+            gameSession.getTeams().add(team);
+        }
 
         // Persist game session in Redis
         saveGameSession(gameSession);

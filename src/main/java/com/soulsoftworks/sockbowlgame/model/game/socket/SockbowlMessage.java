@@ -1,5 +1,5 @@
 package com.soulsoftworks.sockbowlgame.model.game.socket;
 
-public interface SockbowlMessage {
-    public String getMessageType();
+public abstract class SockbowlMessage {
+    public abstract String getMessageType();
 }

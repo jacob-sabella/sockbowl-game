@@ -4,7 +4,6 @@ import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
@@ -13,7 +12,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.MountableFile;
 
 import java.util.concurrent.TimeUnit;
 
@@ -54,8 +52,7 @@ public class RabbitServiceTest {
         });
     }
 
-    private static class TestSockbowlMessage implements SockbowlMessage{
-
+    private static class TestSockbowlMessage extends SockbowlMessage{
         String testString = "TEST";
 
         @Override

@@ -1,12 +1,10 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.socket.MessageQueues;
+import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 

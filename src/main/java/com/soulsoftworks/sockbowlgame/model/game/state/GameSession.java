@@ -29,6 +29,9 @@ public class GameSession{
     @Builder.Default
     private List<Player> playerList = new ArrayList<>();
 
+    @Builder.Default
+    private List<Team> teams = new ArrayList<>();
+
     public void addPlayer(JoinGameRequest joinGameRequest){
         Player player = new Player();
         player.setPlayerId(joinGameRequest.getPlayerSessionId());
