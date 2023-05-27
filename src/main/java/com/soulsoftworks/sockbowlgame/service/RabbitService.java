@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlMessage;
+import com.soulsoftworks.sockbowlgame.config.RabbitMQConfig;
+import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
@@ -8,16 +9,14 @@ import org.springframework.stereotype.Service;
 public class RabbitService {
 
     private final RabbitTemplate rabbitTemplate;
+    private final RabbitMQConfig rabbitMQConfig;
 
-    public RabbitService(RabbitTemplate rabbitTemplate) {
+    public RabbitService(RabbitTemplate rabbitTemplate, RabbitMQConfig rabbitMQConfig) {
         this.rabbitTemplate = rabbitTemplate;
+        this.rabbitMQConfig = rabbitMQConfig;
     }
 
-    public SockbowlMessage getNextMessage(){
-        return (SockbowlMessage) rabbitTemplate.receiveAndConvert("GAME_QUEUE");
-    }
-
-    public void enqueueMessage(SockbowlMessage message){
-        rabbitTemplate.convertAndSend("GAME_QUEUE", message);
+    public void enqueueMessage(SockbowlInMessage message){
+        rabbitTemplate.convertAndSend(rabbitMQConfig.GAME_QUEUE, message);
     }
 }

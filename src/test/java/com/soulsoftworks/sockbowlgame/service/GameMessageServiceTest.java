@@ -7,7 +7,7 @@ import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
 import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.game.state.PlayerMode;
@@ -149,7 +149,7 @@ class GameMessageServiceTest {
         gameMessageService.sendGameStateToPlayer(gameSessionInjection);
 
         String response = completableFuture.get(10, TimeUnit.SECONDS);
-        ProcessError responseError = gson.fromJson(response, ProcessError.class);
+        ProcessErrorMessage responseError = gson.fromJson(response, ProcessErrorMessage.class);
 
         assertEquals("Game session not found.", responseError.getError());
     }

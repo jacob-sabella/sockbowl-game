@@ -1,9 +1,10 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,9 @@ public class RabbitServiceTest {
     @Autowired
     private RabbitService rabbitService;
 
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
 
     @DynamicPropertySource
     static void rabbitMqProperties(DynamicPropertyRegistry registry) {
@@ -40,19 +44,19 @@ public class RabbitServiceTest {
 
     @Test
     void enqueueMessageTest() {
-        TestSockbowlMessage testSockbowlMessage = new TestSockbowlMessage();
+        TestSockbowlInMessage testSockbowlMessage = new TestSockbowlInMessage();
 
         rabbitService.enqueueMessage(testSockbowlMessage);
 
         // wait for the message to be delivered
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
-            SockbowlMessage receivedMessage = rabbitService.getNextMessage();
+            SockbowlInMessage receivedMessage = (SockbowlInMessage) rabbitTemplate.receiveAndConvert("GAME_QUEUE");;
             assertNotNull(receivedMessage);
             assertEquals("GENERIC", receivedMessage.getMessageType());
         });
     }
 
-    private static class TestSockbowlMessage extends SockbowlMessage{
+    private static class TestSockbowlInMessage extends SockbowlInMessage {
         String testString = "TEST";
 
         @Override
