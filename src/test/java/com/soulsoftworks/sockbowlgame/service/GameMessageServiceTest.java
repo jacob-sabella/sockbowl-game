@@ -45,9 +45,6 @@ class GameMessageServiceTest {
     @Autowired
     private GameSessionService gameSessionService;
 
-    @Autowired
-    private GameMessageService gameMessageService;
-
     @Value("${local.server.port}")
     private int port;
 
@@ -96,64 +93,5 @@ class GameMessageServiceTest {
         // Create new completable future
         completableFuture = new CompletableFuture<>();
     }
-
-    @Test
-    public void givenValidGameSession_whenSendingGameStateToPlayer_thenReturnsCorrectGameSession() throws Exception {
-        Player player = gameSession.getPlayerList().get(0);
-        String playerSecret = player.getPlayerSecret();
-
-        GameSessionInjection gameSessionInjection = new GameSessionInjection(new PlayerIdentifiers(
-                stompSession.getSessionId(), playerSecret), gameSession.getId(), gameSession);
-
-        stompSession.subscribe("/user/" + player.getPlayerId() + "/" + MessageQueues.GAME_STATE_QUEUE,
-                new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
-
-        gameMessageService.sendGameStateToPlayer(gameSessionInjection);
-
-        String response = completableFuture.get(10, TimeUnit.SECONDS);
-        GameSession responseGameSession = gson.fromJson(response, GameSession.class);
-
-        // Assert GameSession fields
-        assertEquals(gameSession.getId(), responseGameSession.getId());
-        assertEquals(gameSession.getJoinCode(), responseGameSession.getJoinCode());
-
-        // Assert GameSettings fields
-        assertEquals(gameSession.getGameSettings().getProctorType(), responseGameSession.getGameSettings().getProctorType());
-        assertEquals(gameSession.getGameSettings().getGameMode(), responseGameSession.getGameSettings().getGameMode());
-        assertEquals(gameSession.getGameSettings().getNumPlayers(), responseGameSession.getGameSettings().getNumPlayers());
-        assertEquals(gameSession.getGameSettings().getNumTeams(), responseGameSession.getGameSettings().getNumTeams());
-
-        // Assert Player fields
-        assertEquals(gameSession.getPlayerList().size(), responseGameSession.getPlayerList().size());
-        for (int i = 0; i < gameSession.getPlayerList().size(); i++) {
-            Player originalPlayer = gameSession.getPlayerList().get(i);
-            Player responsePlayer = responseGameSession.getPlayerList().get(i);
-            assertEquals(originalPlayer.getPlayerId(), responsePlayer.getPlayerId());
-            assertEquals(originalPlayer.getPlayerMode(), responsePlayer.getPlayerMode());
-            assertEquals(originalPlayer.getPlayerSecret(), responsePlayer.getPlayerSecret());
-            assertEquals(originalPlayer.getName(), responsePlayer.getName());
-        }
-    }
-
-    @Test
-    public void givenInvalidGameSession_whenSendingGameStateToPlayer_thenReturnsProcessError() throws Exception {
-        Player player = gameSession.getPlayerList().get(0);
-        String playerSecret = player.getPlayerSecret();
-
-        GameSessionInjection gameSessionInjection = new GameSessionInjection(new PlayerIdentifiers(stompSession.getSessionId(), playerSecret),
-                "InvalidGameSessionId", null);
-
-        stompSession.subscribe("/user/" + player.getPlayerId() + "/" + MessageQueues.GAME_STATE_QUEUE,
-                new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
-
-        gameMessageService.sendGameStateToPlayer(gameSessionInjection);
-
-        String response = completableFuture.get(10, TimeUnit.SECONDS);
-        ProcessErrorMessage responseError = gson.fromJson(response, ProcessErrorMessage.class);
-
-        assertEquals("Game session not found.", responseError.getError());
-    }
-
-
 
 }

@@ -1,10 +1,12 @@
 package com.soulsoftworks.sockbowlgame.model.game.socket;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 @Data
 @SuperBuilder
+@NoArgsConstructor
 public abstract class SockbowlInMessage {
 
     private String originatingPlayerId;

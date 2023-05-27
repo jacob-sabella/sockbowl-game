@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame;
 
 import com.redis.testcontainers.RedisContainer;
-import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 public class TestcontainersUtil {
@@ -9,7 +9,7 @@ public class TestcontainersUtil {
         return new RedisContainer(DockerImageName.parse("redislabs/redisearch:latest")).withExposedPorts(6379);
     }
 
-    public static RabbitMQContainer getRabbitMQContainer(){
-        return new RabbitMQContainer("rabbitmq:management");
+    public static KafkaContainer getKafkaContainer() {
+        return new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:latest"));
     }
 }
