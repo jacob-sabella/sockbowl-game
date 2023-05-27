@@ -28,6 +28,7 @@ dependencies {
     implementation 'org.springframework.cloud:spring-cloud-dependencies:2022.0.1'
     implementation 'io.github.openfeign:feign-okhttp:12.1'
     implementation 'io.github.openfeign:feign-httpclient:12.1'
+    implementation 'org.springframework.kafka:spring-kafka'
     implementation 'com.redis.om:redis-om-spring:0.6.0'
 
     compileOnly 'org.projectlombok:lombok'
@@ -36,7 +37,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.testcontainers:testcontainers:1.17.6'
     testImplementation 'org.testcontainers:junit-jupiter:1.17.6'
-    testImplementation 'org.testcontainers:rabbitmq:1.17.6'
+    testImplementation 'org.testcontainers:kafka:1.17.6'
     testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
     testImplementation 'org.awaitility:awaitility:4.0.3'
 

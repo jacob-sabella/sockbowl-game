@@ -12,9 +12,5 @@ public class GameMessageController {
     public GameMessageController(GameMessageService gameMessageService) {
         this.gameMessageService = gameMessageService;
     }
-    @MessageMapping("/request-state")
-    public void getGameState(GameSessionInjection gameSessionInjection) {
-        gameMessageService.sendGameStateToPlayer(gameSessionInjection);
-    }
 
 }
