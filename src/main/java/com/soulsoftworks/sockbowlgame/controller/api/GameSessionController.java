@@ -1,16 +1,13 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.GameSessionService;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-
-import javax.servlet.http.HttpSession;
 
 /**
  * Controller for all game related messages

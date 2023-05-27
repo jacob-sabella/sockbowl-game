@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.redis;
+package com.soulsoftworks.sockbowlgame.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -8,7 +8,7 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
 
 @Configuration
-@ConfigurationProperties(prefix = "redis-game-cache")
+@ConfigurationProperties(prefix = "sockbowl.redis.game-cache")
 @Data
 public class RedisGameCacheConfig {
 

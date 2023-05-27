@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.repository;
 
 import com.redis.om.spring.repository.RedisDocumentRepository;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;

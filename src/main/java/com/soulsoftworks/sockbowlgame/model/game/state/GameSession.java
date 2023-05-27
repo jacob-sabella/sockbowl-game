@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game.config;
+package com.soulsoftworks.sockbowlgame.model.game.state;
 
 import com.redis.om.spring.annotations.Document;
 import com.redis.om.spring.annotations.Searchable;
@@ -28,6 +28,9 @@ public class GameSession{
 
     @Builder.Default
     private List<Player> playerList = new ArrayList<>();
+
+    @Builder.Default
+    private List<Team> teams = new ArrayList<>();
 
     public void addPlayer(JoinGameRequest joinGameRequest){
         Player player = new Player();

@@ -3,10 +3,10 @@ package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameMode;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.config.GameSettings;
-import com.soulsoftworks.sockbowlgame.model.game.config.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameMode;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.game.state.JoinStatus;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
