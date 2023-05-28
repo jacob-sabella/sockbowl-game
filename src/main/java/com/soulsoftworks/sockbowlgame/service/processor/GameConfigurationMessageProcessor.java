@@ -1,13 +1,38 @@
-package com.soulsoftworks.sockbowlgame.service;
+package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
+import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
 @Service
-public class GameConfigurationService {
+public class GameConfigurationMessageProcessor extends GameMessageProcessor {
+
+    private final GameSessionService gameSessionService;
+
+    public GameConfigurationMessageProcessor(GameSessionService gameSessionService) {
+        this.gameSessionService = gameSessionService;
+    }
+
+    @Override
+    protected void initializeProcessorMapping() {
+        processorMapping.registerProcessor(UpdatePlayerTeamMessage.class, this::changeTeamForTargetPlayer);
+    }
+
+    public SockbowlOutMessage changeTeamForTargetPlayer(SockbowlInMessage updatePlayerTeamMessage) {
+
+        UpdatePlayerTeamMessage message = (UpdatePlayerTeamMessage) updatePlayerTeamMessage;
+
+        
+
+
+
+    }
 
     /**
      * Determines whether the asking player is allowed to change the team for the target player.
@@ -20,15 +45,15 @@ public class GameConfigurationService {
      *     returns false.</li>
      * </ul>
      *
-     * @param gameSession the current GameSession containing the list of players
+     * @param gameSession  the current GameSession containing the list of players
      * @param askingPlayer the id of the player who is asking to change the team
      * @param targetPlayer the id of the player who is team is being changed
      * @return true if the asking player can change the team of the target player, false otherwise
      */
-    public boolean canAskingPlayerChangeTeamForTargetPlayer(GameSession gameSession, String askingPlayer, String targetPlayer){
-        if(askingPlayer.equals(targetPlayer)){
+    private boolean canAskingPlayerChangeTeamForTargetPlayer(GameSession gameSession, String askingPlayer, String targetPlayer) {
+        if (askingPlayer.equals(targetPlayer)) {
             return true;
-        } else{
+        } else {
             Optional<Player> player = gameSession.getPlayerList().stream()
                     .filter(p -> p.getPlayerId().equals(askingPlayer))
                     .findFirst();

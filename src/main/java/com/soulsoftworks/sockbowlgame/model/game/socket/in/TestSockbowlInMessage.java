@@ -1,9 +1,11 @@
 package com.soulsoftworks.sockbowlgame.model.game.socket.in;
 
 import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+
 
 
 @EqualsAndHashCode(callSuper = true)
@@ -12,12 +14,8 @@ import lombok.NoArgsConstructor;
 public class TestSockbowlInMessage extends SockbowlInMessage {
     String testString = "TEST";
 
-    public TestSockbowlInMessage(String originatingPlayerId, String gameSessionId) {
-        super(originatingPlayerId, gameSessionId);
-    }
-
     @Override
-    public String getMessageType() {
-        return "GENERIC";
+    public MessageTypes getMessageType() {
+        return MessageTypes.GENERIC;
     }
 }

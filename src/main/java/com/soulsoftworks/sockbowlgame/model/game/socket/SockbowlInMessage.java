@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.model.game.socket;
 
+import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
+import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -11,11 +13,7 @@ public abstract class SockbowlInMessage {
 
     private String originatingPlayerId;
     private String gameSessionId;
+    private GameSession gameSession;
 
-    public SockbowlInMessage(String originatingPlayerId, String gameSessionId) {
-        this.originatingPlayerId = originatingPlayerId;
-        this.gameSessionId = gameSessionId;
-    }
-
-    public abstract String getMessageType();
+    public abstract MessageTypes getMessageType();
 }
