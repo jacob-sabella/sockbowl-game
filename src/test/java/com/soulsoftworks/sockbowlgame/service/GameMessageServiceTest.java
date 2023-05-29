@@ -58,7 +58,7 @@ public class GameMessageServiceTest {
     @Test
     void shouldDeliverGenericMessageSuccessfully() throws InterruptedException {
 
-        TestSockbowlInMessage testSockbowlMessage = new TestSockbowlInMessage(null, null);
+        TestSockbowlInMessage testSockbowlMessage = new TestSockbowlInMessage();
 
         gameMessageService.sendMessage("game-topic-test", testSockbowlMessage);
 
