@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.game.socket;
+package com.soulsoftworks.sockbowlgame.model.game.socket.in;
 
 import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;

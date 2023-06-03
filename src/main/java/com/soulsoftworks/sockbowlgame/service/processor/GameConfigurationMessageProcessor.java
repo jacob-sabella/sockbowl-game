@@ -1,12 +1,13 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.PlayerRosterUpdate;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.game.state.Team;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -14,75 +15,64 @@ import java.util.Optional;
 @Service
 public class GameConfigurationMessageProcessor extends GameMessageProcessor {
 
-    private final GameSessionService gameSessionService;
-
-    public GameConfigurationMessageProcessor(GameSessionService gameSessionService) {
-        this.gameSessionService = gameSessionService;
-    }
-
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(UpdatePlayerTeamMessage.class, this::changeTeamForTargetPlayer);
     }
 
+    /**
+     * Changes the team of a target player.
+     *
+     * @param updatePlayerTeamMessage The incoming message that contains all necessary information to change a player's team.
+     * @return SockbowlOutMessage which might be an error message or a success message. The implementation of this
+     * message is not shown in this method.
+     */
     public SockbowlOutMessage changeTeamForTargetPlayer(SockbowlInMessage updatePlayerTeamMessage) {
+        // Casting the incoming message to the specific type which includes player and team info
         UpdatePlayerTeamMessage message = (UpdatePlayerTeamMessage) updatePlayerTeamMessage;
 
+        // Retrieving the game session from the incoming message
         GameSession gameSession = message.getGameSession();
 
+        // Get values from the session
+        Team targetTeam = gameSession.findTeamWithId(message.getTargetTeam());
+        Team currentTeam = gameSession.getTeamByPlayerId(message.getTargetPlayer());
+        Player targetPlayer = gameSession.getPlayerById(message.getTargetPlayer());
+
+        // Checking if the target team or target player is not found
+        if (targetTeam == null || targetPlayer == null) {
+            // If any is not found, returning an error message
+            return ProcessErrorMessage.builder().recipient(updatePlayerTeamMessage.getOriginatingPlayerId())
+                    .error("Target team or player does not exist").build();
+        }
+
+        // Validating if the player who initiated the request is allowed to change the team of the target player
         if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(),
                 message.getTargetPlayer())) {
-            //TODO: Return process error here
-            return null;
+            // If not, returning an error message
+            return ProcessErrorMessage.builder().error("Player does not have permission to update team")
+                    .recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
         }
 
-        Team targetTeam = null;
-        Team currentTeam = null;
-        Player targetPlayer = null;
 
-        // Fetch the full player object from playerList
-        for (Player player : gameSession.getPlayerList()) {
-            if (player.getPlayerId().equals(message.getTargetPlayer())) {
-                targetPlayer = player;
-                break;
-            }
-        }
-
-        // Find the current team of the player and the target team
-        for (Team team : gameSession.getTeams()) {
-            for (Player player : team.getTeamPlayers()) {
-                if(player.getPlayerId().equals(targetPlayer.getPlayerId())) {
-                    currentTeam = team;
-                }
-            }
-            if (team.getTeamId().equals(message.getTargetTeam())) {
-                targetTeam = team;
-            }
-        }
-
-        if (targetTeam == null || targetPlayer == null) {
-            //TODO: Error - Target team or player not found
-            return null;
-        }
-
-        // If the player is already on the target team, return error
+        // Checking if the player is already in the target team
         if (currentTeam != null && currentTeam.getTeamId().equals(targetTeam.getTeamId())) {
-            //TODO: Error - Player is already on the target team
-            return null;
+            // If yes, returning an error message
+            return ProcessErrorMessage.builder().error("Player already on team")
+                    .recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
         }
 
-        // Remove player from the current team, if they are currently in a team
+        // If the player is currently in a team, remove the player from the current team
         if (currentTeam != null) {
             currentTeam.getTeamPlayers().remove(targetPlayer);
         }
 
         // Add player to the target team
-        targetTeam.getTeamPlayers().add(targetPlayer);
+        targetTeam.addPlayerToTeam(targetPlayer);
 
-        // TODO: Return success message
-        return null;
+        // Return a PlayerRosterUpdate
+        return PlayerRosterUpdate.fromGameSession(gameSession);
     }
-
 
 
     /**

@@ -1,7 +1,7 @@
-package com.soulsoftworks.sockbowlgame.service;
+package com.soulsoftworks.sockbowlgame.service.processor;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
 
 import java.util.HashMap;
 import java.util.function.Function;

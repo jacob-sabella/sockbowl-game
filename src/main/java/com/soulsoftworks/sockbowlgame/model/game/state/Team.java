@@ -11,4 +11,21 @@ public class Team {
     private String teamId = UUID.randomUUID().toString();
     private String teamName;
     private List<Player> teamPlayers = new ArrayList<>();
+
+
+    public Player findPlayerInTeamWithId(String playerId){
+        return teamPlayers.stream()
+                .filter(player -> player.getPlayerId().equals(playerId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public void addPlayerToTeam(Player player){
+        teamPlayers.add(player);
+    }
+
+    public boolean isPlayerOnTeam(String playerId){
+        return teamPlayers.stream()
+                .anyMatch(player -> player.getPlayerId().equals(playerId));
+    }
 }

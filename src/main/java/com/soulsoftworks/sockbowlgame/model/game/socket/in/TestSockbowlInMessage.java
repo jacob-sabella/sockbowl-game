@@ -1,6 +1,5 @@
 package com.soulsoftworks.sockbowlgame.model.game.socket.in;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

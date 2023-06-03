@@ -1,8 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.service.MessageProcessorMapping;
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
 
 import java.util.function.Function;
 
@@ -36,14 +35,18 @@ public abstract class GameMessageProcessor {
      * This method is final and cannot be overridden by subclasses.
      *
      * @param message The message to process.
+     *
+     * @return Sockbowl Out Message
      */
-    public final void processMessage(SockbowlInMessage message) {
+    public final SockbowlOutMessage processMessage(SockbowlInMessage message) {
         // Get the function to process this message type
         Function<SockbowlInMessage, SockbowlOutMessage> func = processorMapping.getProcessor(message);
 
         // If a function was found, apply it
         if (func != null) {
-            func.apply(message);
+            return func.apply(message);
         }
+
+        return null;
     }
 }

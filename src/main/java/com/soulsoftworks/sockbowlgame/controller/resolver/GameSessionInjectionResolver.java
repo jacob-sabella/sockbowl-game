@@ -5,7 +5,7 @@ import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.model.request.PlayerIdentifiers;
-import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
+import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.springframework.core.MethodParameter;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
@@ -17,11 +17,12 @@ import java.util.Optional;
 @Component
 public class GameSessionInjectionResolver implements HandlerMethodArgumentResolver {
 
-    private final GameSessionRepository gameSessionRepository;
+    private final GameSessionService gameSessionService;
 
-    public GameSessionInjectionResolver(GameSessionRepository gameSessionRepository) {
-        this.gameSessionRepository = gameSessionRepository;
+    public GameSessionInjectionResolver(GameSessionService gameSessionService) {
+        this.gameSessionService = gameSessionService;
     }
+
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -32,21 +33,21 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
     public Object resolveArgument(MethodParameter parameter, Message<?> message) {
         SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.wrap(message);
 
-        String simpSessionId = accessor.getSessionId();
         String gameSessionId = (String) accessor.getHeader("gameSessionId");
+        String playerId = (String) accessor.getHeader("playerId");
         String playerSessionSecret = (String) accessor.getHeader("playerSessionSecret");
 
-        Optional<GameSession> gameSessionOptional = gameSessionRepository.findGameSessionById(gameSessionId);
+        Optional<GameSession> gameSessionOptional = Optional.ofNullable(gameSessionService.getGameSessionById(gameSessionId));
 
         if(gameSessionOptional.isPresent()){
             GameSession gameSession = gameSessionOptional.get();
             Optional<Player> playerOptional = gameSession.getPlayerList().stream()
-                    .filter(p -> p.getPlayerId().equals(simpSessionId)).findFirst();
+                    .filter(p -> p.getPlayerId().equals(playerId)).findFirst();
 
             if (playerOptional.isPresent()) {
                 Player player = playerOptional.get();
                 if (player.getPlayerSecret().equals(playerSessionSecret)) {
-                    return new GameSessionInjection(new PlayerIdentifiers(simpSessionId, playerSessionSecret), gameSessionId, gameSession);
+                    return new GameSessionInjection(new PlayerIdentifiers(playerId, playerSessionSecret), gameSessionId, gameSession);
                 } else {
                     throw new PlayerVerificationException("Provided game session secret does not match player's secret.");
                 }
