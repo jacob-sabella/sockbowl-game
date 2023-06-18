@@ -32,6 +32,9 @@ public class GameSession{
     @Builder.Default
     private List<Team> teams = new ArrayList<>();
 
+    @Builder.Default
+    private Match currentMatch = new Match();
+
     public void addPlayer(JoinGameRequest joinGameRequest){
         Player player = Player.builder()
                 .playerId(joinGameRequest.getPlayerSessionId())
@@ -77,5 +80,18 @@ public class GameSession{
                 .orElse(null);
     }
 
+    /**
+     * Check if the player with the given player ID is the game owner.
+     *
+     * @param playerId The unique ID of the player.
+     * @return true if the player is the game owner, false otherwise.
+     */
+    public boolean isPlayerGameOwner(String playerId) {
+        return this.playerList.stream()
+                .filter(player -> player.getPlayerId().equals(playerId))
+                .map(Player::isGameOwner)
+                .findFirst()
+                .orElse(false);
+    }
 
 }

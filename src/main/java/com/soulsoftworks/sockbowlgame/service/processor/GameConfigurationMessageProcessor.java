@@ -1,23 +1,34 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetMatchPacketMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.game.state.Team;
+import com.soulsoftworks.sockbowlgame.model.packet.Packet;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
+import java.util.List;
 
 @Service
 public class GameConfigurationMessageProcessor extends GameMessageProcessor {
 
+    private final PacketClient packetClient;
+
+    public GameConfigurationMessageProcessor(PacketClient packetClient) {
+        this.packetClient = packetClient;
+    }
+
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(UpdatePlayerTeamMessage.class, this::changeTeamForTargetPlayer);
+        processorMapping.registerProcessor(SetMatchPacketMessage.class, this::setPacketForMatch);
     }
 
     /**
@@ -31,7 +42,7 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
         // Casting the incoming message to the specific type which includes player and team info
         UpdatePlayerTeamMessage message = (UpdatePlayerTeamMessage) updatePlayerTeamMessage;
 
-        // Retrieving the game session from the incoming message
+        // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
 
         // Get values from the session
@@ -50,8 +61,7 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
         if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(),
                 message.getTargetPlayer())) {
             // If not, returning an error message
-            return ProcessErrorMessage.builder().error("Player does not have permission to update team")
-                    .recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
+            return ProcessErrorMessage.accessDeniedMessage(message);
         }
 
 
@@ -72,6 +82,53 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
 
         // Return a PlayerRosterUpdate
         return PlayerRosterUpdate.fromGameSession(gameSession);
+    }
+
+    /**
+     * Sets the packet for the current match in the game session.
+     * <p>
+     * This method validates the access level of the originating player to ensure they have the
+     * necessary permissions to set the packet for the match. If access is denied, an error
+     * message is returned. If the packet with the provided ID doesn't exist, an error message
+     * is also returned.
+     * <p>
+     * If everything is valid, the packet is set for the current match and a success message
+     * (MatchPacketUpdate) is returned.
+     *
+     * @param setMatchPacketMessage The incoming message that contains the necessary information
+     *                              to set a packet for a match.
+     * @return SockbowlOutMessage which might be an error message or a MatchPacketUpdate message.
+     */
+    public SockbowlOutMessage setPacketForMatch(SockbowlInMessage setMatchPacketMessage) {
+        // Cast the incoming message to the specific type
+        SetMatchPacketMessage message = (SetMatchPacketMessage) setMatchPacketMessage;
+
+        // Retrieve the game session from the incoming message
+        GameSession gameSession = message.getGameSession();
+
+        // Check if the player making the request is the game owner
+        if (!gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())) {
+            // If not, return an access denied error message
+            return ProcessErrorMessage.accessDeniedMessage(message);
+        }
+
+        // Retrieve the packet using the packet ID from the message
+        Packet packet = packetClient.getPacketById(message.getPacketId());
+
+        // If the packet is not found, return an error message
+        if (packet == null) {
+            return ProcessErrorMessage.builder().recipient(message.getOriginatingPlayerId())
+                    .error("Packet id " + message.getPacketId() + " does not exist").build();
+        }
+
+        // Set the packet for the current match in the game session
+        gameSession.getCurrentMatch().setPacket(packet);
+
+        // Return a MatchPacketUpdate
+        return MatchPacketUpdate.builder()
+                .packetId(packet.getId())
+                .packetName(packet.getName())
+                .build();
     }
 
 
@@ -95,10 +152,7 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
         if (askingPlayer.equals(targetPlayer)) {
             return true;
         } else {
-            Optional<Player> player = gameSession.getPlayerList().stream()
-                    .filter(p -> p.getPlayerId().equals(askingPlayer))
-                    .findFirst();
-            return player.map(Player::isGameOwner).orElse(false);
+            return gameSession.isPlayerGameOwner(askingPlayer);
         }
     }
 }

@@ -137,8 +137,6 @@ public class GameMessageServiceTest {
 
         // Get updated game session
         gameSession = gameSessionService.getGameSessionById(gameSession.getId());
-
-        System.out.println("test");
     }
 
 

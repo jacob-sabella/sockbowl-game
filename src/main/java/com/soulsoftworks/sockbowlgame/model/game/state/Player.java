@@ -11,6 +11,6 @@ public class Player {
     @Builder.Default
     private PlayerStatus playerStatus = PlayerStatus.DISCONNECTED;
     private String playerId;
-    private String playerSecret;
+    private transient String playerSecret;
     private String name;
 }
