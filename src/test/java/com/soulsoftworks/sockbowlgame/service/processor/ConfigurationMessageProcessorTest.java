@@ -12,7 +12,6 @@ import com.soulsoftworks.sockbowlgame.model.game.state.GameSettings;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.game.state.Team;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,9 +27,9 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class GameConfigurationMessageProcessorTest {
+public class ConfigurationMessageProcessorTest {
 
-    private GameConfigurationMessageProcessor processor;
+    private ConfigurationMessageProcessor processor;
 
     private GameSession mockGameSession;
     @Mock
@@ -41,7 +40,7 @@ public class GameConfigurationMessageProcessorTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        processor = new GameConfigurationMessageProcessor(packetClient);
+        processor = new ConfigurationMessageProcessor(packetClient);
 
         mockGameSession = GameSession.builder()
                 .id("TEST")

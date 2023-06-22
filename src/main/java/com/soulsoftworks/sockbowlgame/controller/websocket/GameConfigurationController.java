@@ -1,5 +1,6 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
+import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetMatchPacketMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.service.GameMessageService;
@@ -28,6 +29,18 @@ public class GameConfigurationController {
                 .build();
 
         gameMessageService.sendMessage(updatePlayerTeamMessage);
+    }
+
+    @MessageMapping("/set-match-packet")
+    public void updatePlayerTeam(GameSessionInjection gameSessionInjection, long packetId) {
+        // Create message
+        SetMatchPacketMessage setMatchPacketMessage = SetMatchPacketMessage.builder()
+                        .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
+                        .gameSessionId(gameSessionInjection.getGameSessionId())
+                        .packetId(packetId)
+                        .build();
+
+        gameMessageService.sendMessage(setMatchPacketMessage);
     }
 
 }

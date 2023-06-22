@@ -29,4 +29,13 @@ public class ProcessErrorMessage extends SockbowlOutMessage {
                 .recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
     }
 
+
+    public static ProcessErrorMessage wrongStateMessage(SockbowlInMessage sockbowlInMessage){
+        return ProcessErrorMessage
+                .builder()
+                .error(sockbowlInMessage.getClass().getSimpleName() + ": Not executable for state " +
+                        sockbowlInMessage.getGameSession().getCurrentMatch().getMatchState())
+                .recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
+    }
+
 }

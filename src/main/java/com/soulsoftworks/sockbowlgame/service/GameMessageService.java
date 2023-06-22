@@ -6,7 +6,7 @@ import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
-import com.soulsoftworks.sockbowlgame.service.processor.GameConfigurationMessageProcessor;
+import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -25,7 +25,7 @@ public class GameMessageService {
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final KafkaTemplate<String, SockbowlInMessage> kafkaTemplate;
     private final GameSessionService gameSessionService;
-    private final GameConfigurationMessageProcessor gameConfigurationMessageProcessor;
+    private final ConfigurationMessageProcessor configurationMessageProcessor;
 
     /**
      * Constructor for the GameMessageService.
@@ -33,15 +33,15 @@ public class GameMessageService {
      * @param simpMessagingTemplate Used for sending messages to WebSocket clients.
      * @param kafkaTemplate Used for sending messages to Kafka topics.
      * @param gameSessionService Used for retrieving and updating game sessions.
-     * @param gameConfigurationMessageProcessor Used for processing configuration type messages.
+     * @param configurationMessageProcessor Used for processing configuration type messages.
      */
     public GameMessageService(SimpMessagingTemplate simpMessagingTemplate,
                               KafkaTemplate<String, SockbowlInMessage> kafkaTemplate,
-                              GameSessionService gameSessionService, GameConfigurationMessageProcessor gameConfigurationMessageProcessor) {
+                              GameSessionService gameSessionService, ConfigurationMessageProcessor configurationMessageProcessor) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.kafkaTemplate = kafkaTemplate;
         this.gameSessionService = gameSessionService;
-        this.gameConfigurationMessageProcessor = gameConfigurationMessageProcessor;
+        this.configurationMessageProcessor = configurationMessageProcessor;
     }
 
     @Value("${sockbowl.kafka.topic.game-topic}")
@@ -114,7 +114,7 @@ public class GameMessageService {
         // If the message is a configuration type, direct it to the configuration message processor.
         // Otherwise, create an error message indicating an unknown message type.
         if(message.getMessageType() == MessageTypes.CONFIG){
-            return gameConfigurationMessageProcessor.processMessage(message);
+            return configurationMessageProcessor.processMessage(message);
         } else {
             return ProcessErrorMessage.builder().error("Unknown message type")
                     .recipient(message.getOriginatingPlayerId())

@@ -9,19 +9,18 @@ import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.MatchPacketUp
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.game.state.MatchState;
 import com.soulsoftworks.sockbowlgame.model.game.state.Player;
 import com.soulsoftworks.sockbowlgame.model.game.state.Team;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
-public class GameConfigurationMessageProcessor extends GameMessageProcessor {
+public class ConfigurationMessageProcessor extends GameMessageProcessor {
 
     private final PacketClient packetClient;
 
-    public GameConfigurationMessageProcessor(PacketClient packetClient) {
+    public ConfigurationMessageProcessor(PacketClient packetClient) {
         this.packetClient = packetClient;
     }
 
@@ -49,6 +48,11 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
         Team targetTeam = gameSession.findTeamWithId(message.getTargetTeam());
         Team currentTeam = gameSession.getTeamByPlayerId(message.getTargetPlayer());
         Player targetPlayer = gameSession.getPlayerById(message.getTargetPlayer());
+
+        // Only usable in the CONFIG state
+        if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
+            return ProcessErrorMessage.wrongStateMessage(message);
+        }
 
         // Checking if the target team or target player is not found
         if (targetTeam == null || targetPlayer == null) {
@@ -105,6 +109,11 @@ public class GameConfigurationMessageProcessor extends GameMessageProcessor {
 
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
+
+        // Only usable in the CONFIG state
+        if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
+            return ProcessErrorMessage.wrongStateMessage(message);
+        }
 
         // Check if the player making the request is the game owner
         if (!gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())) {
