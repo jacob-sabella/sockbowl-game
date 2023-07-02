@@ -6,14 +6,14 @@ import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
-import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
-import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.TestSockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
-import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.state.PlayerMode;
+import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageQueues;
+import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
+import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.TestSockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -150,27 +150,27 @@ public class GameMessageServiceTest {
                 new WebSocketUtils.SimpleStompFrameHandler(completableFuture));
 
         // Construct the UpdatePlayerTeamMessage
-        UpdatePlayerTeamMessage updatePlayerTeamMessage = UpdatePlayerTeamMessage.builder()
+        UpdatePlayerTeam updatePlayerTeam = UpdatePlayerTeam.builder()
                 .targetPlayer(gameSession.getPlayerList().get(1).getPlayerId())
                 .targetTeam("FAKE_TEAM_ID")
                 .gameSessionId(gameSession.getId())
                 .originatingPlayerId(gameSession.getPlayerList().get(0).getPlayerId())
                 .build();
 
-        gameMessageService.sendMessage(updatePlayerTeamMessage);
+        gameMessageService.sendMessage(updatePlayerTeam);
 
         // Wait for value
         String response = completableFuture.get(10, SECONDS);
 
         // Validate that it is of type ProcessErrorMessage
-        Assertions.assertDoesNotThrow(() -> gson.fromJson(response, ProcessErrorMessage.class));
+        Assertions.assertDoesNotThrow(() -> gson.fromJson(response, ProcessError.class));
 
         // Convert to object
-        ProcessErrorMessage processErrorMessage = gson.fromJson(response, ProcessErrorMessage.class);
+        ProcessError processError = gson.fromJson(response, ProcessError.class);
 
         // Assert values are right
-        assertEquals(MessageTypes.ERROR, processErrorMessage.getMessageType());
-        assertEquals("Target team or player does not exist", processErrorMessage.getError());
+        assertEquals(MessageTypes.ERROR, processError.getMessageType());
+        assertEquals("Target team or player does not exist", processError.getError());
     }
 
     @Test

@@ -160,4 +160,4 @@ secrets.yml
 .sts4-cache
 
 
-!/src/main/java/com/soulsoftworks/sockbowlgame/model/game/socket/out/
+!/src/main/java/com/soulsoftworks/sockbowlgame/model/socket/out/

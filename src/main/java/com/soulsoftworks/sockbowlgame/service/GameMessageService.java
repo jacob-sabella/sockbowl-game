@@ -1,12 +1,12 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlMultiOutMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
-import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageQueues;
+import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
@@ -88,7 +88,7 @@ public class GameMessageService {
             SockbowlOutMessage sockbowlOutMessage = directMessageToService(message);
 
             // If no error occured, update the game session
-            if(!(sockbowlOutMessage instanceof ProcessErrorMessage)){
+            if(!(sockbowlOutMessage instanceof ProcessError)){
                 gameSessionService.saveGameSession(gameSession);
             }
 
@@ -131,7 +131,7 @@ public class GameMessageService {
         if(message.getMessageType() == MessageTypes.CONFIG){
             return configurationMessageProcessor.processMessage(message);
         } else {
-            return ProcessErrorMessage.builder().error("Unknown message type")
+            return ProcessError.builder().error("Unknown message type")
                     .recipient(message.getOriginatingPlayerId())
                     .build();
         }

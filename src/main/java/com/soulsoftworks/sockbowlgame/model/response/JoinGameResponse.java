@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.response;
 
-import com.soulsoftworks.sockbowlgame.model.game.state.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.state.JoinStatus;
 import lombok.Data;
 
 @Data

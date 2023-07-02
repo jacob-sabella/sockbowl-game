@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetMatchPacketMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.service.GameMessageService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -22,25 +22,25 @@ public class GameConfigurationController {
     public void updatePlayerTeam(GameSessionInjection gameSessionInjection, String playerId, String teamId) {
 
         // Create message
-        UpdatePlayerTeamMessage updatePlayerTeamMessage = UpdatePlayerTeamMessage.builder()
+        UpdatePlayerTeam updatePlayerTeam = UpdatePlayerTeam.builder()
                 .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
                 .gameSessionId(gameSessionInjection.getGameSessionId())
                 .targetPlayer(playerId).targetTeam(teamId)
                 .build();
 
-        gameMessageService.sendMessage(updatePlayerTeamMessage);
+        gameMessageService.sendMessage(updatePlayerTeam);
     }
 
     @MessageMapping("/set-match-packet")
     public void updatePlayerTeam(GameSessionInjection gameSessionInjection, long packetId) {
         // Create message
-        SetMatchPacketMessage setMatchPacketMessage = SetMatchPacketMessage.builder()
+        SetMatchPacket setMatchPacket = SetMatchPacket.builder()
                         .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
                         .gameSessionId(gameSessionInjection.getGameSessionId())
                         .packetId(packetId)
                         .build();
 
-        gameMessageService.sendMessage(setMatchPacketMessage);
+        gameMessageService.sendMessage(setMatchPacket);
     }
 
 }

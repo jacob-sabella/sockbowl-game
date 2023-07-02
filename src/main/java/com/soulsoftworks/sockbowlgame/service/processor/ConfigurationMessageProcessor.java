@@ -1,20 +1,20 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetMatchPacketMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetProctorMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.MatchPacketUpdate;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.PlayerRosterUpdate;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
-import com.soulsoftworks.sockbowlgame.model.game.state.*;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
+import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.springframework.stereotype.Service;
 
 @Service
-public class ConfigurationMessageProcessor extends GameMessageProcessor {
+public class ConfigurationMessageProcessor extends MessageProcessor {
 
     private final PacketClient packetClient;
 
@@ -24,8 +24,8 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
 
     @Override
     protected void initializeProcessorMapping() {
-        processorMapping.registerProcessor(UpdatePlayerTeamMessage.class, this::changeTeamForTargetPlayer);
-        processorMapping.registerProcessor(SetMatchPacketMessage.class, this::setPacketForMatch);
+        processorMapping.registerProcessor(UpdatePlayerTeam.class, this::changeTeamForTargetPlayer);
+        processorMapping.registerProcessor(SetMatchPacket.class, this::setPacketForMatch);
     }
 
     /**
@@ -37,7 +37,7 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
      */
     public SockbowlOutMessage changeTeamForTargetPlayer(SockbowlInMessage updatePlayerTeamMessage) {
         // Casting the incoming message to the specific type which includes player and team info
-        UpdatePlayerTeamMessage message = (UpdatePlayerTeamMessage) updatePlayerTeamMessage;
+        UpdatePlayerTeam message = (UpdatePlayerTeam) updatePlayerTeamMessage;
 
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
@@ -49,13 +49,13 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
 
         // Only usable in the CONFIG state
         if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
-            return ProcessErrorMessage.wrongStateMessage(message);
+            return ProcessError.wrongStateMessage(message);
         }
 
         // Checking if the target team or target player is not found
         if (targetTeam == null || targetPlayer == null) {
             // If any is not found, returning an error message
-            return ProcessErrorMessage.builder().recipient(updatePlayerTeamMessage.getOriginatingPlayerId())
+            return ProcessError.builder().recipient(updatePlayerTeamMessage.getOriginatingPlayerId())
                     .error("Target team or player does not exist").build();
         }
 
@@ -63,14 +63,14 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
         if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(),
                 message.getTargetPlayer())) {
             // If not, returning an error message
-            return ProcessErrorMessage.accessDeniedMessage(message);
+            return ProcessError.accessDeniedMessage(message);
         }
 
 
         // Checking if the player is already in the target team
         if (currentTeam != null && currentTeam.getTeamId().equals(targetTeam.getTeamId())) {
             // If yes, returning an error message
-            return ProcessErrorMessage.builder().error("Player already on team")
+            return ProcessError.builder().error("Player already on team")
                     .recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
         }
 
@@ -106,20 +106,20 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
      */
     public SockbowlOutMessage setPacketForMatch(SockbowlInMessage setMatchPacketMessage) {
         // Cast the incoming message to the specific type
-        SetMatchPacketMessage message = (SetMatchPacketMessage) setMatchPacketMessage;
+        SetMatchPacket message = (SetMatchPacket) setMatchPacketMessage;
 
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
 
         // Only usable in the CONFIG state
         if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
-            return ProcessErrorMessage.wrongStateMessage(message);
+            return ProcessError.wrongStateMessage(message);
         }
 
         // Check if the player making the request is the game owner
         if (!gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())) {
             // If not, return an access denied error message
-            return ProcessErrorMessage.accessDeniedMessage(message);
+            return ProcessError.accessDeniedMessage(message);
         }
 
         // Retrieve the packet using the packet ID from the message
@@ -127,7 +127,7 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
 
         // If the packet is not found, return an error message
         if (packet == null) {
-            return ProcessErrorMessage.builder().recipient(message.getOriginatingPlayerId())
+            return ProcessError.builder().recipient(message.getOriginatingPlayerId())
                     .error("Packet id " + message.getPacketId() + " does not exist").build();
         }
 
@@ -161,7 +161,7 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
      */
     public SockbowlOutMessage setPlayerAsProctor(SockbowlInMessage setProctor) {
         // Cast the incoming message to the specific type
-        SetProctorMessage message = (SetProctorMessage) setProctor;
+        SetProctor message = (SetProctor) setProctor;
 
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
@@ -170,7 +170,7 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
         if (!(gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())
                 || (message.getTargetPlayer().equals(message.getOriginatingPlayerId()) && gameSession.getProctor() == null))) {
             // If not, return an access denied error message
-            return ProcessErrorMessage.accessDeniedMessage(message);
+            return ProcessError.accessDeniedMessage(message);
         }
 
         // Retrieve the target player using the player ID from the message
@@ -178,7 +178,7 @@ public class ConfigurationMessageProcessor extends GameMessageProcessor {
 
         // If the target player is not found, return an error message
         if (targetPlayer == null) {
-            return ProcessErrorMessage.builder().recipient(message.getOriginatingPlayerId())
+            return ProcessError.builder().recipient(message.getOriginatingPlayerId())
                     .error("Player id " + message.getTargetPlayer() + " does not exist").build();
         }
 

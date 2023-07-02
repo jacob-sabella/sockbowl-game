@@ -1,8 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.state.JoinStatus;
-import com.soulsoftworks.sockbowlgame.model.game.state.Team;
+import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.state.Team;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;

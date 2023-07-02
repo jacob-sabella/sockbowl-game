@@ -1,16 +1,16 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.SetMatchPacketMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.config.UpdatePlayerTeamMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.MatchPacketUpdate;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.config.PlayerRosterUpdate;
-import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
-import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.game.state.GameSettings;
-import com.soulsoftworks.sockbowlgame.model.game.state.Player;
-import com.soulsoftworks.sockbowlgame.model.game.state.Team;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.state.Player;
+import com.soulsoftworks.sockbowlgame.model.state.Team;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,7 +59,7 @@ public class ConfigurationMessageProcessorTest {
         @DisplayName("Player without permission to update a team causes error")
         void changeTeamForTargetPlayer_PlayerDoesNotHavePermissionToUpdateTeam_ReturnsProcessErrorMessage() {
 
-            UpdatePlayerTeamMessage message = UpdatePlayerTeamMessage.builder()
+            UpdatePlayerTeam message = UpdatePlayerTeam.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(1).getPlayerId())
                     .targetPlayer(playerList.get(0).getPlayerId())
@@ -68,16 +68,16 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.changeTeamForTargetPlayer(message);
 
-            assertTrue(result instanceof ProcessErrorMessage);
-            assertEquals(ProcessErrorMessage.accessDeniedMessage(message).getError(),
-                    ((ProcessErrorMessage) result).getError());
+            assertTrue(result instanceof ProcessError);
+            assertEquals(ProcessError.accessDeniedMessage(message).getError(),
+                    ((ProcessError) result).getError());
         }
 
         @Test
         @DisplayName("Non-existing target player causes error")
         void changeTeamForTargetPlayer_TargetPlayerDoesNotExist_ReturnsProcessErrorMessage() {
 
-            UpdatePlayerTeamMessage message = UpdatePlayerTeamMessage.builder()
+            UpdatePlayerTeam message = UpdatePlayerTeam.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .targetPlayer("nonexistentPlayerId")
@@ -86,14 +86,14 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.changeTeamForTargetPlayer(message);
 
-            assertTrue(result instanceof ProcessErrorMessage);
-            assertEquals("Target team or player does not exist", ((ProcessErrorMessage) result).getError());
+            assertTrue(result instanceof ProcessError);
+            assertEquals("Target team or player does not exist", ((ProcessError) result).getError());
         }
 
         @Test
         @DisplayName("Game owner can change team successfully")
         void changeTeamForTargetPlayer_PlayerIsGameOwner_ChangesTeamSuccessfully() {
-            UpdatePlayerTeamMessage message = UpdatePlayerTeamMessage.builder()
+            UpdatePlayerTeam message = UpdatePlayerTeam.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .targetPlayer(playerList.get(1).getPlayerId())
@@ -121,7 +121,7 @@ public class ConfigurationMessageProcessorTest {
         @Test
         @DisplayName("Non-owner player tries to set the match packet causes error")
         void setPacketForMatch_NonOwnerPlayerTriesToSetPacket_ReturnsProcessErrorMessage() {
-            SetMatchPacketMessage message = SetMatchPacketMessage.builder()
+            SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(1).getPlayerId())
                     .packetId(1000)
@@ -129,13 +129,13 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);
 
-            assertTrue(result instanceof ProcessErrorMessage);
+            assertTrue(result instanceof ProcessError);
         }
 
         @Test
         @DisplayName("Game owner sets the match packet successfully")
         void setPacketForMatch_OwnerPlayerSetsPacket_SuccessfullySetsPacket() {
-            SetMatchPacketMessage message = SetMatchPacketMessage.builder()
+            SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .packetId(1000)

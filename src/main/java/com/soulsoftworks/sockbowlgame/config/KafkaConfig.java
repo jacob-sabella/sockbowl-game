@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.config;
 
-import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
