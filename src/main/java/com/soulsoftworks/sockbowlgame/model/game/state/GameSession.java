@@ -81,6 +81,19 @@ public class GameSession{
     }
 
     /**
+     * Retrieves the proctor player from the game session.
+     *
+     * @return Player object if found, else null.
+     */
+    public Player getProctor() {
+        // Use a stream to search through the player list for the player in PROCTOR mode
+        return this.playerList.stream()
+                .filter(player -> player.getPlayerMode() == PlayerMode.PROCTOR)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
      * Check if the player with the given player ID is the game owner.
      *
      * @param playerId The unique ID of the player.

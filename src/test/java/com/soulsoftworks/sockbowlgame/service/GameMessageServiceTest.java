@@ -106,14 +106,14 @@ public class GameMessageServiceTest {
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode(gameSession.getJoinCode());
         joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
-        joinGameRequest.setPlayerMode(PlayerMode.BUZZER_ONLY);
+        joinGameRequest.setPlayerMode(PlayerMode.BUZZER);
         joinGameRequest.setName("Jimmy");
 
         // Create another join game request
         JoinGameRequest joinGameRequest2 = new JoinGameRequest();
         joinGameRequest2.setJoinCode(gameSession.getJoinCode());
         joinGameRequest2.setPlayerSessionId(UUID.randomUUID().toString());
-        joinGameRequest2.setPlayerMode(PlayerMode.BUZZER_ONLY);
+        joinGameRequest2.setPlayerMode(PlayerMode.BUZZER);
         joinGameRequest2.setName("James");
 
         // Add player to game

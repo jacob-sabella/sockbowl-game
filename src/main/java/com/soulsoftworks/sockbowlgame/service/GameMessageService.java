@@ -3,6 +3,7 @@ package com.soulsoftworks.sockbowlgame.service;
 import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.game.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.constants.MessageTypes;
+import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.game.socket.out.error.ProcessErrorMessage;
 import com.soulsoftworks.sockbowlgame.model.game.state.GameSession;
@@ -13,6 +14,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 /**
  * This service is responsible for processing game messages.
@@ -89,18 +92,30 @@ public class GameMessageService {
                 gameSessionService.saveGameSession(gameSession);
             }
 
-            // If there are specified recipients for the outgoing message, send the message to them.
-            // Otherwise, send the message to all clients connected to the game session.
-            if(sockbowlOutMessage.getRecipients().size() > 0){
-                sockbowlOutMessage.getRecipients().forEach(recipient ->
-                        simpMessagingTemplate.convertAndSend("/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
-                                gameSession.getId() + "/" + recipient, sockbowlOutMessage)
-                );
+            List<SockbowlOutMessage> sockbowlOutMessagesToProcess;
+
+            if(sockbowlOutMessage instanceof SockbowlMultiOutMessage){
+                sockbowlOutMessagesToProcess = ((SockbowlMultiOutMessage) sockbowlOutMessage).getSockbowlOutMessages();
             } else{
-                simpMessagingTemplate.convertAndSend(
-                        MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
-                        sockbowlOutMessage);
+                sockbowlOutMessagesToProcess = List.of(sockbowlOutMessage);
             }
+
+            // Send out all the sockbowl messages
+            for(SockbowlOutMessage singleMessage : sockbowlOutMessagesToProcess){
+                // If there are specified recipients for the outgoing message, send the message to them.
+                // Otherwise, send the message to all clients connected to the game session.
+                if(singleMessage.getRecipients().size() > 0){
+                    singleMessage.getRecipients().forEach(recipient ->
+                            simpMessagingTemplate.convertAndSend("/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
+                                    gameSession.getId() + "/" + recipient, singleMessage)
+                    );
+                } else{
+                    simpMessagingTemplate.convertAndSend(
+                            MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
+                            singleMessage);
+                }
+            }
+
         }
     }
 

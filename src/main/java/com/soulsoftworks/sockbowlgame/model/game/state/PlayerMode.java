@@ -1,7 +1,8 @@
 package com.soulsoftworks.sockbowlgame.model.game.state;
 
 public enum PlayerMode {
-    BUZZER_ONLY,
+    BUZZER,
+    PROCTOR,
     SPECTATOR,
     DISPLAY
 }

@@ -4,6 +4,7 @@ public enum MessageTypes {
     CONFIG,
     GENERIC,
     PROGRESSION,
+    MULTI,
     ERROR
 
 }

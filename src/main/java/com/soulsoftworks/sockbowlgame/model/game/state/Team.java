@@ -24,6 +24,10 @@ public class Team {
         teamPlayers.add(player);
     }
 
+    public void removePlayerFromTeam(String playerId) {
+        teamPlayers.removeIf(player -> player.getPlayerId().equals(playerId));
+    }
+
     public boolean isPlayerOnTeam(String playerId){
         return teamPlayers.stream()
                 .anyMatch(player -> player.getPlayerId().equals(playerId));
