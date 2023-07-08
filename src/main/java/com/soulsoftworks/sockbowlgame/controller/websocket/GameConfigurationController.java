@@ -3,7 +3,7 @@ package com.soulsoftworks.sockbowlgame.controller.websocket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
-import com.soulsoftworks.sockbowlgame.service.GameMessageService;
+import com.soulsoftworks.sockbowlgame.service.MessageService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 
@@ -11,10 +11,10 @@ import org.springframework.stereotype.Controller;
 @MessageMapping("game/config")
 public class GameConfigurationController {
 
-    private final GameMessageService gameMessageService;
+    private final MessageService messageService;
 
-    public GameConfigurationController(GameMessageService gameMessageService) {
-        this.gameMessageService = gameMessageService;
+    public GameConfigurationController(MessageService messageService) {
+        this.messageService = messageService;
     }
 
 
@@ -28,7 +28,7 @@ public class GameConfigurationController {
                 .targetPlayer(playerId).targetTeam(teamId)
                 .build();
 
-        gameMessageService.sendMessage(updatePlayerTeam);
+        messageService.sendMessage(updatePlayerTeam);
     }
 
     @MessageMapping("/set-match-packet")
@@ -40,7 +40,7 @@ public class GameConfigurationController {
                         .packetId(packetId)
                         .build();
 
-        gameMessageService.sendMessage(setMatchPacket);
+        messageService.sendMessage(setMatchPacket);
     }
 
 }

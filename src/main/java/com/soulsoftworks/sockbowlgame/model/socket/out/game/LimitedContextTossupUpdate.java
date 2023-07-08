@@ -1,6 +1,5 @@
 package com.soulsoftworks.sockbowlgame.model.socket.out.game;
 
-import com.soulsoftworks.sockbowlgame.model.packet.PacketTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import lombok.Data;
@@ -10,9 +9,8 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
 @Data
-public class FullContextTossupUpdate extends SockbowlOutMessage {
-
-    private PacketTossup packetTossup;
+public class LimitedContextTossupUpdate extends SockbowlOutMessage {
+    int tossupNumber;
 
     @Override
     public MessageTypes getMessageType() {

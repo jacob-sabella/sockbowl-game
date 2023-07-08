@@ -6,25 +6,21 @@ import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
+import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
-import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
-import com.soulsoftworks.sockbowlgame.model.socket.in.TestSockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
-import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
-import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.annotation.EnableKafka;
-import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -32,34 +28,31 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 import org.springframework.web.socket.sockjs.client.SockJsClient;
-import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import static com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils.createTransportClient;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EnableKafka
-public class GameMessageServiceTest {
+@EmbeddedKafka(partitions = 1, brokerProperties = {"listeners=PLAINTEXT://localhost:9092", "port=9092"})
+public class MessageServiceTest {
 
     @Container
     private static final RedisContainer REDIS_CONTAINER = TestcontainersUtil.getRedisContainer();
 
-    @Container
-    private static final KafkaContainer kafkaContainer = TestcontainersUtil.getKafkaContainer();
+    @Autowired
+    private SessionService sessionService;
 
     @Autowired
-    private GameSessionService gameSessionService;
-
-    @Autowired
-    private GameMessageService gameMessageService;
+    private MessageService messageService;
 
     @Value("${local.server.port}")
     private int port;
@@ -68,9 +61,6 @@ public class GameMessageServiceTest {
     private StompSession stompSession;
     private CompletableFuture<String> completableFuture;
     private static final Gson gson = new Gson();
-    private final BlockingQueue<ConsumerRecord<String, SockbowlInMessage>> records = new LinkedBlockingDeque<>();
-
-    private CountDownLatch latch = new CountDownLatch(1);
 
     @DynamicPropertySource
     private static void registerRedisProperties(DynamicPropertyRegistry registry) {
@@ -80,22 +70,20 @@ public class GameMessageServiceTest {
 
     @DynamicPropertySource
     static void registerKafkaProperties(DynamicPropertyRegistry registry) {
-        registry.add("sockbowl.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
-        System.out.println(kafkaContainer.getBootstrapServers());
+        registry.add("spring.kafka.bootstrap-servers", () -> "localhost:9092");
+        registry.add("sockbowl.kafka.bootstrap-servers", () -> "localhost:9092");
     }
 
 
     @BeforeEach
     void beforeEach() throws InterruptedException, ExecutionException, TimeoutException {
-        // Allow some time for the listener to start
-        latch.await(10, TimeUnit.SECONDS);
 
         // Create a game
         CreateGameRequest createGameRequest = new CreateGameRequest();
         createGameRequest.getGameSettings().setNumPlayers(8);
         createGameRequest.getGameSettings().setNumTeams(2);
 
-        gameSession = gameSessionService.createNewGame(createGameRequest);
+        gameSession = sessionService.createNewGame(createGameRequest);
 
         // Setup web socket client
         WebSocketStompClient stompClient = new WebSocketStompClient(new SockJsClient(createTransportClient()));
@@ -117,11 +105,11 @@ public class GameMessageServiceTest {
         joinGameRequest2.setName("James");
 
         // Add player to game
-        gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
-        gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest2);
+        sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest2);
 
         // Get updated game session
-        gameSession = gameSessionService.getGameSessionById(gameSession.getId());
+        gameSession = sessionService.getGameSessionById(gameSession.getId());
 
         // Create new completable future
         completableFuture = new CompletableFuture<>();
@@ -136,7 +124,7 @@ public class GameMessageServiceTest {
         stompSession = stompClient.connect(stompUrl, headers, new StompSessionHandlerAdapter(){}).get(600, SECONDS);
 
         // Get updated game session
-        gameSession = gameSessionService.getGameSessionById(gameSession.getId());
+        gameSession = sessionService.getGameSessionById(gameSession.getId());
     }
 
 
@@ -157,7 +145,7 @@ public class GameMessageServiceTest {
                 .originatingPlayerId(gameSession.getPlayerList().get(0).getPlayerId())
                 .build();
 
-        gameMessageService.sendMessage(updatePlayerTeam);
+        messageService.sendMessage(updatePlayerTeam);
 
         // Wait for value
         String response = completableFuture.get(10, SECONDS);
@@ -171,24 +159,6 @@ public class GameMessageServiceTest {
         // Assert values are right
         assertEquals(MessageTypes.ERROR, processError.getMessageType());
         assertEquals("Target team or player does not exist", processError.getError());
-    }
-
-    @Test
-    void shouldDeliverGenericMessageSuccessfully() throws InterruptedException {
-
-        TestSockbowlInMessage testSockbowlMessage = new TestSockbowlInMessage();
-
-        gameMessageService.sendMessage("game-topic-test", testSockbowlMessage);
-
-        // wait for the message to be delivered
-        ConsumerRecord<String, SockbowlInMessage> receivedMessage = records.poll(5, TimeUnit.SECONDS);
-        assertNotNull(receivedMessage);
-        assertEquals(MessageTypes.GENERIC, receivedMessage.value().getMessageType());
-    }
-
-    @KafkaListener(topics = "game-topic-test", groupId = "game-consumers" )
-    public void fakeListen(ConsumerRecord<String, SockbowlInMessage> record) {
-        records.add(record);
     }
 
 }

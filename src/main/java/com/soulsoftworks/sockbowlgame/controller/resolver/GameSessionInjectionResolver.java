@@ -5,7 +5,7 @@ import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.model.request.PlayerIdentifiers;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import com.soulsoftworks.sockbowlgame.service.SessionService;
 import org.springframework.core.MethodParameter;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
@@ -17,10 +17,10 @@ import java.util.Optional;
 @Component
 public class GameSessionInjectionResolver implements HandlerMethodArgumentResolver {
 
-    private final GameSessionService gameSessionService;
+    private final SessionService sessionService;
 
-    public GameSessionInjectionResolver(GameSessionService gameSessionService) {
-        this.gameSessionService = gameSessionService;
+    public GameSessionInjectionResolver(SessionService sessionService) {
+        this.sessionService = sessionService;
     }
 
 
@@ -37,7 +37,7 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
         String playerId = (String) accessor.getHeader("playerId");
         String playerSessionSecret = (String) accessor.getHeader("playerSessionSecret");
 
-        Optional<GameSession> gameSessionOptional = Optional.ofNullable(gameSessionService.getGameSessionById(gameSessionId));
+        Optional<GameSession> gameSessionOptional = Optional.ofNullable(sessionService.getGameSessionById(gameSessionId));
 
         if(gameSessionOptional.isPresent()){
             GameSession gameSession = gameSessionOptional.get();

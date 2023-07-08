@@ -5,12 +5,18 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.LimitedContextTossupUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.FullContextTossupUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameStartedMessage;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.MatchState;
+import com.soulsoftworks.sockbowlgame.model.state.Player;
+import org.springframework.stereotype.Service;
 
-public class MatchProgressionMessageProcessor extends MessageProcessor {
+import java.util.stream.Collectors;
+
+@Service
+public class ProgressionMessageProcessor extends MessageProcessor {
 
     @Override
     protected void initializeProcessorMapping() {
@@ -23,7 +29,7 @@ public class MatchProgressionMessageProcessor extends MessageProcessor {
 
         // Check if the player making the request is the game owner
         if (!gameSession.isPlayerGameOwner(startMatchMessage.getOriginatingPlayerId())) {
-            // If not, return an access denied error message
+            // If not, return access denied error message
             return ProcessError.accessDeniedMessage(startMatchMessage);
         }
 
@@ -33,18 +39,27 @@ public class MatchProgressionMessageProcessor extends MessageProcessor {
         // Create a full context question message to send to proctor
         FullContextTossupUpdate fullContextTossupUpdate = FullContextTossupUpdate
                 .builder()
-                .tossup(gameSession.getCurrentMatch().getPacket().getTossups().get(0).getTossup())
+                .packetTossup(gameSession.getCurrentMatch().getPacket().getTossups().get(0))
                 .recipient(gameSession.getProctor().getPlayerId())
                 .build();
 
-        // Create a multi-message
-        SockbowlMultiOutMessage sockbowlMultiOutMessage = SockbowlMultiOutMessage
-                .builder()
-                .sockbowlOutMessage(new GameStartedMessage())
+        // Create limited context message for other players
+        LimitedContextTossupUpdate limitedContextTossupUpdate = LimitedContextTossupUpdate.builder()
+                .tossupNumber(0)
+                .recipients(gameSession.getPlayerList().stream()
+                        .map(Player::getPlayerId)
+                        .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
+                        .collect(Collectors.toList()))
                 .build();
 
+
         // Send multi-message back to processor
-        return sockbowlMultiOutMessage;
+        return SockbowlMultiOutMessage
+                .builder()
+                .sockbowlOutMessage(new GameStartedMessage())
+                .sockbowlOutMessage(fullContextTossupUpdate)
+                .sockbowlOutMessage(limitedContextTossupUpdate)
+                .build();
     }
 
 }

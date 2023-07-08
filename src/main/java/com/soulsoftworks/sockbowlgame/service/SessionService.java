@@ -14,11 +14,11 @@ import java.util.Locale;
 import java.util.Optional;
 
 @Service
-public class GameSessionService {
+public class SessionService {
 
     private final GameSessionRepository gameSessionRepository;
 
-    public GameSessionService(GameSessionRepository gameSessionRepository) {
+    public SessionService(GameSessionRepository gameSessionRepository) {
         this.gameSessionRepository = gameSessionRepository;
     }
 

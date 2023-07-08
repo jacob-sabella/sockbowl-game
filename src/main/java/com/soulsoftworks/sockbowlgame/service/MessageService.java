@@ -8,6 +8,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
+import com.soulsoftworks.sockbowlgame.service.processor.ProgressionMessageProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -23,28 +24,31 @@ import java.util.List;
  * and sends out processed messages to either specific recipients or all connected clients.
  */
 @Service
-public class GameMessageService {
+public class MessageService {
 
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final KafkaTemplate<String, SockbowlInMessage> kafkaTemplate;
-    private final GameSessionService gameSessionService;
+    private final SessionService sessionService;
     private final ConfigurationMessageProcessor configurationMessageProcessor;
+    private final ProgressionMessageProcessor progressionMessageProcessor;
 
     /**
-     * Constructor for the GameMessageService.
+     * Constructor for the MessageService.
      *
-     * @param simpMessagingTemplate Used for sending messages to WebSocket clients.
-     * @param kafkaTemplate Used for sending messages to Kafka topics.
-     * @param gameSessionService Used for retrieving and updating game sessions.
-     * @param configurationMessageProcessor Used for processing configuration type messages.
+     * @param simpMessagingTemplate            Used for sending messages to WebSocket clients.
+     * @param kafkaTemplate                    Used for sending messages to Kafka topics.
+     * @param sessionService               Used for retrieving and updating game sessions.
+     * @param configurationMessageProcessor    Used for processing configuration type messages.
+     * @param progressionMessageProcessor      Used for processing progression type messages.
      */
-    public GameMessageService(SimpMessagingTemplate simpMessagingTemplate,
-                              KafkaTemplate<String, SockbowlInMessage> kafkaTemplate,
-                              GameSessionService gameSessionService, ConfigurationMessageProcessor configurationMessageProcessor) {
+    public MessageService(SimpMessagingTemplate simpMessagingTemplate,
+                          KafkaTemplate<String, SockbowlInMessage> kafkaTemplate,
+                          SessionService sessionService, ConfigurationMessageProcessor configurationMessageProcessor, ProgressionMessageProcessor progressionMessageProcessor) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.kafkaTemplate = kafkaTemplate;
-        this.gameSessionService = gameSessionService;
+        this.sessionService = sessionService;
         this.configurationMessageProcessor = configurationMessageProcessor;
+        this.progressionMessageProcessor = progressionMessageProcessor;
     }
 
     @Value("${sockbowl.kafka.topic.game-topic}")
@@ -81,7 +85,7 @@ public class GameMessageService {
         if(record != null){
             // Retrieve the game session from the incoming message
             SockbowlInMessage message = record.value();
-            GameSession gameSession = gameSessionService.getGameSessionById(message.getGameSessionId());
+            GameSession gameSession = sessionService.getGameSessionById(message.getGameSessionId());
             message.setGameSession(gameSession);
 
             // Direct the message to the appropriate service for processing
@@ -89,7 +93,7 @@ public class GameMessageService {
 
             // If no error occured, update the game session
             if(!(sockbowlOutMessage instanceof ProcessError)){
-                gameSessionService.saveGameSession(gameSession);
+                sessionService.saveGameSession(gameSession);
             }
 
             List<SockbowlOutMessage> sockbowlOutMessagesToProcess;
@@ -130,6 +134,10 @@ public class GameMessageService {
         // Otherwise, create an error message indicating an unknown message type.
         if(message.getMessageType() == MessageTypes.CONFIG){
             return configurationMessageProcessor.processMessage(message);
+        } else if (message.getMessageType() == MessageTypes.PROGRESSION){
+            return progressionMessageProcessor.processMessage(message);
+        } else if (message.getMessageType() == MessageTypes.GAME){
+            return null;
         } else {
             return ProcessError.builder().error("Unknown message type")
                     .recipient(message.getOriginatingPlayerId())

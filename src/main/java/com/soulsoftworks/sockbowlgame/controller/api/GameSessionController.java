@@ -6,7 +6,7 @@ import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import com.soulsoftworks.sockbowlgame.service.SessionService;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -16,11 +16,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("api/v1/session/")
 public class GameSessionController {
 
-    private final GameSessionService gameSessionService;
+    private final SessionService sessionService;
     private final Gson gson = new Gson();
 
-    public GameSessionController(GameSessionService gameSessionService) {
-        this.gameSessionService = gameSessionService;
+    public GameSessionController(SessionService sessionService) {
+        this.sessionService = sessionService;
     }
 
     /**
@@ -31,7 +31,7 @@ public class GameSessionController {
     @PostMapping("/create-new-game-session")
     public GameSessionIdentifiers createNewGame(@RequestBody CreateGameRequest createGameRequest){
 
-        GameSession gameSession = gameSessionService.createNewGame(createGameRequest);
+        GameSession gameSession = sessionService.createNewGame(createGameRequest);
 
         return GameSessionIdentifiers.builder()
                 .fromGameSession(gameSession)
@@ -43,7 +43,7 @@ public class GameSessionController {
      */
     @PostMapping("/join-game-session-by-code")
     public JoinGameResponse joinGameSessionWithCode(@RequestBody JoinGameRequest joinGameRequest){
-        return gameSessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+        return sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
     }
 
 }

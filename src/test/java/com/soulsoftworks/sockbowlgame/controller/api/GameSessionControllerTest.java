@@ -11,7 +11,7 @@ import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import com.soulsoftworks.sockbowlgame.service.SessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -45,7 +45,7 @@ public class GameSessionControllerTest {
     private final Gson gson = new Gson();
 
     @MockBean
-    private GameSessionService gameSessionService;
+    private SessionService sessionService;
 
     @InjectMocks
     MockHttpSession mockHttpSession;
@@ -78,7 +78,7 @@ public class GameSessionControllerTest {
     public void createNewGame_gameSessionIdentifiersAreReturnedAsExpected() throws Exception {
 
         // Return game session when asked via service
-        when(gameSessionService.createNewGame(any())).thenReturn(gameSession);
+        when(sessionService.createNewGame(any())).thenReturn(gameSession);
 
         // Create expected output
         GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()
@@ -113,7 +113,7 @@ public class GameSessionControllerTest {
         JoinGameRequest joinGameRequest = new JoinGameRequest();
 
         // Return game session when asked via service
-        when(gameSessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
+        when(sessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
 
         // Create expected output
         GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()
