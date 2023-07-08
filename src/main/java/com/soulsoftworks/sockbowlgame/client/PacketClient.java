@@ -22,6 +22,6 @@ public interface PacketClient {
      * @return Response de-serialized into Packet object
      */
     @RequestMapping(method = RequestMethod.GET, value = "/get/{id}")
-    List<Packet> getPacketById(@PathVariable long id);
+    Packet getPacketById(@PathVariable long id);
 
 }

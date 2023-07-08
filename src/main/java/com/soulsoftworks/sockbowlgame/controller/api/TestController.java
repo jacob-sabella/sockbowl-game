@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.service.GameSessionService;
+import com.soulsoftworks.sockbowlgame.service.SessionService;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,11 +10,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/api/v1/")
 public class TestController {
 
-    private final GameSessionService gameSessionService;
+    private final SessionService sessionService;
     private final PacketClient packetClient;
 
-    public TestController(GameSessionService gameSessionService, PacketClient packetClient) {
-        this.gameSessionService = gameSessionService;
+    public TestController(SessionService sessionService, PacketClient packetClient) {
+        this.sessionService = sessionService;
         this.packetClient = packetClient;
     }
 

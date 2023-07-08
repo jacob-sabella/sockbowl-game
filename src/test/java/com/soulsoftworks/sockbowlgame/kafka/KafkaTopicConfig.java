@@ -24,5 +24,13 @@ public class KafkaTopicConfig {
                 .replicas(1)
                 .build();
     }
+
+    @Bean
+    public NewTopic topic2() {
+        return TopicBuilder.name("game-topic-test")
+                .partitions(1)
+                .replicas(1)
+                .build();
+    }
 }
 
