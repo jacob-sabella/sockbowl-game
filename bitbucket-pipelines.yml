@@ -5,7 +5,7 @@
 
 # Prerequisites: appropriate project structure should exist in the repository.
 
-image: gradle:7.6.2-jdk11
+image: gradle:7.6.2-jdk17-focal
 
 pipelines:
   default:
