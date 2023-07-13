@@ -25,6 +25,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(UpdatePlayerTeam.class, this::changeTeamForTargetPlayer);
+        processorMapping.registerProcessor(SetProctor.class, this::setPlayerAsProctor);
         processorMapping.registerProcessor(SetMatchPacket.class, this::setPacketForMatch);
     }
 

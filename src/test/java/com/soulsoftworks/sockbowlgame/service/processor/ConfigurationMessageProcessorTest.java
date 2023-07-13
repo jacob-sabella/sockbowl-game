@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
@@ -24,6 +25,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createPlayers;
+import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createTeams;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -149,32 +152,68 @@ public class ConfigurationMessageProcessorTest {
         }
     }
 
+    @Nested
+    class ProctorTests {
 
-    private List<Player> createPlayers(int numberOfPlayers) {
-        return IntStream.rangeClosed(1, numberOfPlayers)
-                .mapToObj(i -> {
-                    Player player = Player.builder()
-                            .playerId("TEST-PLAYER-" + i + "-ID")
-                            .playerSecret("TEST-PLAYER-" + i + "-SECRET")
-                            .build();
-                    if(i == 1){
-                        player.setGameOwner(true);
-                    }
+        @Test
+        @DisplayName("Non-owner player tries to set another player as proctor causes error")
+        void setPlayerAsProctor_NonOwnerPlayerTriesToSetProctor_ReturnsProcessErrorMessage() {
+            SetProctor message = SetProctor.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(1).getPlayerId()) // non-owner player
+                    .targetPlayer(playerList.get(0).getPlayerId())
+                    .build();
 
-                    return player;
-                })
-                .collect(Collectors.toList());
+            SockbowlOutMessage result = processor.setPlayerAsProctor(message);
+
+            assertTrue(result instanceof ProcessError);
+            assertEquals("SetProctor: Permission Denied", ((ProcessError) result).getError());
+        }
+
+        @Test
+        @DisplayName("Owner player successfully sets another player as proctor")
+        void setPlayerAsProctor_OwnerPlayerSetsProctor_SuccessfullySetsProctor() {
+            SetProctor message = SetProctor.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(0).getPlayerId()) // owner player
+                    .targetPlayer(playerList.get(1).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.setPlayerAsProctor(message);
+
+            assertTrue(result instanceof PlayerRosterUpdate);
+        }
+
+        @Test
+        @DisplayName("Owner player tries to set a non-existing player as proctor causes error")
+        void setPlayerAsProctor_NonExistingPlayer_ReturnsProcessErrorMessage() {
+            SetProctor message = SetProctor.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(0).getPlayerId()) // owner player
+                    .targetPlayer("nonexistentPlayerId")
+                    .build();
+
+            SockbowlOutMessage result = processor.setPlayerAsProctor(message);
+
+            assertTrue(result instanceof ProcessError);
+            assertEquals("Player id nonexistentPlayerId does not exist", ((ProcessError) result).getError());
+        }
+
+        @Test
+        @DisplayName("Player tries to set themselves as proctor successfully")
+        void setPlayerAsProctor_PlayerSetsThemselvesAsProctor_SuccessfullySetsProctor() {
+            SetProctor message = SetProctor.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(1).getPlayerId()) // non-owner player
+                    .targetPlayer(playerList.get(1).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.setPlayerAsProctor(message);
+
+            assertTrue(result instanceof PlayerRosterUpdate);
+        }
     }
 
-    private List<Team> createTeams(int numberOfTeams) {
-        return IntStream.rangeClosed(1, numberOfTeams)
-                .mapToObj(i -> {
-                    Team team = new Team();
-                    team.setTeamId("TEST-TEAM-" + i);
-                    return team;
-                })
-                .collect(Collectors.toList());
-    }
 }
 
 

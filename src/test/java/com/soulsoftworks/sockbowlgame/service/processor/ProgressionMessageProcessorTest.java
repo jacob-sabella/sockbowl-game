@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createPlayers;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,19 +93,4 @@ public class ProgressionMessageProcessorTest {
         assertEquals(MatchState.IN_GAME, mockGameSession.getCurrentMatch().getMatchState());
     }
 
-    private List<Player> createPlayers(int numberOfPlayers) {
-        return IntStream.rangeClosed(1, numberOfPlayers)
-                .mapToObj(i -> {
-                    Player player = Player.builder()
-                            .playerId("TEST-PLAYER-" + i + "-ID")
-                            .playerSecret("TEST-PLAYER-" + i + "-SECRET")
-                            .build();
-                    if(i == 1){
-                        player.setGameOwner(true);
-                    }
-
-                    return player;
-                })
-                .collect(Collectors.toList());
-    }
 }
