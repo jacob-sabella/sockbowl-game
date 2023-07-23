@@ -8,6 +8,7 @@ import org.springframework.data.annotation.Id;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Data
@@ -49,6 +50,15 @@ public class GameSession{
         }
 
         playerList.add(player);
+    }
+
+
+    /**
+     * Get the current round of the current match
+     * @return Current active Round object
+     */
+    public Round getCurrentRound(){
+        return getCurrentMatch().getCurrentRound();
     }
 
     /**
@@ -105,6 +115,21 @@ public class GameSession{
                 .map(Player::isGameOwner)
                 .findFirst()
                 .orElse(false);
+    }
+
+    /**
+     * Retrieves the player mode of a player from the game session by their player ID.
+     *
+     * @param playerId The unique ID of the player.
+     * @return PlayerMode object if found, else null.
+     */
+    public PlayerMode getPlayerModeById(String playerId){
+        // Use a stream to search through the player list for a match on player ID
+        Optional<Player> playerOptional = this.playerList.stream()
+                .filter(player -> player.getPlayerId().equals(playerId))
+                .findFirst();
+
+        return playerOptional.map(Player::getPlayerMode).orElse(null);
     }
 
 }

@@ -65,7 +65,7 @@ public class GameMessageProcessorTest {
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .build();
 
-            SockbowlOutMessage result = processor.processPlayerBuzz(message);
+            SockbowlOutMessage result = processor.playerBuzz(message);
 
             assertTrue(result instanceof PlayerBuzzed);
             assertEquals(playerList.get(0).getPlayerId(), ((PlayerBuzzed) result).getPlayerId());
@@ -83,7 +83,7 @@ public class GameMessageProcessorTest {
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .build();
 
-            SockbowlOutMessage result = processor.processPlayerBuzz(message);
+            SockbowlOutMessage result = processor.playerBuzz(message);
 
             assertTrue(result instanceof PlayerBuzzed);
             assertEquals(playerList.get(0).getPlayerId(), ((PlayerBuzzed) result).getPlayerId());
@@ -99,7 +99,7 @@ public class GameMessageProcessorTest {
                     .originatingPlayerId(playerList.get(1).getPlayerId())
                     .build();
 
-            SockbowlOutMessage result = processor.processPlayerBuzz(message);
+            SockbowlOutMessage result = processor.playerBuzz(message);
 
             assertTrue(result instanceof ProcessError);
             assertEquals("Player mode is not buzzer", ((ProcessError) result).getError());
@@ -116,7 +116,7 @@ public class GameMessageProcessorTest {
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .build();
 
-            SockbowlOutMessage result = processor.processPlayerBuzz(message);
+            SockbowlOutMessage result = processor.playerBuzz(message);
 
             assertTrue(result instanceof ProcessError);
             assertEquals("Buzz processed when round is in unsupported state", ((ProcessError) result).getError());
