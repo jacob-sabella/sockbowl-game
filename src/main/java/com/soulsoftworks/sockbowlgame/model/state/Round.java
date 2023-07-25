@@ -13,6 +13,7 @@ public class Round {
     private List<Buzz> buzzList = new ArrayList<>();
     private String question;
     private String answer;
+    private boolean proctorFinishedReading = false;
 
     public void processBuzz(String playerId, String teamId){
         if(this.currentBuzz != null){
@@ -22,6 +23,18 @@ public class Round {
         this.currentBuzz.setTeamId(teamId);
         this.currentBuzz.setPlayerId(playerId);
         this.roundState = RoundState.AWAITING_ANSWER;
+    }
+
+    public void processIncorrectAnswer(){
+        currentBuzz.setCorrect(false);
+        buzzList.add(currentBuzz);
+        currentBuzz = null;
+
+        if(!proctorFinishedReading){
+            this.roundState = RoundState.PROCTOR_READING;
+        } else{
+            this.roundState = RoundState.AWAITING_BUZZ;
+        }
     }
 
     public void setupRound(int roundNumber, String question, String answer){

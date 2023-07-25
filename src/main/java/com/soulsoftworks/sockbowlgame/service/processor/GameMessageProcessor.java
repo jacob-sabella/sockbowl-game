@@ -4,6 +4,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
@@ -85,8 +86,10 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
+        // Call into the round the process an incorrect answer to get the round into the correct state
+        gameSession.getCurrentRound().processIncorrectAnswer();
 
-
-
+        // Let everyone know that an incorrect answer was processed
+        return IncorrectAnswer.builder().build();
     }
 }
