@@ -1,8 +1,12 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerCorrect;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerIncorrect;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.CorrectAnswer;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +58,7 @@ public class GameMessageProcessorTest {
     @Nested
     @DisplayName("Buzz Tests")
     class BuzzTests {
+
         @Test
         @DisplayName("Player in BUZZER mode successfully buzzes during valid round state")
         void processPlayerBuzz_BuzzerModePlayerBuzzesDuringValidRoundState_ReturnsPlayerBuzzedMessage() {
@@ -121,6 +126,83 @@ public class GameMessageProcessorTest {
             assertTrue(result instanceof ProcessError);
             assertEquals("Buzz processed when round is in unsupported state", ((ProcessError) result).getError());
         }
-
     }
+
+    @Nested
+    @DisplayName("Player Answer Tests")
+    class PlayerAnswerTests {
+
+        @BeforeEach
+        public void beforeEach(){
+            mockGameSession.getCurrentRound().processBuzz(playerList.get(0).getPlayerId(),
+                    mockGameSession.getTeamByPlayerId(playerList.get(0).getPlayerId()).getTeamId());
+        }
+
+        @Test
+        @DisplayName("Proctor player processes correct answer during AWAITING_ANSWER round state")
+        void processPlayerAnswer_ProctorProcessesCorrectAnswerInSupportedState_ReturnsCorrectAnswer() {
+            playerList.get(0).setPlayerMode(PlayerMode.PROCTOR);
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.AWAITING_ANSWER);
+
+            AnswerCorrect message = AnswerCorrect.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(0).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.playerAnswer(message);
+
+            assertTrue(result instanceof CorrectAnswer);
+        }
+
+        @Test
+        @DisplayName("Proctor player processes incorrect answer during AWAITING_ANSWER round state")
+        void processPlayerAnswer_ProctorProcessesIncorrectAnswerInSupportedState_ReturnsIncorrectAnswer() {
+            playerList.get(0).setPlayerMode(PlayerMode.PROCTOR);
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.AWAITING_ANSWER);
+
+            AnswerIncorrect message = AnswerIncorrect.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(0).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.playerAnswer(message);
+
+            assertTrue(result instanceof IncorrectAnswer);
+        }
+
+        @Test
+        @DisplayName("Non-proctor player tries to process answer")
+        void processPlayerAnswer_NonProctorTriesToProcessAnswer_ReturnsProcessErrorMessage() {
+            playerList.get(1).setPlayerMode(PlayerMode.BUZZER);
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.AWAITING_ANSWER);
+
+            AnswerCorrect message = AnswerCorrect.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(1).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.playerAnswer(message);
+
+            assertTrue(result instanceof ProcessError);
+            assertEquals("Originating player is not the proctor", ((ProcessError) result).getError());
+        }
+
+        @Test
+        @DisplayName("Proctor processes answer in unsupported round state causes error")
+        void processPlayerAnswer_ProctorProcessesAnswerInUnsupportedState_ReturnsProcessErrorMessage() {
+            playerList.get(0).setPlayerMode(PlayerMode.PROCTOR);
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.PROCTOR_READING);
+
+            AnswerCorrect message = AnswerCorrect.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(playerList.get(0).getPlayerId())
+                    .build();
+
+            SockbowlOutMessage result = processor.playerAnswer(message);
+
+            assertTrue(result instanceof ProcessError);
+            assertEquals("Answer incorrect message processed when round is in unsupported state", ((ProcessError) result).getError());
+        }
+    }
+
 }

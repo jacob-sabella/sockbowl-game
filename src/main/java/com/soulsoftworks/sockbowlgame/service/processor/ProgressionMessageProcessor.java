@@ -41,8 +41,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         PacketTossup packetTossup = gameSession.getCurrentMatch().getPacket().getTossups().get(0);
 
         // Set up the first round
-        gameSession.getCurrentMatch().getCurrentRound().setupRound(1, packetTossup.getTossup().getQuestion(),
-                packetTossup.getTossup().getAnswer());
+        gameSession.getCurrentMatch().advanceRound();
 
         // Create a full context question message to send to proctor
         FullContextTossupUpdate fullContextTossupUpdate = FullContextTossupUpdate

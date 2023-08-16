@@ -14,4 +14,15 @@ public class Match {
     private Packet packet;
     private List<Round> previousRounds = new ArrayList<>();
     private Round currentRound = new Round();
+
+    public void advanceRound(){
+        int nextRoundNumber = currentRound.getRoundNumber() + 1;
+        String nextRoundQuestion = packet.getTossups().get(nextRoundNumber).getTossup().getQuestion();
+        String nextRoundAnswer = packet.getTossups().get(nextRoundNumber).getTossup().getAnswer();
+
+        previousRounds.add(currentRound);
+        currentRound = new Round();
+        currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer);
+    }
+
 }

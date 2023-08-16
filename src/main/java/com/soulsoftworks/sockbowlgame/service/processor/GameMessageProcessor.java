@@ -1,9 +1,12 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerCorrect;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerIncorrect;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.CorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
@@ -22,6 +25,8 @@ public class GameMessageProcessor extends MessageProcessor {
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(PlayerIncomingBuzz.class, this::playerBuzz);
+        processorMapping.registerProcessor(AnswerIncorrect.class, this::playerAnswer);
+        processorMapping.registerProcessor(AnswerCorrect.class, this::playerAnswer);
     }
 
     /**
@@ -31,12 +36,23 @@ public class GameMessageProcessor extends MessageProcessor {
      * @param playerBuzz the incoming message from the player containing the buzz action.
      * @return SockbowlOutMessage indicating the result of the buzz processing. It can be null if there are no errors.
      */
-    public SockbowlOutMessage playerBuzz(SockbowlInMessage playerBuzz){
+    public SockbowlOutMessage playerBuzz(SockbowlInMessage playerBuzz) {
         // Retrieve the current game session from the player's buzz
         GameSession gameSession = playerBuzz.getGameSession();
 
+        // Get the teamId of the player who buzzed
+        String teamId = gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId();
+
+        // Check if the team has already buzzed this round, if so return an error message
+        if (gameSession.getCurrentRound().hasTeamBuzzed(teamId)) {
+            return ProcessError.builder()
+                    .recipient(playerBuzz.getOriginatingPlayerId())
+                    .error("Team has already buzzed in this round")
+                    .build();
+        }
+
         // Check if the player is in the BUZZER mode, if not return an error message
-        if(gameSession.getPlayerById(playerBuzz.getOriginatingPlayerId()).getPlayerMode() != PlayerMode.BUZZER){
+        if (gameSession.getPlayerById(playerBuzz.getOriginatingPlayerId()).getPlayerMode() != PlayerMode.BUZZER) {
             return ProcessError.builder()
                     .recipient(playerBuzz.getOriginatingPlayerId())
                     .error("Player mode is not buzzer")
@@ -44,8 +60,8 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         // Check if the current game round is in a state that allows buzzing, if not return an error message
-        if(gameSession.getCurrentRound().getRoundState() != RoundState.PROCTOR_READING &&
-                gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BUZZ){
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.PROCTOR_READING &&
+                gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BUZZ) {
             return ProcessError.builder()
                     .recipient(playerBuzz.getOriginatingPlayerId())
                     .error("Buzz processed when round is in unsupported state")
@@ -66,30 +82,34 @@ public class GameMessageProcessor extends MessageProcessor {
     }
 
 
-    public SockbowlOutMessage playerAnswerIncorrect(SockbowlInMessage answerIncorrect){
-        // Retrieve the current game session from the player's buzz
-        GameSession gameSession = answerIncorrect.getGameSession();
+    public SockbowlOutMessage playerAnswer(SockbowlInMessage answer) {
+        // Retrieve the current game session from message
+        GameSession gameSession = answer.getGameSession();
 
         // Check if the player is the proctor, if not return an error message
-        if(gameSession.getPlayerModeById(answerIncorrect.getOriginatingPlayerId()) != PlayerMode.PROCTOR){
+        if (gameSession.getPlayerModeById(answer.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.builder()
-                    .recipient(answerIncorrect.getOriginatingPlayerId())
+                    .recipient(answer.getOriginatingPlayerId())
                     .error("Originating player is not the proctor")
                     .build();
         }
 
         // We can only process this type of message if we're waiting for a buzz
-        if(gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BUZZ){
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_ANSWER) {
             return ProcessError.builder()
-                    .recipient(answerIncorrect.getOriginatingPlayerId())
+                    .recipient(answer.getOriginatingPlayerId())
                     .error("Answer incorrect message processed when round is in unsupported state")
                     .build();
         }
 
         // Call into the round the process an incorrect answer to get the round into the correct state
-        gameSession.getCurrentRound().processIncorrectAnswer();
-
-        // Let everyone know that an incorrect answer was processed
-        return IncorrectAnswer.builder().build();
+        if(answer instanceof AnswerIncorrect){
+            gameSession.getCurrentRound().processIncorrectAnswer();
+            return IncorrectAnswer.builder().build();
+        } else{
+            gameSession.getCurrentRound().processCorrectAnswer();
+            return CorrectAnswer.builder().build();
+        }
     }
+
 }

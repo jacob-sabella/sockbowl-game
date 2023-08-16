@@ -54,7 +54,6 @@ public class ConfigurationMessageProcessorTest {
                 .build();
     }
 
-
     @Nested
     class TeamTests {
 

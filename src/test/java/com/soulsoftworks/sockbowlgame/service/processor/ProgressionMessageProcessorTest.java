@@ -43,7 +43,9 @@ public class ProgressionMessageProcessorTest {
         mockMatch.setPacket(new Packet());
         mockMatch.getPacket().setTossups(new ArrayList<>());
         mockMatch.getPacket().getTossups().add(new PacketTossup());
+        mockMatch.getPacket().getTossups().add(new PacketTossup());
         mockMatch.getPacket().getTossups().get(0).setTossup(new Tossup());
+        mockMatch.getPacket().getTossups().get(1).setTossup(new Tossup());
         playerList.get(0).setPlayerMode(PlayerMode.PROCTOR);
 
         mockGameSession = GameSession.builder()
