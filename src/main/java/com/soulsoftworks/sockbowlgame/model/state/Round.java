@@ -49,8 +49,10 @@ public class Round {
     public void processIncorrectAnswer(){
         // Mark the current buzz as incorrect
         currentBuzz.setCorrect(false);
+
         // Add the buzz to the list
         buzzList.add(currentBuzz);
+
         // Reset the current buzz
         currentBuzz = null;
 
@@ -69,8 +71,10 @@ public class Round {
     public void processCorrectAnswer(){
         // Mark the current buzz as correct
         currentBuzz.setCorrect(true);
+
         // Add the buzz to the list
         buzzList.add(currentBuzz);
+
         // Reset the current buzz
         currentBuzz = null;
 

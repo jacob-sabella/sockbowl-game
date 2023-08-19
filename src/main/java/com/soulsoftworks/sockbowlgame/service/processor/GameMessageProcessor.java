@@ -81,7 +81,24 @@ public class GameMessageProcessor extends MessageProcessor {
                 .build();
     }
 
-
+    /**
+     * Processes a player's answer type based on the current game session and the type of the provided message.
+     * <p>
+     * This method checks if:
+     * <ul>
+     *     <li>The originating player is the proctor.</li>
+     *     <li>The current game round is in a state where an answer can be processed.</li>
+     *     <li>The type of the answer provided (either correct or incorrect).</li>
+     * </ul>
+     * If the checks pass, the method processes the answer accordingly and returns either a CorrectAnswer or IncorrectAnswer message.
+     * Otherwise, it returns a ProcessError message.
+     * </p>
+     *
+     * @param answer The incoming message which contains details about the player's answer, originating player ID, and the game session.
+     * @return SockbowlOutMessage Represents the outcome of the processed answer, which can be of type CorrectAnswer, IncorrectAnswer, or ProcessError.
+     * @throws NullPointerException if the answer or its nested objects are null.
+     * @throws IllegalArgumentException if the state of the game session or the provided answer does not meet the expected conditions.
+     */
     public SockbowlOutMessage playerAnswer(SockbowlInMessage answer) {
         // Retrieve the current game session from message
         GameSession gameSession = answer.getGameSession();

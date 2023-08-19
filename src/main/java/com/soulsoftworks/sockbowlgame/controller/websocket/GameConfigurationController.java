@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
@@ -32,7 +33,7 @@ public class GameConfigurationController {
     }
 
     @MessageMapping("/set-match-packet")
-    public void updatePlayerTeam(GameSessionInjection gameSessionInjection, long packetId) {
+    public void setMatchPacket(GameSessionInjection gameSessionInjection, long packetId) {
         // Create message
         SetMatchPacket setMatchPacket = SetMatchPacket.builder()
                         .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
@@ -41,6 +42,19 @@ public class GameConfigurationController {
                         .build();
 
         messageService.sendMessage(setMatchPacket);
+    }
+
+
+    @MessageMapping("/set-proctor")
+    public void setProctor(GameSessionInjection gameSessionInjection, String targetPlayerId) {
+        // Create message
+        SetProctor setProctor = SetProctor.builder()
+                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
+                .gameSessionId(gameSessionInjection.getGameSessionId())
+                .targetPlayer(targetPlayerId)
+                .build();
+
+        messageService.sendMessage(setProctor);
     }
 
 }
