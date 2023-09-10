@@ -13,7 +13,6 @@ import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -82,8 +81,6 @@ public class MessageServiceTest {
 
         // Create a game
         CreateGameRequest createGameRequest = new CreateGameRequest();
-        createGameRequest.getGameSettings().setNumPlayers(8);
-        createGameRequest.getGameSettings().setNumTeams(2);
 
         gameSession = sessionService.createNewGame(createGameRequest);
 
@@ -96,14 +93,12 @@ public class MessageServiceTest {
         JoinGameRequest joinGameRequest = new JoinGameRequest();
         joinGameRequest.setJoinCode(gameSession.getJoinCode());
         joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
-        joinGameRequest.setPlayerMode(PlayerMode.BUZZER);
         joinGameRequest.setName("Jimmy");
 
         // Create another join game request
         JoinGameRequest joinGameRequest2 = new JoinGameRequest();
         joinGameRequest2.setJoinCode(gameSession.getJoinCode());
         joinGameRequest2.setPlayerSessionId(UUID.randomUUID().toString());
-        joinGameRequest2.setPlayerMode(PlayerMode.BUZZER);
         joinGameRequest2.setName("James");
 
         // Add player to game

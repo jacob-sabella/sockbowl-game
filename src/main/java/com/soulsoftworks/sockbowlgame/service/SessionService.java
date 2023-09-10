@@ -1,8 +1,6 @@
 package com.soulsoftworks.sockbowlgame.service;
 
-import com.soulsoftworks.sockbowlgame.model.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.state.JoinStatus;
-import com.soulsoftworks.sockbowlgame.model.state.Team;
+import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
@@ -12,6 +10,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
+
+import static com.soulsoftworks.sockbowlgame.model.state.PlayerSettingsByGameMode.*;
 
 @Service
 public class SessionService {
@@ -23,6 +24,10 @@ public class SessionService {
     }
 
     public GameSession createNewGame(CreateGameRequest createGameRequest) {
+
+        // Get the player settings for the game mode
+        PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(createGameRequest.getGameSettings().getGameMode());
+
         // Create a new join code
         String joinCode = generateJoinCode();
 
@@ -38,7 +43,7 @@ public class SessionService {
                 .build();
 
         // Add teams to game session
-        for(int i = 1; i <= gameSession.getGameSettings().getNumTeams(); i++){
+        for(int i = 1; i <= playerSettings.getNumTeams(); i++){
             Team team = new Team();
             team.setTeamName("Team " + (i));
             gameSession.getTeams().add(team);
@@ -53,28 +58,32 @@ public class SessionService {
      * For a given JoinGameRequest, find the session with the given join code and create a JoinGameResponse with
      * relevant details
      *
-     * @param joinGameRequest
+     * @param joinGameRequest Join game request from client
      */
     public JoinGameResponse addPlayerToGameSessionWithJoinCode(JoinGameRequest joinGameRequest) {
+        Player newPlayer = null;
+
         GameSession gameSession = getGameSessionByJoinCode(joinGameRequest.getJoinCode());
+
+        PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(gameSession.getGameSettings().getGameMode());
 
         JoinGameResponse joinGameResponse = new JoinGameResponse();
 
-        if (gameSession != null) {
-            if (gameSession.getPlayerList().size() == gameSession.getGameSettings().getNumPlayers()) {
-                joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
-            } else{
-                gameSession.addPlayer(joinGameRequest);
-                saveGameSession(gameSession);
-                joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
-            }
-        } else{
-            joinGameResponse.setJoinStatus(JoinStatus.GAME_DOES_NOT_EXIST);
-            return joinGameResponse;
+        //TODO: This isnt permanent solution to player ID
+        joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
+
+        if (gameSession.getPlayerList().size() == playerSettings.getMaxPlayers()) {
+            joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
+        } else {
+            newPlayer = gameSession.addPlayer(joinGameRequest);
+            saveGameSession(gameSession);
+            joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         }
 
-        if(joinGameResponse.getJoinStatus() == JoinStatus.SUCCESS){
+        if(joinGameResponse.getJoinStatus() == JoinStatus.SUCCESS && newPlayer != null){
             joinGameResponse.setGameSessionId(gameSession.getId());
+            joinGameResponse.setPlayerSessionId(joinGameRequest.getPlayerSessionId());
+            joinGameResponse.setPlayerSecret(newPlayer.getPlayerSecret());
         }
 
         return joinGameResponse;

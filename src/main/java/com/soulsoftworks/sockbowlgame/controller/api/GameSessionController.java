@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 public class GameSessionController {
 
     private final SessionService sessionService;
-    private final Gson gson = new Gson();
 
     public GameSessionController(SessionService sessionService) {
         this.sessionService = sessionService;

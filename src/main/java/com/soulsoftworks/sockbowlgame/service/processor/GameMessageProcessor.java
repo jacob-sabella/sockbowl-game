@@ -1,10 +1,12 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerCorrect;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerIncorrect;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.CorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
@@ -28,6 +30,7 @@ public class GameMessageProcessor extends MessageProcessor {
         processorMapping.registerProcessor(AnswerIncorrect.class, this::playerAnswer);
         processorMapping.registerProcessor(AnswerCorrect.class, this::playerAnswer);
     }
+
 
     /**
      * Method to process the player's buzz action in the game.

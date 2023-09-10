@@ -14,5 +14,4 @@ public class JoinGameRequest {
     String playerSessionId;
     String joinCode;
     String name;
-    PlayerMode playerMode;
 }

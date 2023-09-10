@@ -114,8 +114,8 @@ public class MessageService {
                                     gameSession.getId() + "/" + recipient, singleMessage)
                     );
                 } else{
-                    simpMessagingTemplate.convertAndSend(
-                            MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
+                    simpMessagingTemplate.convertAndSend("/" +
+                                    MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
                             singleMessage);
                 }
             }

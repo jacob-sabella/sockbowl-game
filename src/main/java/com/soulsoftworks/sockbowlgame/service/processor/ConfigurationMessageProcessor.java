@@ -3,10 +3,12 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
@@ -27,6 +29,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         processorMapping.registerProcessor(UpdatePlayerTeam.class, this::changeTeamForTargetPlayer);
         processorMapping.registerProcessor(SetProctor.class, this::setPlayerAsProctor);
         processorMapping.registerProcessor(SetMatchPacket.class, this::setPacketForMatch);
+        processorMapping.registerProcessor(GetGameState.class, this::sendGameState);
     }
 
     /**
@@ -225,5 +228,15 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         } else {
             return gameSession.isPlayerGameOwner(askingPlayer);
         }
+    }
+
+
+    private SockbowlOutMessage sendGameState(SockbowlInMessage sockbowlInMessage) {
+
+        // Retrieve the current game session from message
+        GameSession gameSession = sockbowlInMessage.getGameSession();
+
+        return GameSessionUpdate.builder().gameSession(gameSession).build();
+
     }
 }

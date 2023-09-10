@@ -33,9 +33,9 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
     public Object resolveArgument(MethodParameter parameter, Message<?> message) {
         SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.wrap(message);
 
-        String gameSessionId = (String) accessor.getHeader("gameSessionId");
-        String playerId = (String) accessor.getHeader("playerId");
-        String playerSessionSecret = (String) accessor.getHeader("playerSessionSecret");
+        String gameSessionId = accessor.getFirstNativeHeader("gameSessionId");
+        String playerId = accessor.getFirstNativeHeader("playerSessionId");
+        String playerSessionSecret = accessor.getFirstNativeHeader("playerSecret");
 
         Optional<GameSession> gameSessionOptional = Optional.ofNullable(sessionService.getGameSessionById(gameSessionId));
 

@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
+import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
@@ -55,6 +57,17 @@ public class GameConfigurationController {
                 .build();
 
         messageService.sendMessage(setProctor);
+    }
+
+    @MessageMapping("/get-game")
+    public void getGameSession(GameSessionInjection gameSessionInjection) {
+
+        GetGameState getGameState = GetGameState.builder()
+                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
+                .gameSessionId(gameSessionInjection.getGameSessionId())
+                .build();
+
+        messageService.sendMessage(getGameState);
     }
 
 }

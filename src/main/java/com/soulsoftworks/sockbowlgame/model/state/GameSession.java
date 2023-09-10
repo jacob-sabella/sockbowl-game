@@ -36,11 +36,11 @@ public class GameSession{
     @Builder.Default
     private Match currentMatch = new Match();
 
-    public void addPlayer(JoinGameRequest joinGameRequest){
+    public Player addPlayer(JoinGameRequest joinGameRequest){
         Player player = Player.builder()
                 .playerId(joinGameRequest.getPlayerSessionId())
                 .name(joinGameRequest.getName())
-                .playerMode(joinGameRequest.getPlayerMode())
+                .playerMode(PlayerMode.SPECTATOR)
                 .playerSecret(UUID.randomUUID().toString())
                 .build();
 
@@ -50,6 +50,8 @@ public class GameSession{
         }
 
         playerList.add(player);
+
+        return player;
     }
 
 
