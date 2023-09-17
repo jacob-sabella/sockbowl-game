@@ -17,6 +17,6 @@ public class GameSessionUpdate extends SockbowlOutMessage {
 
     @Override
     public MessageTypes getMessageType() {
-        return MessageTypes.GAME;
+        return MessageTypes.CONFIG;
     }
 }
