@@ -46,7 +46,7 @@ public class SessionService {
         for(int i = 1; i <= playerSettings.getNumTeams(); i++){
             Team team = new Team();
             team.setTeamName("Team " + (i));
-            gameSession.getTeams().add(team);
+            gameSession.getTeamList().add(team);
         }
 
         // Persist game session in Redis

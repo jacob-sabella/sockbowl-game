@@ -27,7 +27,7 @@ public class PlayerRosterUpdate extends SockbowlOutMessage {
     public static PlayerRosterUpdate fromGameSession(GameSession gameSession) {
         return PlayerRosterUpdate.builder()
                 .playerList(gameSession.getPlayerList())
-                .teamList(gameSession.getTeams())
+                .teamList(gameSession.getTeamList())
                 .build();
     }
 }

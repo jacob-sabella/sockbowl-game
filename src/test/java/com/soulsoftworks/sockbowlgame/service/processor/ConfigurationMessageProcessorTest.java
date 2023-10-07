@@ -11,7 +11,6 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
-import com.soulsoftworks.sockbowlgame.model.state.Team;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,8 +21,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createPlayers;
 import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createTeams;
@@ -49,7 +46,7 @@ public class ConfigurationMessageProcessorTest {
                 .id("TEST")
                 .gameSettings(new GameSettings())
                 .joinCode("TEST")
-                .teams(createTeams(2))
+                .teamList(createTeams(2))
                 .playerList(playerList)
                 .build();
     }
@@ -65,7 +62,7 @@ public class ConfigurationMessageProcessorTest {
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(1).getPlayerId())
                     .targetPlayer(playerList.get(0).getPlayerId())
-                    .targetTeam(mockGameSession.getTeams().get(0).getTeamId())
+                    .targetTeam(mockGameSession.getTeamList().get(0).getTeamId())
                     .build();
 
             SockbowlOutMessage result = processor.changeTeamForTargetPlayer(message);
@@ -83,7 +80,7 @@ public class ConfigurationMessageProcessorTest {
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .targetPlayer("nonexistentPlayerId")
-                    .targetTeam(mockGameSession.getTeams().get(0).getTeamId())
+                    .targetTeam(mockGameSession.getTeamList().get(0).getTeamId())
                     .build();
 
             SockbowlOutMessage result = processor.changeTeamForTargetPlayer(message);
@@ -99,7 +96,7 @@ public class ConfigurationMessageProcessorTest {
                     .gameSession(mockGameSession)
                     .originatingPlayerId(playerList.get(0).getPlayerId())
                     .targetPlayer(playerList.get(1).getPlayerId())
-                    .targetTeam(mockGameSession.getTeams().get(0).getTeamId())
+                    .targetTeam(mockGameSession.getTeamList().get(0).getTeamId())
                     .build();
 
             SockbowlOutMessage result = processor.changeTeamForTargetPlayer(message);

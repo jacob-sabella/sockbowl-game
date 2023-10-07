@@ -48,11 +48,11 @@ public class GameMessageProcessorTest {
                 .playerList(playerList)
                 .currentMatch(mockMatch)
                 .gameSettings(new GameSettings())
-                .teams(teams)
+                .teamList(teams)
                 .build();
 
-        mockGameSession.getTeams().get(0).addPlayerToTeam(playerList.get(0));
-        mockGameSession.getTeams().get(1).addPlayerToTeam(playerList.get(1));
+        mockGameSession.getTeamList().get(0).addPlayerToTeam(playerList.get(0));
+        mockGameSession.getTeamList().get(1).addPlayerToTeam(playerList.get(1));
     }
 
     @Nested

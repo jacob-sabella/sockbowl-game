@@ -13,10 +13,10 @@ import java.util.UUID;
 
 @Data
 @Document(timeToLive = 21600)
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor(force = true)
 @AllArgsConstructor
-public class GameSession{
+public class  GameSession{
     @Id
     private String id;
 
@@ -31,7 +31,7 @@ public class GameSession{
     private List<Player> playerList = new ArrayList<>();
 
     @Builder.Default
-    private List<Team> teams = new ArrayList<>();
+    private List<Team> teamList = new ArrayList<>();
 
     @Builder.Default
     private Match currentMatch = new Match();
@@ -79,14 +79,14 @@ public class GameSession{
 
 
     public Team findTeamWithId(String teamId) {
-        return teams.stream()
+        return teamList.stream()
                 .filter(team -> team.getTeamId().equals(teamId))
                 .findFirst()
                 .orElse(null);
     }
 
     public Team getTeamByPlayerId(String playerId) {
-        return teams.stream()
+        return teamList.stream()
                 .filter(team -> team.isPlayerOnTeam(playerId))
                 .findFirst()
                 .orElse(null);

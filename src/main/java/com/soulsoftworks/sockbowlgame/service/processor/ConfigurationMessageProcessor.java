@@ -8,7 +8,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.model.socket.out.config.GameSessionUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
@@ -236,7 +236,14 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Retrieve the current game session from message
         GameSession gameSession = sockbowlInMessage.getGameSession();
 
-        return GameSessionUpdate.builder().gameSession(gameSession).build();
+        // Get player that sent the message and determine their player mode
+        PlayerMode playerMode = gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId());
+
+        // Sanitize and return the session
+        return GameSessionUpdate.builder()
+                .gameSession(GameSessionSanitizer.sanitize(gameSession, playerMode))
+                .recipient(sockbowlInMessage.getOriginatingPlayerId())
+                .build();
 
     }
 }

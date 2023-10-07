@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame.model.socket.out.config;
+package com.soulsoftworks.sockbowlgame.model.socket.out.progression;
 
 
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
@@ -17,6 +17,6 @@ public class GameSessionUpdate extends SockbowlOutMessage {
 
     @Override
     public MessageTypes getMessageType() {
-        return MessageTypes.CONFIG;
+        return MessageTypes.PROGRESSION;
     }
 }
