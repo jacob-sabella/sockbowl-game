@@ -2,18 +2,21 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.model.packet.Packet;
+import com.soulsoftworks.sockbowlgame.model.packet.PacketTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
-import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.springframework.stereotype.Service;
+
+import java.util.Comparator;
 
 @Service
 public class ConfigurationMessageProcessor extends MessageProcessor {
@@ -47,25 +50,26 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         GameSession gameSession = message.getGameSession();
 
         // Get values from the session
-        Team targetTeam = gameSession.findTeamWithId(message.getTargetTeam());
+        Team targetTeam = new Team();
+        if (!message.getTargetTeam().equals(Team.SPECTATOR_TEAM)) {
+            targetTeam = gameSession.findTeamWithId(message.getTargetTeam());
+        }
         Team currentTeam = gameSession.getTeamByPlayerId(message.getTargetPlayer());
         Player targetPlayer = gameSession.getPlayerById(message.getTargetPlayer());
 
         // Only usable in the CONFIG state
-        if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
+        if (gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG) {
             return ProcessError.wrongStateMessage(message);
         }
 
         // Checking if the target team or target player is not found
         if (targetTeam == null || targetPlayer == null) {
             // If any is not found, returning an error message
-            return ProcessError.builder().recipient(updatePlayerTeamMessage.getOriginatingPlayerId())
-                    .error("Target team or player does not exist").build();
+            return ProcessError.builder().recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).error("Target team or player does not exist").build();
         }
 
         // Validating if the player who initiated the request is allowed to change the team of the target player
-        if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(),
-                message.getTargetPlayer())) {
+        if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(), message.getTargetPlayer())) {
             // If not, returning an error message
             return ProcessError.accessDeniedMessage(message);
         }
@@ -74,20 +78,24 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Checking if the player is already in the target team
         if (currentTeam != null && currentTeam.getTeamId().equals(targetTeam.getTeamId())) {
             // If yes, returning an error message
-            return ProcessError.builder().error("Player already on team")
-                    .recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
+            return ProcessError.builder().error("Player already on team").recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
         }
 
         // If the player is currently in a team, remove the player from the current team
-        if (currentTeam != null) {
+        if (currentTeam != null && !currentTeam.getTeamId().equals(Team.SPECTATOR_TEAM)) {
             currentTeam.getTeamPlayers().remove(targetPlayer);
         }
 
         // Add player to the target team
         targetTeam.addPlayerToTeam(targetPlayer);
 
-        // Change player PlayerMode to buzzer
-        targetPlayer.setPlayerMode(PlayerMode.BUZZER);
+        if (message.getTargetTeam().equals(Team.SPECTATOR_TEAM)) {
+            // Change player PlayerMode to spectator
+            targetPlayer.setPlayerMode(PlayerMode.SPECTATOR);
+        } else {
+            // Change player PlayerMode to buzzer
+            targetPlayer.setPlayerMode(PlayerMode.BUZZER);
+        }
 
         // Return a PlayerRosterUpdate
         return PlayerRosterUpdate.fromGameSession(gameSession);
@@ -116,7 +124,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         GameSession gameSession = message.getGameSession();
 
         // Only usable in the CONFIG state
-        if(gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG){
+        if (gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG) {
             return ProcessError.wrongStateMessage(message);
         }
 
@@ -131,18 +139,17 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // If the packet is not found, return an error message
         if (packet == null) {
-            return ProcessError.builder().recipient(message.getOriginatingPlayerId())
-                    .error("Packet id " + message.getPacketId() + " does not exist").build();
+            return ProcessError.builder().recipient(message.getOriginatingPlayerId()).error("Packet id " + message.getPacketId() + " does not exist").build();
         }
+
+        // Sort the tossups by number
+        packet.getTossups().sort(Comparator.comparingInt(PacketTossup::getNumber));
 
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
 
         // Return a MatchPacketUpdate
-        return MatchPacketUpdate.builder()
-                .packetId(packet.getId())
-                .packetName(packet.getName())
-                .build();
+        return MatchPacketUpdate.builder().packetId(packet.getId()).packetName(packet.getName()).build();
     }
 
     /**
@@ -171,9 +178,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         GameSession gameSession = message.getGameSession();
 
         // Check if the player making the request is the game owner or the target player when no proctor is set
-        if (!(gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())
-                || (message.getTargetPlayer().equals(message.getOriginatingPlayerId()) && gameSession.getProctor() == null))) {
-            // If not, return an access denied error message
+        if (!(gameSession.isPlayerGameOwner(message.getOriginatingPlayerId()) || (message.getTargetPlayer().equals(message.getOriginatingPlayerId()) && gameSession.getProctor() == null))) {
+            // If not, return access denied error message
             return ProcessError.accessDeniedMessage(message);
         }
 
@@ -182,12 +188,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // If the target player is not found, return an error message
         if (targetPlayer == null) {
-            return ProcessError.builder().recipient(message.getOriginatingPlayerId())
-                    .error("Player id " + message.getTargetPlayer() + " does not exist").build();
+            return ProcessError.builder().recipient(message.getOriginatingPlayerId()).error("Player id " + message.getTargetPlayer() + " does not exist").build();
         }
 
         // If there is currently a proctor set, unset the proctor
-        if(gameSession.getProctor() != null){
+        if (gameSession.getProctor() != null) {
             gameSession.getProctor().setPlayerMode(PlayerMode.SPECTATOR);
         }
 
@@ -203,7 +208,6 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Return a PlayerRosterUpdate
         return PlayerRosterUpdate.fromGameSession(gameSession);
     }
-
 
 
     /**
@@ -231,6 +235,18 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     }
 
 
+    /**
+     * Sends an updated game state to a player.
+     * <p>
+     * This method retrieves the current game session from the incoming message, determines the player mode
+     * of the player who sent the message, and then sanitizes the game session based on that player mode.
+     * A sanitized game session update is then sent back to the originating player.
+     *
+     * @param sockbowlInMessage The incoming message containing the player's ID and the current game session.
+     *                          This is used to determine the player's mode and retrieve the relevant game session.
+     * @return SockbowlOutMessage A message containing the sanitized game session, tailored for the player who
+     * sent the request. This message is to be sent back to the originating player.
+     */
     private SockbowlOutMessage sendGameState(SockbowlInMessage sockbowlInMessage) {
 
         // Retrieve the current game session from message
@@ -240,10 +256,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         PlayerMode playerMode = gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId());
 
         // Sanitize and return the session
-        return GameSessionUpdate.builder()
-                .gameSession(GameSessionSanitizer.sanitize(gameSession, playerMode))
-                .recipient(sockbowlInMessage.getOriginatingPlayerId())
-                .build();
-
+        GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, playerMode);
+        return GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
     }
 }

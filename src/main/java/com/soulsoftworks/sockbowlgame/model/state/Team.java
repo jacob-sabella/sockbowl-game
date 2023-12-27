@@ -7,11 +7,12 @@ import java.util.List;
 import java.util.UUID;
 
 @Data
-public class Team {
+public class  Team {
     private String teamId = UUID.randomUUID().toString();
     private String teamName;
     private List<Player> teamPlayers = new ArrayList<>();
 
+    public static String SPECTATOR_TEAM = "SPECTATE";
 
     public Player findPlayerInTeamWithId(String playerId){
         return teamPlayers.stream()

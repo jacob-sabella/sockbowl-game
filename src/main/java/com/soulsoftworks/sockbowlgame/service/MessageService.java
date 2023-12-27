@@ -8,6 +8,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
+import com.soulsoftworks.sockbowlgame.service.processor.GameMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.ProgressionMessageProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,24 +32,27 @@ public class MessageService {
     private final SessionService sessionService;
     private final ConfigurationMessageProcessor configurationMessageProcessor;
     private final ProgressionMessageProcessor progressionMessageProcessor;
+    private final GameMessageProcessor gameMessageProcessor;
 
     /**
      * Constructor for the MessageService.
      *
-     * @param simpMessagingTemplate            Used for sending messages to WebSocket clients.
-     * @param kafkaTemplate                    Used for sending messages to Kafka topics.
-     * @param sessionService               Used for retrieving and updating game sessions.
-     * @param configurationMessageProcessor    Used for processing configuration type messages.
-     * @param progressionMessageProcessor      Used for processing progression type messages.
+     * @param simpMessagingTemplate         Used for sending messages to WebSocket clients.
+     * @param kafkaTemplate                 Used for sending messages to Kafka topics.
+     * @param sessionService                Used for retrieving and updating game sessions.
+     * @param configurationMessageProcessor Used for processing configuration type messages.
+     * @param progressionMessageProcessor   Used for processing progression type messages.
+     * @param gameMessageProcessor          Used for processing game type messages
      */
     public MessageService(SimpMessagingTemplate simpMessagingTemplate,
                           KafkaTemplate<String, SockbowlInMessage> kafkaTemplate,
-                          SessionService sessionService, ConfigurationMessageProcessor configurationMessageProcessor, ProgressionMessageProcessor progressionMessageProcessor) {
+                          SessionService sessionService, ConfigurationMessageProcessor configurationMessageProcessor, ProgressionMessageProcessor progressionMessageProcessor, GameMessageProcessor gameMessageProcessor) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.kafkaTemplate = kafkaTemplate;
         this.sessionService = sessionService;
         this.configurationMessageProcessor = configurationMessageProcessor;
         this.progressionMessageProcessor = progressionMessageProcessor;
+        this.gameMessageProcessor = gameMessageProcessor;
     }
 
     @Value("${sockbowl.kafka.topic.game-topic}")
@@ -137,7 +141,7 @@ public class MessageService {
         } else if (message.getMessageType() == MessageTypes.PROGRESSION){
             return progressionMessageProcessor.processMessage(message);
         } else if (message.getMessageType() == MessageTypes.GAME){
-            return null;
+            return gameMessageProcessor.processMessage(message);
         } else {
             return ProcessError.builder().error("Unknown message type")
                     .recipient(message.getOriginatingPlayerId())

@@ -22,42 +22,33 @@ public class GameConfigurationController {
 
 
     @MessageMapping("/update-player-team")
-    public void updatePlayerTeam(GameSessionInjection gameSessionInjection, String playerId, String teamId) {
+    public void updatePlayerTeam(GameSessionInjection gameSessionInjection, UpdatePlayerTeam updatePlayerTeam) {
 
-        // Create message
-        UpdatePlayerTeam updatePlayerTeam = UpdatePlayerTeam.builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
-                .targetPlayer(playerId).targetTeam(teamId)
-                .build();
+        updatePlayerTeam.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        updatePlayerTeam.setGameSessionId(gameSessionInjection.getGameSessionId());
 
         messageService.sendMessage(updatePlayerTeam);
     }
 
     @MessageMapping("/set-match-packet")
-    public void setMatchPacket(GameSessionInjection gameSessionInjection, long packetId) {
-        // Create message
-        SetMatchPacket setMatchPacket = SetMatchPacket.builder()
-                        .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                        .gameSessionId(gameSessionInjection.getGameSessionId())
-                        .packetId(packetId)
-                        .build();
+    public void setMatchPacket(GameSessionInjection gameSessionInjection, SetMatchPacket setMatchPacket) {
+
+        setMatchPacket.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        setMatchPacket.setGameSessionId(gameSessionInjection.getGameSessionId());
 
         messageService.sendMessage(setMatchPacket);
     }
 
 
     @MessageMapping("/set-proctor")
-    public void setProctor(GameSessionInjection gameSessionInjection, String targetPlayerId) {
-        // Create message
-        SetProctor setProctor = SetProctor.builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
-                .targetPlayer(targetPlayerId)
-                .build();
+    public void setProctor(GameSessionInjection gameSessionInjection, SetProctor setProctor) {
+
+        setProctor.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        setProctor.setGameSessionId(gameSessionInjection.getGameSessionId());
 
         messageService.sendMessage(setProctor);
     }
+
 
     @MessageMapping("/get-game")
     public void getGameSession(GameSessionInjection gameSessionInjection) {

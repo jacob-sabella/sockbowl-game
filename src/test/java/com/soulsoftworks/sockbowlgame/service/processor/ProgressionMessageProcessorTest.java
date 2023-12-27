@@ -7,8 +7,6 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
-import com.soulsoftworks.sockbowlgame.model.socket.out.game.FullContextTossupUpdate;
-import com.soulsoftworks.sockbowlgame.model.socket.out.game.LimitedContextTossupUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameStartedMessage;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.junit.jupiter.api.BeforeEach;

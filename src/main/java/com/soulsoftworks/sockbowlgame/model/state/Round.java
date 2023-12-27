@@ -33,10 +33,12 @@ public class Round {
         if(this.currentBuzz != null){
             this.buzzList.add(currentBuzz);
         }
+
         // Create a new buzz with the provided player and team IDs
         this.currentBuzz = new Buzz();
         this.currentBuzz.setTeamId(teamId);
         this.currentBuzz.setPlayerId(playerId);
+
         // Change the round state to AWAITING_ANSWER
         this.roundState = RoundState.AWAITING_ANSWER;
     }
@@ -93,6 +95,7 @@ public class Round {
         this.roundNumber = roundNumber;
         this.question = question;
         this.answer = answer;
+        this.roundState = RoundState.PROCTOR_READING;
     }
 
     /**

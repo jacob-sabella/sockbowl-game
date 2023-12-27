@@ -11,7 +11,7 @@ import java.util.List;
 @NoArgsConstructor
 public class Match {
     private MatchState matchState = MatchState.CONFIG;
-    private Packet packet;
+    private Packet packet = new Packet();
     private List<Round> previousRounds = new ArrayList<>();
     private Round currentRound = new Round();
 
