@@ -15,6 +15,7 @@ import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
 import com.soulsoftworks.sockbowlgame.model.state.RoundState;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeRound;
@@ -118,7 +119,7 @@ public class GameMessageProcessor extends MessageProcessor {
      *
      * @param answer The incoming message which contains details about the player's answer, originating player ID, and the game session.
      * @return SockbowlOutMessage Represents the outcome of the processed answer, which can be of type CorrectAnswer, IncorrectAnswer, or ProcessError.
-     * @throws NullPointerException if the answer or its nested objects are null.
+     * @throws NullPointerException     if the answer or its nested objects are null.
      * @throws IllegalArgumentException if the state of the game session or the provided answer does not meet the expected conditions.
      */
     public SockbowlOutMessage playerAnswer(SockbowlInMessage answer) {
@@ -141,15 +142,50 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
-        // Call into the round the process an incorrect answer to get the round into the correct state
-        if(answer instanceof AnswerIncorrect){
+        SockbowlOutMessage fullContextMessage;
+        SockbowlOutMessage limitedContextMessage;
+
+        // Create a list of recipients for the limited context message (all players except the proctor)
+        List<String> nonProctorPlayerIds = gameSession.getPlayerList().stream()
+                .map(Player::getPlayerId)
+                .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
+                .toList();
+
+        // Depending on the answer type, create different messages with sanitized round data
+        if (answer instanceof AnswerIncorrect) {
             gameSession.getCurrentRound().processIncorrectAnswer();
-            return IncorrectAnswer.builder().currentRound(gameSession.getCurrentRound()).build();
-        } else{
+
+            fullContextMessage = IncorrectAnswer.builder()
+                    .currentRound(gameSession.getCurrentRound())
+                    .recipient(gameSession.getProctor().getPlayerId())
+                    .build();
+
+            limitedContextMessage = IncorrectAnswer.builder()
+                    .currentRound(sanitizeRound(gameSession.getCurrentRound()))
+                    .recipients(nonProctorPlayerIds)
+                    .build();
+        } else {
+
             gameSession.getCurrentRound().processCorrectAnswer();
             gameSession.getCurrentMatch().advanceRound();
-            return CorrectAnswer.builder().currentRound(gameSession.getCurrentRound()).build();
+
+            fullContextMessage = CorrectAnswer.builder()
+                    .currentRound(gameSession.getCurrentRound())
+                    .recipient(gameSession.getProctor().getPlayerId())
+                    .build();
+
+            limitedContextMessage = CorrectAnswer.builder()
+                    .currentRound(sanitizeRound(gameSession.getCurrentRound()))
+                    .recipients(nonProctorPlayerIds)
+                    .build();
         }
+
+
+        // Return multi-message with both full and limited context messages
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(fullContextMessage)
+                .sockbowlOutMessage(limitedContextMessage)
+                .build();
     }
 
     /**
