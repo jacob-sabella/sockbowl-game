@@ -35,7 +35,7 @@ public class WebSocketConfig extends WebSocketMessageBrokerConfigurationSupport
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(STOMP_ENDPOINT)
-                .setAllowedOrigins("http://localhost:4200");
+                .setAllowedOrigins("http://localhost:4200", "http://alpha.sockbowl.com:7003");
     }
 
     @Override
