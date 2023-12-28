@@ -51,6 +51,6 @@ public class GameSanitizer {
         sanitizedRound.setQuestion("");
         sanitizedRound.setAnswer("");
 
-        return round;
+        return sanitizedRound;
     }
 }

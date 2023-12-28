@@ -1,6 +1,5 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
-import com.soulsoftworks.sockbowlgame.model.packet.PacketTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
@@ -63,14 +62,14 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         gameSession.getCurrentMatch().advanceRound();
 
         // Create a full context round update message to send to proctor
-        RoundUpdate fullContextTossupUpdate = RoundUpdate
+        RoundUpdate fullContextRoundUpdate = RoundUpdate
                 .builder()
                 .round(gameSession.getCurrentRound())
                 .recipient(gameSession.getProctor().getPlayerId())
                 .build();
 
         // Create sanitized round update for other players
-        RoundUpdate limitedContextTossupUpdate = RoundUpdate.builder()
+        RoundUpdate limitedContextRoundUpdate = RoundUpdate.builder()
                 .round(sanitizeRound(gameSession.getCurrentRound()))
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
@@ -83,8 +82,8 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         return SockbowlMultiOutMessage
                 .builder()
                 .sockbowlOutMessage(new GameStartedMessage())
-                .sockbowlOutMessage(fullContextTossupUpdate)
-                .sockbowlOutMessage(limitedContextTossupUpdate)
+                .sockbowlOutMessage(fullContextRoundUpdate)
+                .sockbowlOutMessage(limitedContextRoundUpdate)
                 .build();
     }
 
