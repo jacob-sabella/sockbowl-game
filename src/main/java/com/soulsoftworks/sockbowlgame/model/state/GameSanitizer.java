@@ -15,19 +15,18 @@ public class GameSanitizer {
      * @param playerMode  The player mode determining the level of sanitization.
      * @return A sanitized copy of the original game session.
      */
-    public static GameSession sanitizeGameSession(GameSession gameSession, PlayerMode playerMode){
+    public static GameSession sanitizeGameSession(GameSession gameSession, PlayerMode playerMode) {
         // Create a deep copy of the game session
         GameSession sanitizedGameSession = DeepCopyUtil.deepCopy(gameSession, GameSession.class);
 
         // Now modify the sanitizedGameSession as needed
         sanitizedGameSession.getPlayerList().forEach(player -> player.setPlayerSecret(""));
 
-        if(playerMode != PlayerMode.PROCTOR){
-            if(sanitizedGameSession.getCurrentMatch().getPacket() != null){
+        if (playerMode != PlayerMode.PROCTOR) {
+            if (sanitizedGameSession.getCurrentMatch().getPacket() != null) {
                 sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
                 sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
-                sanitizedGameSession.getCurrentRound().setAnswer("");
-                sanitizedGameSession.getCurrentRound().setQuestion("");
+                sanitizedGameSession.getCurrentMatch().setCurrentRound(sanitizeRound(sanitizedGameSession.getCurrentRound()));
             }
         }
 
@@ -43,7 +42,7 @@ public class GameSanitizer {
      * @param round The round to be sanitized.
      * @return A sanitized copy of the round.
      */
-    public static Round sanitizeRound(Round round){
+    public static Round sanitizeRound(Round round) {
         // Create a deep copy of the round
         Round sanitizedRound = DeepCopyUtil.deepCopy(round, Round.class);
 
