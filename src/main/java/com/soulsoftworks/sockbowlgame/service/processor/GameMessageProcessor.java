@@ -39,11 +39,13 @@ public class GameMessageProcessor extends MessageProcessor {
 
 
     /**
-     * Method to process the player's buzz action in the game.
-     * It checks for the player's mode and the current game state before processing the buzz.
+     * Processes the player's buzz action in the game.
+     * This method checks the player's mode, the current round state, and whether the team has already buzzed.
+     * If all conditions are met, it processes the buzz and returns an update message.
+     * Otherwise, it returns an error message.
      *
-     * @param playerBuzz the incoming message from the player containing the buzz action.
-     * @return SockbowlOutMessage indicating the result of the buzz processing. It can be null if there are no errors.
+     * @param playerBuzz The incoming buzz action message from the player.
+     * @return SockbowlOutMessage containing either the result of the buzz processing or an error message.
      */
     public SockbowlOutMessage playerBuzz(SockbowlInMessage playerBuzz) {
         // Retrieve the current game session from the player's buzz
@@ -88,12 +90,17 @@ public class GameMessageProcessor extends MessageProcessor {
                 .playerId(playerBuzz.getOriginatingPlayerId())
                 .teamId(gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId())
                 .round(gameSession.getCurrentRound())
+                .recipient(gameSession.getProctor().getPlayerId())
                 .build();
 
         PlayerBuzzed limitedContextPlayerBuzzed = PlayerBuzzed.builder()
                 .playerId(playerBuzz.getOriginatingPlayerId())
                 .teamId(gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId())
                 .round(sanitizeRound(gameSession.getCurrentRound()))
+                .recipients(gameSession.getPlayerList().stream()
+                        .map(Player::getPlayerId)
+                        .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
+                        .collect(Collectors.toList()))
                 .build();
 
         // Return player buzz message to all players
@@ -105,22 +112,15 @@ public class GameMessageProcessor extends MessageProcessor {
     }
 
     /**
-     * Processes a player's answer type based on the current game session and the type of the provided message.
-     * <p>
-     * This method checks if:
-     * <ul>
-     *     <li>The originating player is the proctor.</li>
-     *     <li>The current game round is in a state where an answer can be processed.</li>
-     *     <li>The type of the answer provided (either correct or incorrect).</li>
-     * </ul>
-     * If the checks pass, the method processes the answer accordingly and returns either a CorrectAnswer or IncorrectAnswer message.
-     * Otherwise, it returns a ProcessError message.
-     * </p>
+     * Processes a player's answer (correct or incorrect) based on the current game session.
+     * It validates the player's role as the proctor and the current round state.
+     * Depending on the answer type, it processes the answer and advances the round if necessary,
+     * returning a corresponding message.
      *
-     * @param answer The incoming message which contains details about the player's answer, originating player ID, and the game session.
-     * @return SockbowlOutMessage Represents the outcome of the processed answer, which can be of type CorrectAnswer, IncorrectAnswer, or ProcessError.
+     * @param answer The incoming answer message containing details about the player's answer.
+     * @return SockbowlOutMessage representing the outcome (CorrectAnswer, IncorrectAnswer, or ProcessError).
      * @throws NullPointerException     if the answer or its nested objects are null.
-     * @throws IllegalArgumentException if the state of the game session or the provided answer does not meet the expected conditions.
+     * @throws IllegalArgumentException if the game session state or the answer type is invalid.
      */
     public SockbowlOutMessage playerAnswer(SockbowlInMessage answer) {
         // Retrieve the current game session from message
@@ -155,13 +155,24 @@ public class GameMessageProcessor extends MessageProcessor {
         if (answer instanceof AnswerIncorrect) {
             gameSession.getCurrentRound().processIncorrectAnswer();
 
+            boolean shouldAdvanceRound = gameSession.getTeamList().stream()
+                    .allMatch(team -> gameSession.getCurrentRound().getBuzzList().stream()
+                            .filter(buzz -> buzz.getTeamId().equals(team.getTeamId()))
+                            .anyMatch(buzz -> !buzz.isCorrect()));
+
+            if (shouldAdvanceRound) {
+                gameSession.getCurrentMatch().advanceRound();
+            }
+
             fullContextMessage = IncorrectAnswer.builder()
                     .currentRound(gameSession.getCurrentRound())
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                     .recipient(gameSession.getProctor().getPlayerId())
                     .build();
 
             limitedContextMessage = IncorrectAnswer.builder()
                     .currentRound(sanitizeRound(gameSession.getCurrentRound()))
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                     .recipients(nonProctorPlayerIds)
                     .build();
         } else {
@@ -171,11 +182,13 @@ public class GameMessageProcessor extends MessageProcessor {
 
             fullContextMessage = CorrectAnswer.builder()
                     .currentRound(gameSession.getCurrentRound())
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                     .recipient(gameSession.getProctor().getPlayerId())
                     .build();
 
             limitedContextMessage = CorrectAnswer.builder()
                     .currentRound(sanitizeRound(gameSession.getCurrentRound()))
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                     .recipients(nonProctorPlayerIds)
                     .build();
         }
@@ -189,14 +202,13 @@ public class GameMessageProcessor extends MessageProcessor {
     }
 
     /**
-     * Processes a timeout message in a game session.
-     * This method is called when a timeout occurs during the game.
-     * It checks the current round state and processes the timeout if the state is 'AWAITING_BUZZ'.
-     * On successful processing, it sets the round state to 'COMPLETED' and advances to the next round.
-     * It then creates and sends round update messages to the players.
+     * Processes a timeout event in a game session.
+     * This method is called when a timeout occurs and checks if the current round state allows for a timeout.
+     * If valid, it advances the round and returns round update messages.
+     * Otherwise, returns a ProcessError message.
      *
-     * @param timeoutMessage The incoming timeout message containing the game session information.
-     * @return SockbowlOutMessage Either a SockbowlMultiOutMessage containing round updates or a ProcessError message.
+     * @param timeoutMessage The incoming timeout message with game session details.
+     * @return SockbowlOutMessage containing round updates or a ProcessError message.
      * @throws NullPointerException if the timeoutMessage or its nested objects are null.
      */
     public SockbowlOutMessage timeout(SockbowlInMessage timeoutMessage) {
@@ -239,15 +251,13 @@ public class GameMessageProcessor extends MessageProcessor {
 
 
     /**
-     * Handles the 'Finished Reading' message in a game session.
-     * This method is invoked when a proctor finishes reading a question.
-     * It checks if the current round state is either 'PROCTOR_READING' or 'AWAITING_BUZZ'
-     * and sets the round state to 'AWAITING_ANSWER' if the condition is met.
-     * If the round is not in the correct state, a ProcessError is returned.
-     * Round update messages are created and sent to all players, indicating the new state of the round.
+     * Handles the 'Finished Reading' event in a game session.
+     * It's invoked when a proctor finishes reading a question and checks the current round state.
+     * If the state is valid, it updates the round state and sends update messages.
+     * Otherwise, returns a ProcessError message.
      *
-     * @param finishedReadingMessage The incoming message indicating that the proctor has finished reading.
-     * @return SockbowlOutMessage Either a SockbowlMultiOutMessage containing round updates or a ProcessError message.
+     * @param finishedReadingMessage The incoming message indicating the proctor has finished reading.
+     * @return SockbowlOutMessage containing round updates or a ProcessError message.
      * @throws NullPointerException if the finishedReadingMessage or its nested objects are null.
      */
     public SockbowlOutMessage finishedReading(SockbowlInMessage finishedReadingMessage) {
@@ -269,11 +279,13 @@ public class GameMessageProcessor extends MessageProcessor {
         RoundUpdate fullContextUpdate = RoundUpdate
                 .builder()
                 .round(gameSession.getCurrentRound())
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                 .recipient(gameSession.getProctor().getPlayerId())
                 .build();
 
         RoundUpdate limitedContextUpdate = RoundUpdate.builder()
                 .round(sanitizeRound(gameSession.getCurrentRound()))
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
                         .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
