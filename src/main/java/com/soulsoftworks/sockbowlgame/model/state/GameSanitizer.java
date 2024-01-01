@@ -1,6 +1,9 @@
 package com.soulsoftworks.sockbowlgame.model.state;
 
+import com.google.common.reflect.TypeToken;
 import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
+
+import java.util.List;
 
 public class GameSanitizer {
 
@@ -51,5 +54,23 @@ public class GameSanitizer {
         sanitizedRound.setAnswer("");
 
         return sanitizedRound;
+    }
+
+
+    /**
+     * Removes the playerSecret from all Player instances in the provided player list.
+     * This ensures that sensitive information is not exposed in the player list.
+     *
+     * @param playerList The list of players whose secrets need to be sanitized.
+     * @return A sanitized copy of the player list with playerSecrets removed.
+     */
+    public static List<Player> sanitizePlayerList(List<Player> playerList) {
+        // Create a deep copy of the player list
+        List<Player> sanitizedPlayerList = DeepCopyUtil.deepCopy(playerList, new TypeToken<List<Player>>(){}.getType());
+
+        // Remove the playerSecret from each player in the list
+        sanitizedPlayerList.forEach(player -> player.setPlayerSecret(""));
+
+        return sanitizedPlayerList;
     }
 }

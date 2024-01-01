@@ -5,11 +5,14 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.model.state.Team;
+import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
 import java.util.List;
+
+import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizePlayerList;
 
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
@@ -26,7 +29,7 @@ public class PlayerRosterUpdate extends SockbowlOutMessage {
 
     public static PlayerRosterUpdate fromGameSession(GameSession gameSession) {
         return PlayerRosterUpdate.builder()
-                .playerList(gameSession.getPlayerList())
+                .playerList(sanitizePlayerList(gameSession.getPlayerList()))
                 .teamList(gameSession.getTeamList())
                 .build();
     }
