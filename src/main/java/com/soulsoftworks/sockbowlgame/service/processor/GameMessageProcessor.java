@@ -9,11 +9,11 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.AnswerUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeRound;
 
@@ -97,7 +97,7 @@ public class GameMessageProcessor extends MessageProcessor {
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
                         .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
-                        .collect(Collectors.toList()))
+                        .toList())
                 .build();
 
         // Return player buzz message to all players
@@ -128,10 +128,7 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Check if the player is the proctor, if not return an error message
         if (gameSession.getPlayerModeById(answer.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
-            return ProcessError.builder()
-                    .recipient(answer.getOriginatingPlayerId())
-                    .error("Originating player is not the proctor")
-                    .build();
+            return ProcessError.accessDeniedMessage(answer);
         }
 
         // We can only process this type of message if we're waiting for a buzz
@@ -178,10 +175,7 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Check if the player is the proctor, if not return an error message
         if (gameSession.getPlayerModeById(timeoutMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
-            return ProcessError.builder()
-                    .recipient(timeoutMessage.getOriginatingPlayerId())
-                    .error("Originating player is not the proctor")
-                    .build();
+            return ProcessError.accessDeniedMessage(timeoutMessage);
         }
 
         // Check if the current round state is 'AWAITING_BUZZ'
@@ -244,10 +238,7 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Check if the originating player is the proctor
         if (gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
-            return ProcessError.builder()
-                    .recipient(sockbowlInMessage.getOriginatingPlayerId())
-                    .error("Originating player is not the proctor")
-                    .build();
+            return ProcessError.accessDeniedMessage(sockbowlInMessage);
         }
 
         // Check if the current round status is 'COMPLETED'
@@ -260,6 +251,15 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Advance to the next round
         gameSession.getCurrentMatch().advanceRound();
+
+        if(gameSession.getCurrentMatch().getMatchState() == MatchState.COMPLETED){
+            // Sanitize and return the session
+            GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
+            return GameSessionUpdate.builder()
+                    .gameSession(gameSessionSanitized)
+                    .recipient(sockbowlInMessage.getOriginatingPlayerId())
+                    .build();
+        }
 
         return createRoundUpdateMessages(gameSession);
     }
@@ -301,7 +301,7 @@ public class GameMessageProcessor extends MessageProcessor {
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
                         .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
-                        .collect(Collectors.toList()))
+                        .toList())
                 .build();
 
         return SockbowlMultiOutMessage.builder()

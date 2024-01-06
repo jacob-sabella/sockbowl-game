@@ -20,7 +20,7 @@ public abstract class MessageProcessor {
     /**
      * Constructor. Initializes the processorMapping for this instance.
      */
-    public MessageProcessor() {
+    protected MessageProcessor() {
         processorMapping = new MessageProcessorMapping();
         initializeProcessorMapping();
     }
@@ -35,7 +35,6 @@ public abstract class MessageProcessor {
      * This method is final and cannot be overridden by subclasses.
      *
      * @param message The message to process.
-     *
      * @return Sockbowl Out Message
      */
     public final SockbowlOutMessage processMessage(SockbowlInMessage message) {
