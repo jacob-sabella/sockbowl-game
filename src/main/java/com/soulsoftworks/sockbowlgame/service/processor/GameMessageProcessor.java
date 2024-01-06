@@ -221,7 +221,7 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
-        // Set the round state to 'AWAITING_BUZZ'
+        // Set the round state to 'AWAITING_BUZZ' and update the reading state
         gameSession.getCurrentRound().setRoundState(RoundState.AWAITING_BUZZ);
         gameSession.getCurrentRound().setProctorFinishedReading(true);
 
