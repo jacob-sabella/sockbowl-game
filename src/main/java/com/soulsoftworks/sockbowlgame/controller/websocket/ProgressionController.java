@@ -27,4 +27,5 @@ public class ProgressionController {
 
         messageService.sendMessage(startMatch);
     }
+
 }

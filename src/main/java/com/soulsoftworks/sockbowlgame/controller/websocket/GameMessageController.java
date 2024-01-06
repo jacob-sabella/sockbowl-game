@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
@@ -15,20 +16,12 @@ public class GameMessageController {
         this.messageService = messageService;
     }
 
-    @MessageMapping("/answer-correct")
-    public void answerCorrect(GameSessionInjection gameSessionInjection, AnswerCorrect answerCorrect) {
-        answerCorrect.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        answerCorrect.setGameSessionId(gameSessionInjection.getGameSessionId());
+    @MessageMapping("/answer-outcome")
+    public void answerCorrect(GameSessionInjection gameSessionInjection, AnswerOutcome answerOutcome) {
+        answerOutcome.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        answerOutcome.setGameSessionId(gameSessionInjection.getGameSessionId());
 
-        messageService.sendMessage(answerCorrect);
-    }
-
-    @MessageMapping("/answer-incorrect")
-    public void answerIncorrect(GameSessionInjection gameSessionInjection, AnswerIncorrect answerIncorrect) {
-        answerIncorrect.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        answerIncorrect.setGameSessionId(gameSessionInjection.getGameSessionId());
-
-        messageService.sendMessage(answerIncorrect);
+        messageService.sendMessage(answerOutcome);
     }
 
     @MessageMapping("/player-incoming-buzz")
@@ -55,5 +48,16 @@ public class GameMessageController {
         messageService.sendMessage(finishedReading);
     }
 
+    @MessageMapping("/advance-round")
+    public void advanceRound(GameSessionInjection gameSessionInjection) {
+
+        AdvanceRound advanceRound = AdvanceRound
+                .builder()
+                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
+                .gameSessionId(gameSessionInjection.getGameSessionId())
+                .build();
+
+        messageService.sendMessage(advanceRound);
+    }
 
 }

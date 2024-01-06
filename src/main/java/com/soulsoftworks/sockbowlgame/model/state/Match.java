@@ -25,4 +25,8 @@ public class Match {
         currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer);
     }
 
+    public void completeRound(){
+        currentRound.setRoundState(RoundState.COMPLETED);
+    }
+
 }

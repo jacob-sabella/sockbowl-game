@@ -2,17 +2,14 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
-import com.soulsoftworks.sockbowlgame.model.socket.out.game.CorrectAnswer;
-import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.AnswerUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
-import com.soulsoftworks.sockbowlgame.model.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.state.Player;
-import com.soulsoftworks.sockbowlgame.model.state.PlayerMode;
-import com.soulsoftworks.sockbowlgame.model.state.RoundState;
+import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -31,10 +28,10 @@ public class GameMessageProcessor extends MessageProcessor {
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(PlayerIncomingBuzz.class, this::playerBuzz);
-        processorMapping.registerProcessor(AnswerIncorrect.class, this::playerAnswer);
-        processorMapping.registerProcessor(AnswerCorrect.class, this::playerAnswer);
+        processorMapping.registerProcessor(AnswerOutcome.class, this::playerAnswer);
         processorMapping.registerProcessor(TimeoutRound.class, this::timeout);
         processorMapping.registerProcessor(FinishedReading.class, this::finishedReading);
+        processorMapping.registerProcessor(AdvanceRound.class, this::advanceRound);
     }
 
 
@@ -118,11 +115,14 @@ public class GameMessageProcessor extends MessageProcessor {
      * returning a corresponding message.
      *
      * @param answer The incoming answer message containing details about the player's answer.
-     * @return SockbowlOutMessage representing the outcome (CorrectAnswer, IncorrectAnswer, or ProcessError).
+     * @return SockbowlOutMessage representing the outcome (CorrectAnswer, AnswerUpdate, or ProcessError).
      * @throws NullPointerException     if the answer or its nested objects are null.
      * @throws IllegalArgumentException if the game session state or the answer type is invalid.
      */
     public SockbowlOutMessage playerAnswer(SockbowlInMessage answer) {
+
+        AnswerOutcome answerOutcome = (AnswerOutcome) answer;
+
         // Retrieve the current game session from message
         GameSession gameSession = answer.getGameSession();
 
@@ -142,64 +142,26 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
-        SockbowlOutMessage fullContextMessage;
-        SockbowlOutMessage limitedContextMessage;
-
-        // Create a list of recipients for the limited context message (all players except the proctor)
-        List<String> nonProctorPlayerIds = gameSession.getPlayerList().stream()
-                .map(Player::getPlayerId)
-                .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
-                .toList();
-
-        // Depending on the answer type, create different messages with sanitized round data
-        if (answer instanceof AnswerIncorrect) {
+        // Depending on the answer outcome, create different messages with sanitized round data
+        if (!answerOutcome.isCorrect()) {
             gameSession.getCurrentRound().processIncorrectAnswer();
-
-            boolean shouldAdvanceRound = gameSession.getTeamList().stream()
+            boolean shouldCompleteRound = gameSession.getTeamList().stream()
                     .allMatch(team -> gameSession.getCurrentRound().getBuzzList().stream()
                             .filter(buzz -> buzz.getTeamId().equals(team.getTeamId()))
                             .anyMatch(buzz -> !buzz.isCorrect()));
 
-            if (shouldAdvanceRound) {
-                gameSession.getCurrentMatch().advanceRound();
+            if (shouldCompleteRound) {
+                gameSession.getCurrentMatch().completeRound();
             }
-
-            fullContextMessage = IncorrectAnswer.builder()
-                    .currentRound(gameSession.getCurrentRound())
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
-                    .recipient(gameSession.getProctor().getPlayerId())
-                    .build();
-
-            limitedContextMessage = IncorrectAnswer.builder()
-                    .currentRound(sanitizeRound(gameSession.getCurrentRound()))
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
-                    .recipients(nonProctorPlayerIds)
-                    .build();
         } else {
-
             gameSession.getCurrentRound().processCorrectAnswer();
-            gameSession.getCurrentMatch().advanceRound();
-
-            fullContextMessage = CorrectAnswer.builder()
-                    .currentRound(gameSession.getCurrentRound())
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
-                    .recipient(gameSession.getProctor().getPlayerId())
-                    .build();
-
-            limitedContextMessage = CorrectAnswer.builder()
-                    .currentRound(sanitizeRound(gameSession.getCurrentRound()))
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
-                    .recipients(nonProctorPlayerIds)
-                    .build();
         }
 
-
         // Return multi-message with both full and limited context messages
-        return SockbowlMultiOutMessage.builder()
-                .sockbowlOutMessage(fullContextMessage)
-                .sockbowlOutMessage(limitedContextMessage)
-                .build();
+        return createAnswerUpdateMessages(gameSession, answerOutcome.isCorrect());
+
     }
+
 
     /**
      * Processes a timeout event in a game session.
@@ -214,6 +176,14 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage timeout(SockbowlInMessage timeoutMessage) {
         GameSession gameSession = timeoutMessage.getGameSession();
 
+        // Check if the player is the proctor, if not return an error message
+        if (gameSession.getPlayerModeById(timeoutMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.builder()
+                    .recipient(timeoutMessage.getOriginatingPlayerId())
+                    .error("Originating player is not the proctor")
+                    .build();
+        }
+
         // Check if the current round state is 'AWAITING_BUZZ'
         if (gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BUZZ) {
             return ProcessError.builder()
@@ -222,31 +192,10 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
-        // Set the round state to Buzz and increment the round
-        gameSession.getCurrentRound().setRoundState(RoundState.COMPLETED);
-        gameSession.getCurrentMatch().advanceRound();
+        // Set the round state to completed
+        gameSession.getCurrentMatch().completeRound();
 
-        // Create round update messages
-        RoundUpdate fullContextUpdate = RoundUpdate
-                .builder()
-                .round(gameSession.getCurrentRound())
-                .recipient(gameSession.getProctor().getPlayerId())
-                .build();
-
-        RoundUpdate limitedContextUpdate = RoundUpdate.builder()
-                .round(sanitizeRound(gameSession.getCurrentRound()))
-                .recipients(gameSession.getPlayerList().stream()
-                        .map(Player::getPlayerId)
-                        .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
-                        .collect(Collectors.toList()))
-                .build();
-
-        // Send multi-message back to processor
-        return SockbowlMultiOutMessage
-                .builder()
-                .sockbowlOutMessage(fullContextUpdate)
-                .sockbowlOutMessage(limitedContextUpdate)
-                .build();
+        return createRoundUpdateMessages(gameSession);
     }
 
 
@@ -275,9 +224,71 @@ public class GameMessageProcessor extends MessageProcessor {
         // Set the round state to 'AWAITING_ANSWER'
         gameSession.getCurrentRound().setRoundState(RoundState.AWAITING_BUZZ);
 
-        // Create round update messages
-        RoundUpdate fullContextUpdate = RoundUpdate
-                .builder()
+        return createRoundUpdateMessages(gameSession);
+    }
+
+
+    /**
+     * Processes the request to advance to the next round in the game.
+     * This method is only callable if the current round status is 'COMPLETED' and the originating player is the proctor.
+     * It advances the round and sends a round update to all users, with non-proctors receiving a sanitized round.
+     *
+     * @param sockbowlInMessage The incoming message requesting to advance the round.
+     * @return SockbowlOutMessage containing round updates.
+     * @throws NullPointerException     if the sockbowlInMessage or its nested objects are null.
+     * @throws IllegalArgumentException if the round state is not 'COMPLETED' or if the originating player is not the proctor.
+     */
+    public SockbowlOutMessage advanceRound(SockbowlInMessage sockbowlInMessage) {
+        GameSession gameSession = sockbowlInMessage.getGameSession();
+
+        // Check if the originating player is the proctor
+        if (gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.builder()
+                    .recipient(sockbowlInMessage.getOriginatingPlayerId())
+                    .error("Originating player is not the proctor")
+                    .build();
+        }
+
+        // Check if the current round status is 'COMPLETED'
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.COMPLETED) {
+            return ProcessError.builder()
+                    .recipient(sockbowlInMessage.getOriginatingPlayerId())
+                    .error("Cannot advance round when current round is not completed")
+                    .build();
+        }
+
+        // Advance to the next round
+        gameSession.getCurrentMatch().advanceRound();
+
+        return createRoundUpdateMessages(gameSession);
+    }
+
+
+    /**
+     * Creates round update messages for the game session.
+     * If the current round's state is 'COMPLETED', it creates a full context update without specific recipients,
+     * which will be sent to all players. Otherwise, it creates both full context (for the proctor) and limited context updates.
+     *
+     * @param gameSession The current game session containing all the necessary game data.
+     * @return SockbowlOutMessage containing round updates.
+     */
+    private SockbowlOutMessage createRoundUpdateMessages(GameSession gameSession) {
+        RoundUpdate fullContextUpdate;
+
+        if (gameSession.getCurrentRound().getRoundState() == RoundState.COMPLETED) {
+            // If round is completed, create full context update without specific recipients
+            fullContextUpdate = RoundUpdate.builder()
+                    .round(gameSession.getCurrentRound())
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                    .build(); // No recipient is set, so it will be sent to all players
+
+            return SockbowlMultiOutMessage.builder()
+                    .sockbowlOutMessage(fullContextUpdate)
+                    .build();
+        }
+
+        // If round is not completed, create full context update for proctor and limited context update for other players
+        fullContextUpdate = RoundUpdate.builder()
                 .round(gameSession.getCurrentRound())
                 .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                 .recipient(gameSession.getProctor().getPlayerId())
@@ -292,11 +303,55 @@ public class GameMessageProcessor extends MessageProcessor {
                         .collect(Collectors.toList()))
                 .build();
 
-        // Send multi-message back to processor
-        return SockbowlMultiOutMessage
-                .builder()
+        return SockbowlMultiOutMessage.builder()
                 .sockbowlOutMessage(fullContextUpdate)
                 .sockbowlOutMessage(limitedContextUpdate)
+                .build();
+    }
+
+    /**
+     * Creates a SockbowlOutMessage containing either a single or both full and limited context AnswerUpdate messages.
+     * A single message is created when the round is completed; otherwise, separate messages for the proctor
+     * (full context) and other players (limited context) are created.
+     *
+     * @param gameSession The current game session containing all the necessary game data.
+     * @param isCorrect   Flag to indicate whether the answer was correct or not.
+     * @return SockbowlOutMessage containing the appropriate messages based on the round state.
+     */
+    private SockbowlOutMessage createAnswerUpdateMessages(GameSession gameSession, boolean isCorrect) {
+        AnswerUpdate fullContextMessage = AnswerUpdate.builder()
+                .currentRound(gameSession.getCurrentRound())
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .correct(isCorrect)
+                .playerId(gameSession.getProctor().getPlayerId())
+                .build();
+
+        // Check if the round is completed
+        if (gameSession.getCurrentRound().getRoundState() == RoundState.COMPLETED) {
+            // If round is completed, return only the full context update
+            return SockbowlMultiOutMessage.builder()
+                    .sockbowlOutMessage(fullContextMessage)
+                    .build();
+        }
+
+        // Create limited context message for other players
+        Round roundForLimitedContext = sanitizeRound(gameSession.getCurrentRound());
+        List<String> nonProctorPlayerIds = gameSession.getPlayerList().stream()
+                .map(Player::getPlayerId)
+                .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
+                .toList();
+
+        AnswerUpdate limitedContextMessage = AnswerUpdate.builder()
+                .currentRound(roundForLimitedContext)
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .correct(isCorrect)
+                .recipients(nonProctorPlayerIds)
+                .build();
+
+        // Return both full and limited context messages
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(fullContextMessage)
+                .sockbowlOutMessage(limitedContextMessage)
                 .build();
     }
 

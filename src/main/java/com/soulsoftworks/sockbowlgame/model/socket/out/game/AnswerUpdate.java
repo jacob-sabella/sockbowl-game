@@ -12,9 +12,11 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
 @Data
-public class CorrectAnswer extends SockbowlOutMessage {
+public class AnswerUpdate extends SockbowlOutMessage {
 
     Round currentRound;
+    boolean correct;
+    String playerId;
     private List<Round> previousRounds;
 
     @Override
@@ -22,4 +24,3 @@ public class CorrectAnswer extends SockbowlOutMessage {
         return MessageTypes.GAME;
     }
 }
-
