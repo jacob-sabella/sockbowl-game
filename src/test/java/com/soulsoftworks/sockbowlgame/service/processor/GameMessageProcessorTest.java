@@ -5,8 +5,8 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.game.AnswerIncorrect;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.AnswerUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.CorrectAnswer;
-import com.soulsoftworks.sockbowlgame.model.socket.out.game.IncorrectAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,7 +167,7 @@ public class GameMessageProcessorTest {
 
             SockbowlOutMessage result = processor.playerAnswer(message);
 
-            assertTrue(result instanceof IncorrectAnswer);
+            assertTrue(result instanceof AnswerUpdate);
         }
 
         @Test

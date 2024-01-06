@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @Data
 @NoArgsConstructor
-public class AnswerCorrect extends SockbowlInMessage {
+public class AdvanceRound extends SockbowlInMessage {
     @Override
     public MessageTypes getMessageType() {
         return MessageTypes.GAME;
