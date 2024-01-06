@@ -257,7 +257,6 @@ public class GameMessageProcessor extends MessageProcessor {
             GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
             return GameSessionUpdate.builder()
                     .gameSession(gameSessionSanitized)
-                    .recipient(sockbowlInMessage.getOriginatingPlayerId())
                     .build();
         }
 
