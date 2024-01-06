@@ -13,8 +13,6 @@ import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.model.state.Team;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
-
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeRound;
 
 @Service
@@ -74,7 +72,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
                         .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
-                        .collect(Collectors.toList()))
+                        .toList())
                 .build();
 
 

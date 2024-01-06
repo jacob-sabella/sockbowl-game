@@ -16,7 +16,7 @@ import java.util.UUID;
 @Builder(toBuilder = true)
 @NoArgsConstructor(force = true)
 @AllArgsConstructor
-public class  GameSession{
+public class GameSession {
     @Id
     private String id;
 
@@ -36,16 +36,17 @@ public class  GameSession{
     @Builder.Default
     private Match currentMatch = new Match();
 
-    public Player addPlayer(JoinGameRequest joinGameRequest){
+    public Player addPlayer(JoinGameRequest joinGameRequest) {
         Player player = Player.builder()
                 .playerId(joinGameRequest.getPlayerSessionId())
                 .name(joinGameRequest.getName())
                 .playerMode(PlayerMode.SPECTATOR)
-                .playerSecret(UUID.randomUUID().toString())
+                .playerSecret(UUID.randomUUID()
+                        .toString())
                 .build();
 
         // First player to join is the game owner
-        if(playerList.size() == 0){
+        if (playerList.isEmpty()) {
             player.setGameOwner(true);
         }
 
@@ -55,13 +56,12 @@ public class  GameSession{
     }
 
 
-
-
     /**
      * Get the current round of the current match
+     *
      * @return Current active Round object
      */
-    public Round getCurrentRound(){
+    public Round getCurrentRound() {
         return getCurrentMatch().getCurrentRound();
     }
 
@@ -71,10 +71,11 @@ public class  GameSession{
      * @param playerId The unique ID of the player.
      * @return Player object if found, else null.
      */
-    public Player getPlayerById(String playerId){
+    public Player getPlayerById(String playerId) {
         // Use a stream to search through the player list for a match on player ID
         return this.playerList.stream()
-                .filter(player -> player.getPlayerId().equals(playerId))
+                .filter(player -> player.getPlayerId()
+                        .equals(playerId))
                 .findFirst()
                 .orElse(null);
     }
@@ -82,7 +83,8 @@ public class  GameSession{
 
     public Team findTeamWithId(String teamId) {
         return teamList.stream()
-                .filter(team -> team.getTeamId().equals(teamId))
+                .filter(team -> team.getTeamId()
+                        .equals(teamId))
                 .findFirst()
                 .orElse(null);
     }
@@ -115,7 +117,8 @@ public class  GameSession{
      */
     public boolean isPlayerGameOwner(String playerId) {
         return this.playerList.stream()
-                .filter(player -> player.getPlayerId().equals(playerId))
+                .filter(player -> player.getPlayerId()
+                        .equals(playerId))
                 .map(Player::isGameOwner)
                 .findFirst()
                 .orElse(false);
@@ -127,13 +130,15 @@ public class  GameSession{
      * @param playerId The unique ID of the player.
      * @return PlayerMode object if found, else null.
      */
-    public PlayerMode getPlayerModeById(String playerId){
+    public PlayerMode getPlayerModeById(String playerId) {
         // Use a stream to search through the player list for a match on player ID
         Optional<Player> playerOptional = this.playerList.stream()
-                .filter(player -> player.getPlayerId().equals(playerId))
+                .filter(player -> player.getPlayerId()
+                        .equals(playerId))
                 .findFirst();
 
-        return playerOptional.map(Player::getPlayerMode).orElse(null);
+        return playerOptional.map(Player::getPlayerMode)
+                .orElse(null);
     }
 
 }

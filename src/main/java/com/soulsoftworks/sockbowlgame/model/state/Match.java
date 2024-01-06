@@ -15,14 +15,31 @@ public class Match {
     private List<Round> previousRounds = new ArrayList<>();
     private Round currentRound = new Round();
 
-    public void advanceRound(){
+    public void advanceRound() {
         int nextRoundNumber = currentRound.getRoundNumber() + 1;
-        String nextRoundQuestion = packet.getTossups().get(nextRoundNumber).getTossup().getQuestion();
-        String nextRoundAnswer = packet.getTossups().get(nextRoundNumber).getTossup().getAnswer();
 
-        previousRounds.add(currentRound);
-        currentRound = new Round();
-        currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer);
+        // Check if the nextRoundNumber exceeds the number of tossups in the packet
+        if (nextRoundNumber >= packet.getTossups().size()) {
+            // No more tossups left, complete the match
+            matchState = MatchState.COMPLETED;
+
+            if(nextRoundNumber - 1 != 0){
+                previousRounds.add(currentRound);
+            }
+
+            currentRound = null; // Null out the current round
+        } else {
+            // Proceed with setting up the next round
+            String nextRoundQuestion = packet.getTossups().get(nextRoundNumber).getTossup().getQuestion();
+            String nextRoundAnswer = packet.getTossups().get(nextRoundNumber).getTossup().getAnswer();
+
+            if(nextRoundNumber - 1 != 0){
+                previousRounds.add(currentRound);
+            }
+
+            currentRound = new Round();
+            currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer);
+        }
     }
 
     public void completeRound(){

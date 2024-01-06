@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.MatchState;
 import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.GameMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.ProgressionMessageProcessor;
@@ -62,7 +63,7 @@ public class MessageService {
      * Sends a message to a specific Kafka topic.
      *
      * @param gameTopic The Kafka topic to send the message to.
-     * @param message The message to be sent.
+     * @param message   The message to be sent.
      */
     public void sendMessage(String gameTopic, SockbowlInMessage message) {
         kafkaTemplate.send(gameTopic, message);
@@ -84,9 +85,9 @@ public class MessageService {
      *
      * @param record The Kafka consumer record containing the game message.
      */
-    @KafkaListener(topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers" )
+    @KafkaListener(topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers")
     public void processGameMessage(ConsumerRecord<String, SockbowlInMessage> record) {
-        if(record != null){
+        if (record != null) {
             // Retrieve the game session from the incoming message
             SockbowlInMessage message = record.value();
             GameSession gameSession = sessionService.getGameSessionById(message.getGameSessionId());
@@ -96,28 +97,28 @@ public class MessageService {
             SockbowlOutMessage sockbowlOutMessage = directMessageToService(message);
 
             // If no error occured, update the game session
-            if(!(sockbowlOutMessage instanceof ProcessError)){
+            if (!(sockbowlOutMessage instanceof ProcessError)) {
                 sessionService.saveGameSession(gameSession);
             }
 
             List<SockbowlOutMessage> sockbowlOutMessagesToProcess;
 
-            if(sockbowlOutMessage instanceof SockbowlMultiOutMessage){
+            if (sockbowlOutMessage instanceof SockbowlMultiOutMessage) {
                 sockbowlOutMessagesToProcess = ((SockbowlMultiOutMessage) sockbowlOutMessage).getSockbowlOutMessages();
-            } else{
+            } else {
                 sockbowlOutMessagesToProcess = List.of(sockbowlOutMessage);
             }
 
             // Send out all the sockbowl messages
-            for(SockbowlOutMessage singleMessage : sockbowlOutMessagesToProcess){
+            for (SockbowlOutMessage singleMessage : sockbowlOutMessagesToProcess) {
                 // If there are specified recipients for the outgoing message, send the message to them.
                 // Otherwise, send the message to all clients connected to the game session.
-                if(singleMessage.getRecipients().size() > 0){
+                if (!singleMessage.getRecipients().isEmpty()) {
                     singleMessage.getRecipients().forEach(recipient ->
                             simpMessagingTemplate.convertAndSend("/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
                                     gameSession.getId() + "/" + recipient, singleMessage)
                     );
-                } else{
+                } else {
                     simpMessagingTemplate.convertAndSend("/" +
                                     MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
                             singleMessage);
@@ -133,14 +134,22 @@ public class MessageService {
      * @param message The incoming game message.
      * @return The processed outgoing game message.
      */
-    private SockbowlOutMessage directMessageToService(SockbowlInMessage message){
-        // If the message is a configuration type, direct it to the configuration message processor.
-        // Otherwise, create an error message indicating an unknown message type.
-        if(message.getMessageType() == MessageTypes.CONFIG){
+    private SockbowlOutMessage directMessageToService(SockbowlInMessage message) {
+        if (message.getMessageType() == MessageTypes.CONFIG) {
+            /*if (message.getGameSession().getCurrentMatch().getMatchState() != MatchState.CONFIG) {
+                return ProcessError.builder().error("Config message received during non-config state")
+                        .recipient(message.getOriginatingPlayerId())
+                        .build();
+            }*/
             return configurationMessageProcessor.processMessage(message);
-        } else if (message.getMessageType() == MessageTypes.PROGRESSION){
+        } else if (message.getMessageType() == MessageTypes.PROGRESSION) {
             return progressionMessageProcessor.processMessage(message);
-        } else if (message.getMessageType() == MessageTypes.GAME){
+        } else if (message.getMessageType() == MessageTypes.GAME) {
+            /*if (message.getGameSession().getCurrentMatch().getMatchState() != MatchState.IN_GAME) {
+                return ProcessError.builder().error("Game message received during non-config state")
+                        .recipient(message.getOriginatingPlayerId())
+                        .build();
+            }*/
             return gameMessageProcessor.processMessage(message);
         } else {
             return ProcessError.builder().error("Unknown message type")

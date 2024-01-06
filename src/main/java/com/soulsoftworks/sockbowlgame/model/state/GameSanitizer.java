@@ -7,6 +7,8 @@ import java.util.List;
 
 public class GameSanitizer {
 
+    private GameSanitizer() {}
+
     /**
      * Sanitizes the given game session based on the specified player mode.
      * This method creates a deep copy of the provided game session and then modifies
@@ -25,12 +27,11 @@ public class GameSanitizer {
         // Now modify the sanitizedGameSession as needed
         sanitizedGameSession.getPlayerList().forEach(player -> player.setPlayerSecret(""));
 
-        if (playerMode != PlayerMode.PROCTOR) {
-            if (sanitizedGameSession.getCurrentMatch().getPacket() != null) {
+        if (playerMode != PlayerMode.PROCTOR && (sanitizedGameSession.getCurrentMatch().getPacket() != null)) {
                 sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
                 sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
                 sanitizedGameSession.getCurrentMatch().setCurrentRound(sanitizeRound(sanitizedGameSession.getCurrentRound()));
-            }
+
         }
 
         return sanitizedGameSession;
