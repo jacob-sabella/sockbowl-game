@@ -1,16 +1,16 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.in.progression.EndMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameStartedMessage;
-import com.soulsoftworks.sockbowlgame.model.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.state.MatchState;
-import com.soulsoftworks.sockbowlgame.model.state.Player;
-import com.soulsoftworks.sockbowlgame.model.state.Team;
+import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
 import org.springframework.stereotype.Service;
 
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeRound;
@@ -21,7 +21,37 @@ public class ProgressionMessageProcessor extends MessageProcessor {
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(StartMatch.class, this::startMatch);
+        processorMapping.registerProcessor(EndMatch.class, this::endMatch);
     }
+
+    public SockbowlOutMessage endMatch(SockbowlInMessage endMatchMessage) {
+
+        GameSession gameSession = endMatchMessage.getGameSession();
+
+        // Check if the player making the request is the game owner
+        if (!gameSession.isPlayerGameOwner(endMatchMessage.getOriginatingPlayerId())) {
+            // If not, return access denied error message
+            return ProcessError.accessDeniedMessage(endMatchMessage);
+        }
+
+        // Retrieve the current match
+        Match currentMatch = gameSession.getCurrentMatch();
+
+        // Deep copy the current match and add it to the previous matches list
+        Match completedMatch = DeepCopyUtil.deepCopy(currentMatch, Match.class);
+        gameSession.getPreviousMatches().add(completedMatch);
+
+        // Set up a new match in config mode
+        Match newMatch = new Match();
+        gameSession.setCurrentMatch(newMatch);
+
+        // Return a sanitized game session update with Proctor privileges since there is nothing to hide anymore
+        GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
+        return GameSessionUpdate.builder()
+                .gameSession(gameSessionSanitized)
+                .build();
+    }
+
 
     public SockbowlOutMessage startMatch(SockbowlInMessage startMatchMessage){
 

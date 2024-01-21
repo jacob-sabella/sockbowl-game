@@ -27,11 +27,18 @@ public class GameSanitizer {
         // Now modify the sanitizedGameSession as needed
         sanitizedGameSession.getPlayerList().forEach(player -> player.setPlayerSecret(""));
 
-        if (playerMode != PlayerMode.PROCTOR && (sanitizedGameSession.getCurrentMatch().getPacket() != null)) {
+        if (playerMode != PlayerMode.PROCTOR && sanitizedGameSession.getCurrentMatch().getPacket() != null) {
+
                 sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
                 sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
-                sanitizedGameSession.getCurrentMatch().setCurrentRound(sanitizeRound(sanitizedGameSession.getCurrentRound()));
 
+                RoundState roundState = gameSession.getCurrentMatch().getCurrentRound().getRoundState();
+
+                if(roundState != RoundState.COMPLETED){
+                    sanitizedGameSession.getCurrentMatch().setCurrentRound(
+                            sanitizeRound(sanitizedGameSession.getCurrentRound()));
+
+                }
         }
 
         return sanitizedGameSession;

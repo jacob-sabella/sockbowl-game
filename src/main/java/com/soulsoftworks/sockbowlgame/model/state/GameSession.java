@@ -36,6 +36,9 @@ public class GameSession {
     @Builder.Default
     private Match currentMatch = new Match();
 
+    @Builder.Default
+    private List<Match> previousMatches = new ArrayList<>();
+
     public Player addPlayer(JoinGameRequest joinGameRequest) {
         Player player = Player.builder()
                 .playerId(joinGameRequest.getPlayerSessionId())

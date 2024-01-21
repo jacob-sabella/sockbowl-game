@@ -14,7 +14,6 @@ public class DeepCopyUtil {
         return gson.fromJson(gson.toJson(object), clazz);
     }
 
-    // New method to handle generic types
     public static <T> T deepCopy(T object, Type typeOfT) {
         return gson.fromJson(gson.toJson(object), typeOfT);
     }

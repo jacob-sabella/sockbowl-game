@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
+import com.soulsoftworks.sockbowlgame.model.socket.in.progression.EndMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -26,6 +27,18 @@ public class ProgressionController {
                 .build();
 
         messageService.sendMessage(startMatch);
+    }
+
+    @MessageMapping("/end-match")
+    public void endMatch(GameSessionInjection gameSessionInjection) {
+
+        EndMatch endMatch = EndMatch
+                .builder()
+                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
+                .gameSessionId(gameSessionInjection.getGameSessionId())
+                .build();
+
+        messageService.sendMessage(endMatch);
     }
 
 }
