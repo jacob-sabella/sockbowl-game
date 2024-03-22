@@ -1,13 +1,14 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
-import com.google.gson.Gson;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+
 
 /**
  * Controller for all game related messages
@@ -41,7 +42,7 @@ public class GameSessionController {
      * Join a game with a join code
      */
     @PostMapping("/join-game-session-by-code")
-    public JoinGameResponse joinGameSessionWithCode(@RequestBody JoinGameRequest joinGameRequest){
+    public JoinGameResponse joinGameSessionWithCode(@Valid @RequestBody JoinGameRequest joinGameRequest){
         return sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
     }
 

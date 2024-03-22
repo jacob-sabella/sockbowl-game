@@ -2,7 +2,7 @@ package com.soulsoftworks.sockbowlgame.service;
 
 import com.google.gson.Gson;
 import com.redis.testcontainers.RedisContainer;
-import com.soulsoftworks.sockbowlgame.TestcontainersUtil;
+import com.soulsoftworks.sockbowlgame.util.TestcontainersUtil;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.GsonMessageConverterWithStringResponse;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;

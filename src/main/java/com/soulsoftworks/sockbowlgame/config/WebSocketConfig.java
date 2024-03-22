@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.controller.resolver.GameSessionInjectionResolver;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
@@ -13,8 +14,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSocketMessageBroker
-public class WebSocketConfig extends WebSocketMessageBrokerConfigurationSupport
-        implements WebSocketMessageBrokerConfigurer {
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
 
     private final GameSessionInjectionResolver gameSessionInjectionResolver;
@@ -36,21 +36,22 @@ public class WebSocketConfig extends WebSocketMessageBrokerConfigurationSupport
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(STOMP_ENDPOINT)
                 .setAllowedOrigins("http://localhost:4200", "http://alpha.sockbowl.com:7003")
-                .setAllowedOriginPatterns("http://*.sockbowl.com:*");
+                .setAllowedOriginPatterns("http://*.sockbowl.com:*")
+                .withSockJS();
     }
 
     @Override
-    public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
+    public void configureWebSocketTransport(@NotNull WebSocketTransportRegistration registry) {
         WebSocketMessageBrokerConfigurer.super.configureWebSocketTransport(registry);
     }
 
     @Override
-    public void configureClientInboundChannel(ChannelRegistration registration) {
+    public void configureClientInboundChannel(@NotNull ChannelRegistration registration) {
         WebSocketMessageBrokerConfigurer.super.configureClientInboundChannel(registration);
     }
 
     @Override
-    public void configureClientOutboundChannel(ChannelRegistration registration) {
+    public void configureClientOutboundChannel(@NotNull ChannelRegistration registration) {
         WebSocketMessageBrokerConfigurer.super.configureClientOutboundChannel(registration);
     }
 
@@ -61,12 +62,12 @@ public class WebSocketConfig extends WebSocketMessageBrokerConfigurationSupport
     }
 
     @Override
-    public void addReturnValueHandlers(List<HandlerMethodReturnValueHandler> returnValueHandlers) {
+    public void addReturnValueHandlers(@NotNull List<HandlerMethodReturnValueHandler> returnValueHandlers) {
         WebSocketMessageBrokerConfigurer.super.addReturnValueHandlers(returnValueHandlers);
     }
 
     @Override
-    public boolean configureMessageConverters(List<MessageConverter> messageConverters) {
+    public boolean configureMessageConverters(@NotNull List<MessageConverter> messageConverters) {
         return WebSocketMessageBrokerConfigurer.super.configureMessageConverters(messageConverters);
     }
 

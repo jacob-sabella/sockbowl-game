@@ -1,27 +1,40 @@
-#  Template Java Gradle build
-
-#  This template allows you to test and build your Java project with Gradle.
-#  The workflow allows running tests, code checkstyle and security scans on the default branch.
-
-# Prerequisites: appropriate project structure should exist in the repository.
-
-image: gradle:7.6.2-jdk17-focal
+image: gradle:7.6.4-jdk17-focal
 
 pipelines:
   default:
     - parallel:
-      - step:
-          name: Build and Test
-          caches:
-            - gradle
-          script:
-            - export TESTCONTAINERS_RYUK_DISABLED=true
-            - gradle build
-          after-script:
-            - pipe: atlassian/checkstyle-report:0.3.0
-      - step:
-          name: Security Scan
-          script:
-            # Run a security scan for sensitive data.
-            # See more security tools at https://bitbucket.org/product/features/pipelines/integrations?&category=security
-            - pipe: atlassian/git-secrets-scan:0.5.1
+        - step:
+            runs-on:
+              - self.hosted
+              - linux
+            name: Build and Test
+            caches:
+              - gradle
+            script:
+              - export TESTCONTAINERS_RYUK_DISABLED=true
+              - gradle build
+            after-script:
+              - pipe: atlassian/checkstyle-report:0.3.0
+            artifacts:
+              - build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
+        - step:
+            runs-on:
+              - self.hosted
+              - linux
+            name: Security Scan
+            script:
+              - pipe: atlassian/git-secrets-scan:0.5.1
+    - step:
+        runs-on:
+          - self.hosted
+          - linux
+        name: Publish to S3
+        script:
+          - pipe: atlassian/aws-s3-deploy:1.6.0
+            variables:
+              AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+              AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+              AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+              S3_BUCKET: 'your-bucket-name'
+              LOCAL_PATH: 'build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar'
+              S3_PATH: 'sockbowl-game-prod.jar'

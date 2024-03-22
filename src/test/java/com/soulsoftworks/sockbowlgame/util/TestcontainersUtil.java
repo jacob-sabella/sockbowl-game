@@ -1,4 +1,4 @@
-package com.soulsoftworks.sockbowlgame;
+package com.soulsoftworks.sockbowlgame.util;
 
 import com.redis.testcontainers.RedisContainer;
 import org.testcontainers.utility.DockerImageName;

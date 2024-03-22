@@ -1,12 +1,11 @@
-package com.soulsoftworks.sockbowlgame.model.packet;
+package com.soulsoftworks.sockbowlgame.model.packet.nodes;
 
 import lombok.Data;
 
 
 @Data
 public class BonusPart {
-    private int bonusId;
+    private String id;
     private String question;
     private String answer;
-    private int number;
 }

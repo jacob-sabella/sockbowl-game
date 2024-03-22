@@ -3,10 +3,7 @@ package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
-import com.soulsoftworks.sockbowlgame.model.state.GameMode;
-import com.soulsoftworks.sockbowlgame.model.state.GameSession;
-import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
-import com.soulsoftworks.sockbowlgame.model.state.JoinStatus;
+import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
@@ -50,16 +47,14 @@ public class GameSessionControllerTest {
     @InjectMocks
     MockHttpSession mockHttpSession;
 
-    private GameSettings gameSettings;
     private GameSession gameSession;
     private CreateGameRequest createGameRequest;
 
     @BeforeEach
-    private void beforeAll() {
-        gameSettings = GameSettings.builder()
+    public void beforeAll() {
+        GameSettings gameSettings = GameSettings.builder()
                 .gameMode(GameMode.QUIZ_BOWL_CLASSIC)
-                .numPlayers(2)
-                .numTeams(2)
+                .proctorType(ProctorType.ONLINE_PROCTOR)
                 .build();
 
         createGameRequest = CreateGameRequest.builder()
@@ -109,16 +104,21 @@ public class GameSessionControllerTest {
         joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         joinGameResponse.setGameSessionId("1");
 
-        // Create join game request
-        JoinGameRequest joinGameRequest = new JoinGameRequest();
+        // Create join game request with required fields
+        JoinGameRequest joinGameRequest = JoinGameRequest.builder()
+                .playerSessionId("mySuperCoolSessionId")
+                .joinCode("ABCD")
+                .name("Bigglejunce")
+                .build();
+
 
         // Return game session when asked via service
         when(sessionService.addPlayerToGameSessionWithJoinCode(any())).thenReturn(joinGameResponse);
 
-        // Create expected output
+/*        // Create expected output
         GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()
                 .fromGameSession(gameSession)
-                .build();
+                .build();*/
 
         // Run endpoint and get response
         ResultActions resultActions = this.mockMvc.perform(post("/api/v1/session/join-game-session-by-code")

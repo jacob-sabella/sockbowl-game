@@ -64,7 +64,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         }
 
         // Verify that a packet has been selected
-        if (gameSession.getCurrentMatch().getPacket().getId() == 0) {
+        if ("".equals(gameSession.getCurrentMatch().getPacket().getId())) {
             // If packet ID is 90, return error message
             return ProcessError.builder().error("A packet must be selected for the match.").build();
         }

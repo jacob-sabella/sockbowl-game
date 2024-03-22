@@ -1,8 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.model.packet.Packet;
-import com.soulsoftworks.sockbowlgame.model.packet.PacketTossup;
+import com.soulsoftworks.sockbowlgame.model.packet.nodes.Packet;
+import com.soulsoftworks.sockbowlgame.model.packet.relationships.ContainsTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
@@ -143,7 +143,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
 
         // Sort the tossups by number
-        packet.getTossups().sort(Comparator.comparingInt(PacketTossup::getNumber));
+        packet.getTossups().sort(Comparator.comparingInt(ContainsTossup::getOrder));
 
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
