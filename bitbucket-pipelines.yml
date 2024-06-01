@@ -1,4 +1,4 @@
-image: gradle:7.6.4-jdk17-focal
+image: docker:19.03.12
 
 pipelines:
   default:
@@ -8,11 +8,13 @@ pipelines:
               - self.hosted
               - linux
             name: Build and Test
+            services:
+              - docker
             caches:
               - gradle
             script:
               - export TESTCONTAINERS_RYUK_DISABLED=true
-              - gradle build
+              - ./gradlew build
             after-script:
               - pipe: atlassian/checkstyle-report:0.3.0
             artifacts:
@@ -38,3 +40,9 @@ pipelines:
               S3_BUCKET: 'your-bucket-name'
               LOCAL_PATH: 'build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar'
               S3_PATH: 'sockbowl-game-prod.jar'
+
+definitions:
+  services:
+    docker:
+      image: docker:19.03.12-dind
+      privileged: true
