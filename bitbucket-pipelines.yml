@@ -21,14 +21,6 @@ pipelines:
         artifacts:
           - build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
     - step:
-        runs-on:
-          - self.hosted
-          - linux
-        name: Verify Artifact
-        script:
-          - chmod 777 build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
-          - ls -la build/libs
-    - step:
         services:
           - docker
         caches:
@@ -52,14 +44,15 @@ pipelines:
           download: true
         script:
           - chmod 777 build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
+          - mv build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar build/libs/sockbowl-game-prod.jar
           - pipe: atlassian/aws-s3-deploy:1.6.0
             variables:
               AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
               AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
               AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
               S3_BUCKET: 'sockbowl-us-east-1-prod-build-artifacts'
-              LOCAL_PATH: 'build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar'
-              S3_PATH: 'spring/bin/prod/sockbowl-game-prod.jar'
+              LOCAL_PATH: 'build/libs/'
+              S3_PATH: 'spring/bin/prod/'
 
 definitions:
   services:
