@@ -36,6 +36,8 @@ pipelines:
           - self.hosted
           - linux
         name: Publish to S3
+        artifacts:
+          download: true
         script:
           - pipe: atlassian/aws-s3-deploy:1.6.0
             variables:
