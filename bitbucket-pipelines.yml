@@ -21,6 +21,8 @@ pipelines:
             artifacts:
               - build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
         - step:
+            services:
+              - docker
             runs-on:
               - self.hosted
               - linux
