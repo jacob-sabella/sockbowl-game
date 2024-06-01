@@ -30,6 +30,8 @@ pipelines:
             script:
               - pipe: atlassian/git-secrets-scan:0.5.1
     - step:
+        services:
+          - docker
         runs-on:
           - self.hosted
           - linux
@@ -40,9 +42,9 @@ pipelines:
               AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
               AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
               AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
-              S3_BUCKET: 'your-bucket-name'
+              S3_BUCKET: 'sockbowl-us-east-1-prod-build-artifacts'
               LOCAL_PATH: 'build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar'
-              S3_PATH: 'sockbowl-game-prod.jar'
+              S3_PATH: 'spring/bin/prod/sockbowl-game-prod.jar'
 
 definitions:
   services:
