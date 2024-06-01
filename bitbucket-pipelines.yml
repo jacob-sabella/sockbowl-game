@@ -45,7 +45,7 @@ pipelines:
         artifacts:
           download: true
         script:
-          - chmod -R 777 build/libs/
+          - chmod 777 build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
           - pipe: atlassian/aws-s3-deploy:1.6.0
             variables:
               AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
