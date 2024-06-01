@@ -12,6 +12,7 @@ pipelines:
         image: gradle:7.6.4-jdk17-focal
         caches:
           - gradle
+          - docker
         script:
           - export TESTCONTAINERS_RYUK_DISABLED=true
           - ./gradlew build
@@ -30,6 +31,8 @@ pipelines:
     - step:
         services:
           - docker
+        caches:
+          - docker
         runs-on:
           - self.hosted
           - linux
@@ -38,6 +41,8 @@ pipelines:
           - pipe: atlassian/git-secrets-scan:0.5.1
     - step:
         services:
+          - docker
+        caches:
           - docker
         runs-on:
           - self.hosted
