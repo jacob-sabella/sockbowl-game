@@ -25,6 +25,7 @@ pipelines:
           - linux
         name: Verify Artifact
         script:
+          - chmod 777 build/libs/sockbowl-game-0.0.1-SNAPSHOT.jar
           - ls -la build/libs
     - step:
         services:
