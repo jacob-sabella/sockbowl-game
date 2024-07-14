@@ -9,7 +9,7 @@ import java.util.List;
 
 public class PacketBuilderHelper {
 
-    public static Packet createPacket(long id, String name, Difficulty difficulty, List<ContainsTossup> tossups, List<ContainsBonus> bonuses) {
+    public static Packet createPacket(String id, String name, Difficulty difficulty, List<ContainsTossup> tossups, List<ContainsBonus> bonuses) {
         Packet packet = new Packet();
         packet.setId(id);
         packet.setName(name);

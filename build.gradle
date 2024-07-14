@@ -75,3 +75,9 @@ generateTypeScript {
 test {
     useJUnitPlatform()
 }
+
+tasks.bootBuildImage {
+    docker {
+        host = "//./pipe/dockerDesktopLinuxEngine"
+    }
+}

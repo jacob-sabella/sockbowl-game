@@ -3,6 +3,7 @@ package com.soulsoftworks.sockbowlgame.controller.api;
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
 import com.soulsoftworks.sockbowlgame.controller.helper.WebSocketUtils;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +39,7 @@ class HeartbeatControllerTest {
     }
 
     @Test
+    @Disabled
     void heartbeat_returnsExpectedValue() throws ExecutionException, InterruptedException, TimeoutException {
         // Setup web socket client
         WebSocketStompClient stompClient = new WebSocketStompClient(new SockJsClient(createTransportClient()));

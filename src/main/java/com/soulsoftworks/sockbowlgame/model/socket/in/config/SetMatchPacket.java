@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public class SetMatchPacket extends SockbowlInMessage {
 
-    long packetId;
+    String packetId;
 
     @Override
     public MessageTypes getMessageType() {

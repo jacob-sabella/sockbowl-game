@@ -8,7 +8,7 @@ import java.util.List;
 
 @Data
 public class Packet {
-    private long id;
+    private String id;
     private String name;
     private Difficulty difficulty;
     private List<ContainsTossup> tossups;

@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
 @Data
 public class MatchPacketUpdate extends SockbowlOutMessage {
 
-    private long packetId;
+    private String packetId;
     private String packetName;
 
     @Override

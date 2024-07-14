@@ -35,9 +35,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(STOMP_ENDPOINT)
-                .setAllowedOrigins("http://localhost:4200", "http://alpha.sockbowl.com:7003")
-                .setAllowedOriginPatterns("http://*.sockbowl.com:*")
-                .withSockJS();
+                .setAllowedOrigins("http://localhost:4200", "http://alpha.sockbowl.com:7003", "http://alpha.sockbowl.com")
+                .setAllowedOriginPatterns("http://*.sockbowl.com:*", "http://alpha.sockbowl.com", "http://localhost:4200");
     }
 
     @Override

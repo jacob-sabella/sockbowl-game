@@ -110,11 +110,11 @@ public class ConfigurationMessageProcessorTest {
         ContainsBonus containsBonus = PacketBuilderHelper.createBonus(1L, 1, bonus);
 
         // Use PacketBuilderHelper to create Packet with tossups and bonuses
-        Packet mockPacket = PacketBuilderHelper.createPacket(1L, "Default Packet", difficulty,
+        Packet mockPacket = PacketBuilderHelper.createPacket("1", "Default Packet", difficulty,
                 new ArrayList<>(List.of(containsTossup)), new ArrayList<>(List.of(containsBonus)));
 
         // Mock packetClient to return the constructed packet
-        when(packetClient.getPacketById(1L)).thenReturn(mockPacket);
+        when(packetClient.getPacketById("1")).thenReturn(mockPacket);
     }
 
     @AfterEach
@@ -214,14 +214,14 @@ public class ConfigurationMessageProcessorTest {
             SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(gameOwner.getPlayerId())
-                    .packetId(1L)
+                    .packetId("1")
                     .build();
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);
 
             assertInstanceOf(MatchPacketUpdate.class, result);
             MatchPacketUpdate update = (MatchPacketUpdate) result;
-            assertEquals(1L, update.getPacketId());
+            assertEquals("1", update.getPacketId());
             assertEquals("Default Packet", update.getPacketName());
         }
 
@@ -252,7 +252,7 @@ public class ConfigurationMessageProcessorTest {
             SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(nonOwner.getPlayerId())
-                    .packetId(1000)
+                    .packetId("1000")
                     .build();
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);

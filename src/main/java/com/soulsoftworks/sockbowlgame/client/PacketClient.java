@@ -12,7 +12,7 @@ import java.util.List;
  * Client for interacting with the sockbowl-questions service to deal with Packets
  */
 @FeignClient(value="PacketClient",
-             url = "http://docker1.lan:7001/api/v1/packets",
+             url = "http://docker1.lan:7002/api/v1/packets",
              configuration = ClientConfiguration.class)
 public interface PacketClient {
 
@@ -22,6 +22,6 @@ public interface PacketClient {
      * @return Response de-serialized into Packet object
      */
     @RequestMapping(method = RequestMethod.GET, value = "/get/{id}")
-    Packet getPacketById(@PathVariable long id);
+    Packet getPacketById(@PathVariable String id);
 
 }

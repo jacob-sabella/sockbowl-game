@@ -20,7 +20,7 @@ public class TestController {
 
     @GetMapping("test")
     public void test(){
-        System.out.println(packetClient.getPacketById(17L));
+        System.out.println(packetClient.getPacketById("17"));
     }
 
 }
