@@ -1,6 +1,7 @@
 import cz.habarta.typescript.generator.ClassMapping
 import cz.habarta.typescript.generator.EnumMapping
 import cz.habarta.typescript.generator.TypeScriptFileType
+import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
     id 'org.springframework.boot' version '3.2.4'
@@ -76,8 +77,9 @@ test {
     useJUnitPlatform()
 }
 
-tasks.bootBuildImage {
+bootBuildImage {
     docker {
         host = "//./pipe/dockerDesktopLinuxEngine"
     }
+    createdDate = "now"
 }
