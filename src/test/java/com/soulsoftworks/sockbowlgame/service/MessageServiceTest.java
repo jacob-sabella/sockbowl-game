@@ -100,7 +100,7 @@ public class MessageServiceTest {
         joinGameRequest2.setJoinCode(gameSession.getJoinCode());
         joinGameRequest2.setPlayerSessionId(UUID.randomUUID().toString());
         joinGameRequest2.setName("James");
-
+        	
         // Add player to game
         sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
         sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest2);

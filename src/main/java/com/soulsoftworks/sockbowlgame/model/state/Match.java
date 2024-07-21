@@ -32,13 +32,24 @@ public class Match {
             // Proceed with setting up the next round
             String nextRoundQuestion = packet.getTossups().get(nextRoundNumber).getTossup().getQuestion();
             String nextRoundAnswer = packet.getTossups().get(nextRoundNumber).getTossup().getAnswer();
+	    
 
+	    String nextRoundSubcategory = "";
+            String nextRoundCategory = "";
+
+            try {
+            	nextRoundSubcategory = packet.getTossups().get(nextRoundNumber).getTossup().getSubcategory().getName();
+                nextRoundCategory = packet.getTossups().get(nextRoundNumber).getTossup().getSubcategory().getCategory().getName();
+	    } catch (Exception e){
+	        //
+	    }
+	   	
             if(nextRoundNumber - 1 != 0){
                 previousRounds.add(currentRound);
             }
 
             currentRound = new Round();
-            currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer);
+            currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer, nextRoundCategory, nextRoundSubcategory);
         }
     }
 

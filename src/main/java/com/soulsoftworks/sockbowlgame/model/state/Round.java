@@ -18,6 +18,8 @@ public class Round {
     private List<Buzz> buzzList = new ArrayList<>();
     private String question;
     private String answer;
+    private String category;
+    private String subcategory;
     private boolean proctorFinishedReading = false;
 
     /**
@@ -91,11 +93,13 @@ public class Round {
      * @param question the question for the round
      * @param answer the answer for the question
      */
-    public void setupRound(int roundNumber, String question, String answer){
+    public void setupRound(int roundNumber, String question, String answer, String category, String subcategory){
         this.roundNumber = roundNumber;
         this.question = question;
         this.answer = answer;
         this.roundState = RoundState.PROCTOR_READING;
+	this.category = category;
+	this.subcategory = subcategory;
     }
 
     /**
