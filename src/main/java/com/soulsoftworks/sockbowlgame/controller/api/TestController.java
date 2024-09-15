@@ -10,17 +10,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/api/v1/")
 public class TestController {
 
-    private final SessionService sessionService;
     private final PacketClient packetClient;
 
-    public TestController(SessionService sessionService, PacketClient packetClient) {
-        this.sessionService = sessionService;
+    public TestController(PacketClient packetClient) {
         this.packetClient = packetClient;
     }
 
     @GetMapping("test")
     public void test(){
-        System.out.println(packetClient.getPacketById(17L));
+        System.out.println(packetClient.getPacketById("17"));
     }
 
 }
