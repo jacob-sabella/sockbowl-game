@@ -48,8 +48,6 @@ dependencies {
     testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
     testImplementation 'org.awaitility:awaitility:4.2.2'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-
-
 }
 
 tasks.named('test') {
@@ -82,4 +80,15 @@ bootBuildImage {
         host = "//./pipe/dockerDesktopLinuxEngine"
     }
     createdDate = "now"
+
+    imageName = "sockbowl/${project.name}:${gitBranch()}"
 }
+
+def gitBranch() {
+    def branch = 'SNAPSHOT'
+    try {
+        branch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+    } catch (Exception ignored) {}
+    return branch
+}
+
