@@ -77,7 +77,7 @@ test {
 
 bootBuildImage {
     createdDate = "now"
-    imageName = "sockbowl/${project.name}:${gitBranch()}"
+    imageName = "jacob-sabella/${project.name}:${gitBranch()}"
 }
 
 static def gitBranch() {
