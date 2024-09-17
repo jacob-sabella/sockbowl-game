@@ -76,15 +76,11 @@ test {
 }
 
 bootBuildImage {
-    docker {
-        host = "//./pipe/dockerDesktopLinuxEngine"
-    }
     createdDate = "now"
-
     imageName = "sockbowl/${project.name}:${gitBranch()}"
 }
 
-def gitBranch() {
+static def gitBranch() {
     def branch = 'SNAPSHOT'
     try {
         branch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
