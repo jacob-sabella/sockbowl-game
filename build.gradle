@@ -37,7 +37,7 @@ dependencies {
     implementation 'org.springframework.kafka:spring-kafka'
     implementation 'com.redis.om:redis-om-spring:0.8.9'
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'org.projectlombok:lombok:1.18.32'
+    implementation 'org.projectlombok:lombok:1.18.34'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
