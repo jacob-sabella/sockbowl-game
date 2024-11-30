@@ -37,10 +37,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint(STOMP_ENDPOINT)
                 .setAllowedOriginPatterns(
                         "http://localhost:4200",
-                        "http://*.sockbowl.com:*",
+                        "http://*.sockbowl.*:*",
                         "http://alpha.sockbowl.com",
                         "http://alpha.sockbowl.com/*",
-                        "http://alpha.sockbowl.com:7003"
+                        "http://alpha.sockbowl.com:7003",
+                        "http://ng.sockbowl.localhost"
                 );
     }
 
