@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -50,6 +51,7 @@ public class KafkaConfig {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "game-consumers");
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT"); // Add this line
         return props;
     }
 
