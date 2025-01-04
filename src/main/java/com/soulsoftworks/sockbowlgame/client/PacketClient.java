@@ -12,6 +12,7 @@ import java.util.List;
  * Client for interacting with the sockbowl-questions service to deal with Packets
  */
 @FeignClient(value="PacketClient",
+             url = "${sockbowl.questions.url}",
              configuration = ClientConfiguration.class)
 public interface PacketClient {
 
