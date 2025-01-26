@@ -39,7 +39,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         "http://localhost:4200",
                         "http://*.sockbowl.*:*",
                         "https://alpha.sockbowl.com",
+                        "https://ng.alpha.sockbowl.com",
                         "https://alpha.sockbowl.com/*",
+                        "https://ng.alpha.sockbowl.com/*",
                         "https://alpha.sockbowl.com:7003",
                         "http://ng.sockbowl.localhost"
                 );
