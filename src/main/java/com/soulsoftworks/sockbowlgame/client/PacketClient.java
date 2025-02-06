@@ -1,27 +1,35 @@
 package com.soulsoftworks.sockbowlgame.client;
 
+import com.soulsoftworks.sockbowlgame.config.SockbowlQuestionsConfig;
 import com.soulsoftworks.sockbowlgame.model.packet.nodes.Packet;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.graphql.client.GraphQlClient;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
-import java.util.List;
+@Component
+public class PacketClient {
 
-/**
- * Client for interacting with the sockbowl-questions service to deal with Packets
- */
-@FeignClient(value="PacketClient",
-             url = "${sockbowl.questions.url}",
-             configuration = ClientConfiguration.class)
-public interface PacketClient {
+    private final GraphQlClient graphQlClient;
+
+    public PacketClient(SockbowlQuestionsConfig sockbowlQuestionsConfig) {
+        this.graphQlClient = HttpGraphQlClient.builder()
+                .url(sockbowlQuestionsConfig.getUrl() + "/graphql")
+                .build();
+    }
 
     /**
-     * For a given packet ID, retrieve the packet id
-     * @param id Packet ID
-     * @return Response de-serialized into Packet object
+     * Fetches a packet by its ID
+     *
+     * @param packetId The packet ID
+     * @return A Mono emitting the Packet object
      */
-    @RequestMapping(method = RequestMethod.GET, value = "/get/{id}")
-    Packet getPacketById(@PathVariable String id);
+    public Mono<Packet> getPacketById(String packetId) {
+        String query = "query($id: ID!) { getPacketById(id: $id) { id name } }";
 
+        return graphQlClient.document(query)
+                .variable("id", packetId)
+                .retrieve("getPacketById")
+                .toEntity(Packet.class);
+    }
 }

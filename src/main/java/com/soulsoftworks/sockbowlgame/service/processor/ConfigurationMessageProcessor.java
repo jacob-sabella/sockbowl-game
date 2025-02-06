@@ -135,7 +135,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
 
         // Retrieve the packet using the packet ID from the message
-        Packet packet = packetClient.getPacketById(message.getPacketId());
+        Packet packet = packetClient.getPacketById(message.getPacketId()).block();
 
         // If the packet is not found, return an error message
         if (packet == null) {

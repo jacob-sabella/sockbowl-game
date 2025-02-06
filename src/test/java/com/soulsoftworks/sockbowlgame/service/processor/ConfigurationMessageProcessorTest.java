@@ -114,7 +114,7 @@ public class ConfigurationMessageProcessorTest {
                 new ArrayList<>(List.of(containsTossup)), new ArrayList<>(List.of(containsBonus)));
 
         // Mock packetClient to return the constructed packet
-        when(packetClient.getPacketById("1")).thenReturn(mockPacket);
+        when(packetClient.getPacketById("1").block()).thenReturn(mockPacket);
     }
 
     @AfterEach
