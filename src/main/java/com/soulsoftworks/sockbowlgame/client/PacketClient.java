@@ -29,7 +29,7 @@ public class PacketClient {
 
     return graphQlClient.document(query)
         .variable("id", packetId)
-        .retrieve("Packet")
+        .retrieve("getPacketById")
         .toEntity(Packet.class);
   }
 }
