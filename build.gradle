@@ -35,7 +35,7 @@ dependencies {
     implementation 'io.github.openfeign:feign-okhttp:13.3'
     implementation 'io.github.openfeign:feign-httpclient:13.5'
     implementation 'org.springframework.kafka:spring-kafka'
-    implementation 'com.redis.om:redis-om-spring:0.8.9'
+    implementation 'com.redis.om:redis-om-spring:0.9.9'
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'org.projectlombok:lombok:1.18.36'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
