@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.controller.resolver.GameSessionInjectionResolver;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
@@ -16,15 +17,13 @@ import java.util.List;
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-
     private final GameSessionInjectionResolver gameSessionInjectionResolver;
-
 
     public static String STOMP_ENDPOINT = "/sockbowl-game";
 
     public WebSocketConfig(GameSessionInjectionResolver gameSessionInjectionResolver) {
         this.gameSessionInjectionResolver = gameSessionInjectionResolver;
-    }
+    } 
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -32,21 +31,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         config.setApplicationDestinationPrefixes("/app");
     }
 
+    @Value("${sockbowl.websocket.allowed-origins}")
+    private String[] allowedOrigins;
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(STOMP_ENDPOINT)
-                .setAllowedOriginPatterns(
-                        "http://localhost:4200",
-                        "http://localhost:80",
-                        "http://localhost",
-                        "http://*.sockbowl.*:*",
-                        "https://alpha.sockbowl.com",
-                        "https://ng.alpha.sockbowl.com",
-                        "https://alpha.sockbowl.com/*",
-                        "https://ng.alpha.sockbowl.com/*",
-                        "https://alpha.sockbowl.com:7003",
-                        "http://ng.sockbowl.localhost"
-                );
+                .setAllowedOriginPatterns(allowedOrigins);
     }
 
     @Override
