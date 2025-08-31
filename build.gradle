@@ -89,11 +89,6 @@ bootBuildImage {
     imageName = "ghcr.io/${repo}:${project.version}"
 }
 
-/* ---------------------------- Dependency management ------------------------ */
-dependencyManagement {
-    imports { mavenBom "org.springframework.ai:spring-ai-bom:$springAiVersion" }
-}
-
 /* ------------------------------- Utilities -------------------------------- */
 tasks.register('printVersion') {
     group = 'help'
