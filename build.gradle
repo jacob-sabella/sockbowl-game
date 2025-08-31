@@ -11,7 +11,7 @@ plugins {
 }
 
 group = 'com.soulsoftworks'
-version = '0.0.1-SNAPSHOT'
+version = resolveVersion()
 sourceCompatibility = '17'
 
 configurations {
