@@ -37,7 +37,8 @@ public class ConfigurationMessageProcessorTest {
     private PacketClient packetClient;
 
     private GameSession mockGameSession;
-    private Player gameOwner, otherPlayer;
+    private Player gameOwner;
+    private Player otherPlayer;
 
     private AutoCloseable closeable;
 
