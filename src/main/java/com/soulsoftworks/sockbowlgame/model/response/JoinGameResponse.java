@@ -11,4 +11,10 @@ public class JoinGameResponse {
     String gameSessionId;
     String playerSecret;
     String playerSessionId;
+
+    /**
+     * UUID of the authenticated user (null for guest players).
+     * Only populated when joining as an authenticated user via Keycloak.
+     */
+    String userId;
 }

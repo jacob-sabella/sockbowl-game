@@ -42,7 +42,18 @@ dependencies {
     implementation 'com.github.victools:jsonschema-generator:4.38.0'
     implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // Spring Security & OAuth2/OIDC
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // Database & JPA for User persistence
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.postgresql:postgresql'
+
     testImplementation 'org.springframework.graphql:spring-graphql-test'
+    testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework:spring-webflux'
     testImplementation 'io.projectreactor:reactor-test'
 

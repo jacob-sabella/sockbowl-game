@@ -7,7 +7,13 @@ import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 
 /**
@@ -18,6 +24,9 @@ import org.springframework.web.bind.annotation.*;
 public class GameSessionController {
 
     private final SessionService sessionService;
+
+    @Value("${sockbowl.auth.enabled:false}")
+    private boolean authEnabled;
 
     public GameSessionController(SessionService sessionService) {
         this.sessionService = sessionService;
@@ -39,11 +48,44 @@ public class GameSessionController {
     }
 
     /**
-     * Join a game with a join code
+     * Join a game with a join code (guest mode)
      */
     @PostMapping("/join-game-session-by-code")
     public JoinGameResponse joinGameSessionWithCode(@Valid @RequestBody JoinGameRequest joinGameRequest){
         return sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
+    }
+
+    /**
+     * Join a game as an authenticated user with Keycloak token.
+     * Requires authentication via Bearer token in Authorization header.
+     *
+     * Only available when sockbowl.auth.enabled=true.
+     *
+     * @param joinGameRequest Join game request from client
+     * @param jwt JWT token from Keycloak (injected by Spring Security)
+     * @return JoinGameResponse with user information
+     */
+    @PostMapping("/join-game-session-authenticated")
+    public ResponseEntity<JoinGameResponse> joinGameSessionAuthenticated(
+            @Valid @RequestBody JoinGameRequest joinGameRequest,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        if (!authEnabled) {
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Authentication is not enabled. Set sockbowl.auth.enabled=true to use this feature."
+            );
+        }
+
+        if (jwt == null) {
+            throw new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication required. Please provide a valid Bearer token."
+            );
+        }
+
+        JoinGameResponse response = sessionService.addAuthenticatedUserToGameSession(joinGameRequest, jwt);
+        return ResponseEntity.ok(response);
     }
 
 }
