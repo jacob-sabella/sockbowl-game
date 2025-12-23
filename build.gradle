@@ -40,7 +40,7 @@ dependencies {
     implementation 'org.projectlombok:lombok:1.18.38'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
     implementation 'com.github.victools:jsonschema-generator:4.38.0'
-    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.1.1'
+    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.3.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Spring Security & OAuth2/OIDC
