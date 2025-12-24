@@ -61,13 +61,15 @@ public class GameSessionController {
      *
      * Only available when sockbowl.auth.enabled=true.
      *
-     * @param joinGameRequest Join game request from client
+     * Note: Name field is not required - it will be extracted from the JWT token.
+     *
+     * @param joinGameRequest Join game request from client (name field is optional)
      * @param jwt JWT token from Keycloak (injected by Spring Security)
      * @return JoinGameResponse with user information
      */
     @PostMapping("/join-game-session-authenticated")
     public ResponseEntity<JoinGameResponse> joinGameSessionAuthenticated(
-            @Valid @RequestBody JoinGameRequest joinGameRequest,
+            @RequestBody JoinGameRequest joinGameRequest,
             @AuthenticationPrincipal Jwt jwt) {
 
         if (!authEnabled) {
@@ -81,6 +83,14 @@ public class GameSessionController {
             throw new ResponseStatusException(
                 HttpStatus.UNAUTHORIZED,
                 "Authentication required. Please provide a valid Bearer token."
+            );
+        }
+
+        // Validate only the join code is present
+        if (joinGameRequest.getJoinCode() == null || joinGameRequest.getJoinCode().isBlank()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Join code is required"
             );
         }
 

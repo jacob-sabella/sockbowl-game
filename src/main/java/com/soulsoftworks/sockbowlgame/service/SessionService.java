@@ -156,12 +156,13 @@ public class SessionService {
         }
 
         // Find or create user
+        String finalName = name;
         User user = userRepository.findByKeycloakId(keycloakId)
                 .orElseGet(() -> {
                     User newUser = User.builder()
                             .keycloakId(keycloakId)
                             .email(email)
-                            .name(name)
+                            .name(finalName)
                             .createdAt(Instant.now())
                             .lastLoginAt(Instant.now())
                             .build();

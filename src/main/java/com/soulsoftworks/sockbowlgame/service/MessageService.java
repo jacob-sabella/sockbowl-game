@@ -12,6 +12,8 @@ import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProc
 import com.soulsoftworks.sockbowlgame.service.processor.GameMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.ProgressionMessageProcessor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -27,6 +29,8 @@ import java.util.List;
  */
 @Service
 public class MessageService {
+
+    private static final Logger log = LoggerFactory.getLogger(MessageService.class);
 
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final KafkaTemplate<String, SockbowlInMessage> kafkaTemplate;
@@ -75,6 +79,8 @@ public class MessageService {
      * @param message The message to be sent.
      */
     public void sendMessage(SockbowlInMessage message) {
+        log.info("Sending message to Kafka - type: {}, gameSessionId: {}, playerId: {}",
+            message.getMessageType(), message.getGameSessionId(), message.getOriginatingPlayerId());
         sendMessage(gameTopic, message);
     }
 
@@ -90,11 +96,19 @@ public class MessageService {
         if (record != null) {
             // Retrieve the game session from the incoming message
             SockbowlInMessage message = record.value();
+            log.info("Received message from Kafka - type: {}, gameSessionId: {}, playerId: {}",
+                message.getMessageType(), message.getGameSessionId(), message.getOriginatingPlayerId());
+
             GameSession gameSession = sessionService.getGameSessionById(message.getGameSessionId());
+            if (gameSession == null) {
+                log.error("Game session not found: {}", message.getGameSessionId());
+                return;
+            }
             message.setGameSession(gameSession);
 
             // Direct the message to the appropriate service for processing
             SockbowlOutMessage sockbowlOutMessage = directMessageToService(message);
+            log.info("Processed message - outgoing type: {}", sockbowlOutMessage.getClass().getSimpleName());
 
             // If no error occured, update the game session
             if (!(sockbowlOutMessage instanceof ProcessError)) {
@@ -114,14 +128,18 @@ public class MessageService {
                 // If there are specified recipients for the outgoing message, send the message to them.
                 // Otherwise, send the message to all clients connected to the game session.
                 if (!singleMessage.getRecipients().isEmpty()) {
-                    singleMessage.getRecipients().forEach(recipient ->
-                            simpMessagingTemplate.convertAndSend("/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
-                                    gameSession.getId() + "/" + recipient, singleMessage)
-                    );
+                    log.info("Sending targeted message to {} recipients for game {}",
+                        singleMessage.getRecipients().size(), gameSession.getId());
+                    singleMessage.getRecipients().forEach(recipient -> {
+                        String destination = "/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
+                            gameSession.getId() + "/" + recipient;
+                        log.debug("Sending to: {}", destination);
+                        simpMessagingTemplate.convertAndSend(destination, singleMessage);
+                    });
                 } else {
-                    simpMessagingTemplate.convertAndSend("/" +
-                                    MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId(),
-                            singleMessage);
+                    String destination = "/" + MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId();
+                    log.info("Broadcasting message to all players at: {}", destination);
+                    simpMessagingTemplate.convertAndSend(destination, singleMessage);
                 }
             }
 

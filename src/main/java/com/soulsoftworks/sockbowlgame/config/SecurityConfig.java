@@ -13,6 +13,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Security configuration for Keycloak OAuth2/OIDC authentication.
@@ -43,8 +49,23 @@ public class SecurityConfig {
                 .ignoringRequestMatchers("/sockbowl-game/**")  // WebSocket endpoint
                 .ignoringRequestMatchers("/api/v1/session/**"))  // Guest session endpoints
 
-            // Enable CORS
+            // Enable CORS - must come before other security filters
             .cors(Customizer.withDefaults())
+
+            // Handle authentication exceptions without redirects for API endpoints
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint((request, response, authException) -> {
+                    // For API requests, return 401 instead of redirecting to login
+                    if (request.getRequestURI().startsWith("/api/")) {
+                        response.setStatus(401);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"error\":\"Unauthorized\",\"message\":\"Authentication required\"}");
+                    } else {
+                        // For non-API requests, allow default OAuth2 redirect behavior
+                        response.sendRedirect("/api/v1/auth/login");
+                    }
+                })
+            )
 
             // Configure authorization rules
             .authorizeHttpRequests(auth -> auth

@@ -1,11 +1,14 @@
 package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
+import jakarta.annotation.PostConstruct;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,8 +19,11 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.listener.CommonErrorHandler;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,8 +32,19 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(KafkaConfig.class);
+
     @Value("${sockbowl.kafka.bootstrap-servers}")
     private String bootstrapServers;
+
+    @PostConstruct
+    public void logConfig() {
+        log.info("=================================================");
+        log.info("Kafka Configuration:");
+        log.info("Bootstrap Servers: {}", bootstrapServers);
+        log.info("Consumer Group ID: game-consumers");
+        log.info("=================================================");
+    }
 
     @Bean
     public ProducerFactory<String, SockbowlInMessage> producerFactory() {
@@ -67,6 +84,15 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, SockbowlInMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+        factory.setCommonErrorHandler(errorHandler());
+        log.info("Kafka listener container factory created successfully");
         return factory;
+    }
+
+    @Bean
+    public CommonErrorHandler errorHandler() {
+        DefaultErrorHandler handler = new DefaultErrorHandler(new FixedBackOff(1000L, 2L));
+        handler.setLogLevel(org.springframework.kafka.KafkaException.Level.ERROR);
+        return handler;
     }
 }

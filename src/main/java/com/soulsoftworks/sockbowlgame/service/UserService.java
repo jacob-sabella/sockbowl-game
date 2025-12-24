@@ -48,6 +48,41 @@ public class UserService {
     }
 
     /**
+     * Find or create a user by their Keycloak ID.
+     * If the user doesn't exist, creates a new user record.
+     *
+     * @param keycloakId the Keycloak user ID (JWT sub claim)
+     * @param email the user's email from Keycloak
+     * @param name the user's name from Keycloak
+     * @return The user (existing or newly created)
+     */
+    public User findOrCreateUser(String keycloakId, String email, String name) {
+        return userRepository.findByKeycloakId(keycloakId)
+            .orElseGet(() -> {
+                User newUser = User.builder()
+                    .keycloakId(keycloakId)
+                    .email(email)
+                    .name(name)
+                    .createdAt(Instant.now())
+                    .lastLoginAt(Instant.now())
+                    .build();
+                return userRepository.save(newUser);
+            });
+    }
+
+    /**
+     * Update user's last login time.
+     *
+     * @param userId the user ID
+     */
+    public void updateLastLogin(UUID userId) {
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setLastLoginAt(Instant.now());
+            userRepository.save(user);
+        });
+    }
+
+    /**
      * Get a user by their ID.
      *
      * @param userId the user ID

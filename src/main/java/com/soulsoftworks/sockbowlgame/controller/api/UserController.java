@@ -49,8 +49,11 @@ public class UserController {
         }
 
         String keycloakId = jwt.getSubject();
-        User user = userService.findByKeycloakId(keycloakId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        String email = jwt.getClaimAsString("email");
+        String name = jwt.getClaimAsString("name");
+
+        User user = userService.findOrCreateUser(keycloakId, email, name);
+        userService.updateLastLogin(user.getId());
 
         Map<String, Object> profile = new HashMap<>();
         profile.put("id", user.getId().toString());
@@ -76,8 +79,11 @@ public class UserController {
         }
 
         String keycloakId = jwt.getSubject();
-        User user = userService.findByKeycloakId(keycloakId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        String email = jwt.getClaimAsString("email");
+        String name = jwt.getClaimAsString("name");
+
+        User user = userService.findOrCreateUser(keycloakId, email, name);
+        userService.updateLastLogin(user.getId());
 
         UserStats stats = userService.getUserStats(user.getId());
 
@@ -123,8 +129,11 @@ public class UserController {
         }
 
         String keycloakId = jwt.getSubject();
-        User user = userService.findByKeycloakId(keycloakId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        String email = jwt.getClaimAsString("email");
+        String name = jwt.getClaimAsString("name");
+
+        User user = userService.findOrCreateUser(keycloakId, email, name);
+        userService.updateLastLogin(user.getId());
 
         Page<UserGameHistory> history = userService.getUserGameHistory(user.getId(), pageable);
 
