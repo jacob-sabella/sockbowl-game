@@ -83,6 +83,18 @@ public class GameSession {
                 .orElse(null);
     }
 
+    /**
+     * Get count of active players (BUZZER mode only, excludes spectators).
+     * Used for enforcing player capacity limits while allowing unlimited spectators.
+     *
+     * @return Number of players in BUZZER mode (on teams)
+     */
+    public int getActivePlayerCount() {
+        return (int) playerList.stream()
+                .filter(player -> player.getPlayerMode() == PlayerMode.BUZZER)
+                .count();
+    }
+
 
     public Team findTeamWithId(String teamId) {
         return teamList.stream()

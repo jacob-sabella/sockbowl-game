@@ -86,7 +86,7 @@ public class SessionService {
         //TODO: This isnt permanent solution to player ID
         joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
 
-        if (gameSession.getPlayerList().size() == playerSettings.getMaxPlayers()) {
+        if (gameSession.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
             joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
         } else {
             newPlayer = gameSession.addPlayer(joinGameRequest);
@@ -182,7 +182,7 @@ public class SessionService {
         JoinGameResponse response = new JoinGameResponse();
         joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
 
-        if (gameSession.getPlayerList().size() >= playerSettings.getMaxPlayers()) {
+        if (gameSession.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
             response.setJoinStatus(JoinStatus.SESSION_FULL);
             return response;
         }
