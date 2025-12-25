@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.AnswerUpdate;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.BonusUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
@@ -29,6 +30,7 @@ public class GameMessageProcessor extends MessageProcessor {
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(PlayerIncomingBuzz.class, this::playerBuzz);
         processorMapping.registerProcessor(AnswerOutcome.class, this::playerAnswer);
+        processorMapping.registerProcessor(BonusPartOutcome.class, this::bonusPartAnswer);
         processorMapping.registerProcessor(TimeoutRound.class, this::timeout);
         processorMapping.registerProcessor(FinishedReading.class, this::finishedReading);
         processorMapping.registerProcessor(AdvanceRound.class, this::advanceRound);
@@ -151,7 +153,27 @@ public class GameMessageProcessor extends MessageProcessor {
                 gameSession.getCurrentMatch().completeRound();
             }
         } else {
+            // Process correct answer
             gameSession.getCurrentRound().processCorrectAnswer();
+
+            // Check if bonuses are enabled and if this tossup has a bonus
+            if (gameSession.getGameSettings().isBonusesEnabled() &&
+                gameSession.getCurrentRound().hasAssociatedBonus()) {
+                // Start bonus phase for the team that answered correctly
+                String teamId = gameSession.getCurrentRound().getBuzzList()
+                        .stream()
+                        .filter(buzz -> buzz.isCorrect())
+                        .findFirst()
+                        .map(buzz -> buzz.getTeamId())
+                        .orElse(null);
+
+                if (teamId != null) {
+                    gameSession.getCurrentMatch().startBonusPhase(teamId);
+                }
+            } else {
+                // No bonus, mark round as completed
+                gameSession.getCurrentMatch().completeRound();
+            }
         }
 
         // Return multi-message with both full and limited context messages
@@ -352,6 +374,75 @@ public class GameMessageProcessor extends MessageProcessor {
         return SockbowlMultiOutMessage.builder()
                 .sockbowlOutMessage(fullContextMessage)
                 .sockbowlOutMessage(limitedContextMessage)
+                .build();
+    }
+
+    /**
+     * Processes bonus part answers from the proctor.
+     * Validates that the sender is the proctor and that the round is in the correct state.
+     * Updates the bonus part answer and broadcasts the update to all players.
+     *
+     * @param bonusPartOutcomeMsg The incoming bonus part outcome message
+     * @return BonusUpdate message or ProcessError
+     */
+    public SockbowlOutMessage bonusPartAnswer(SockbowlInMessage bonusPartOutcomeMsg) {
+        BonusPartOutcome bonusPartOutcome = (BonusPartOutcome) bonusPartOutcomeMsg;
+        GameSession gameSession = bonusPartOutcomeMsg.getGameSession();
+
+        // Check if the player is the proctor
+        if (gameSession.getPlayerModeById(bonusPartOutcomeMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.accessDeniedMessage(bonusPartOutcomeMsg);
+        }
+
+        // Check if we're in the correct state
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BONUS_ANSWER) {
+            return ProcessError.builder()
+                    .recipient(bonusPartOutcomeMsg.getOriginatingPlayerId())
+                    .error("Bonus part answer processed when round is not awaiting bonus answer")
+                    .build();
+        }
+
+        // Validate part index
+        if (bonusPartOutcome.getPartIndex() < 0 || bonusPartOutcome.getPartIndex() > 2) {
+            return ProcessError.builder()
+                    .recipient(bonusPartOutcomeMsg.getOriginatingPlayerId())
+                    .error("Invalid bonus part index: " + bonusPartOutcome.getPartIndex())
+                    .build();
+        }
+
+        // Process the bonus part answer
+        gameSession.getCurrentRound().processBonusPartAnswer(
+                bonusPartOutcome.getPartIndex(),
+                bonusPartOutcome.isCorrect()
+        );
+
+        // If all parts answered, complete the bonus phase and the round
+        if (gameSession.getCurrentRound().getRoundState() == RoundState.BONUS_COMPLETED) {
+            gameSession.getCurrentMatch().completeBonusPhase();
+        }
+
+        // Create and return bonus update message
+        return createBonusUpdateMessages(gameSession, bonusPartOutcome.getPartIndex(), bonusPartOutcome.isCorrect());
+    }
+
+    /**
+     * Creates bonus update messages - full context for everyone since bonus answers are public
+     *
+     * @param gameSession The game session
+     * @param partIndex Which part was just judged
+     * @param correct Whether it was correct
+     * @return BonusUpdate message
+     */
+    private SockbowlOutMessage createBonusUpdateMessages(GameSession gameSession, int partIndex, boolean correct) {
+        BonusUpdate bonusUpdate = BonusUpdate.builder()
+                .currentRound(gameSession.getCurrentRound())
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .partIndex(partIndex)
+                .correct(correct)
+                .build();
+
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(bonusUpdate)
                 .build();
     }
 

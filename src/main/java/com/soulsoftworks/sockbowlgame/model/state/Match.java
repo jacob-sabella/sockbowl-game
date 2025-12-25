@@ -50,10 +50,41 @@ public class Match {
 
             currentRound = new Round();
             currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer, nextRoundCategory, nextRoundSubcategory);
+
+            // Check if there's a bonus for this tossup (same index)
+            if (packet.getBonuses() != null && nextRoundNumber < packet.getBonuses().size()) {
+                try {
+                    currentRound.setAssociatedBonus(packet.getBonuses().get(nextRoundNumber).getBonus());
+                } catch (Exception e) {
+                    // Bonus might be null, that's okay
+                }
+            }
         }
     }
 
     public void completeRound(){
+        currentRound.setRoundState(RoundState.COMPLETED);
+    }
+
+    /**
+     * Transitions round from tossup completion to bonus phase.
+     * Called after correct tossup answer if bonuses enabled.
+     *
+     * @param teamId Team that gets to answer the bonus
+     */
+    public void startBonusPhase(String teamId) {
+        if (currentRound.hasAssociatedBonus()) {
+            currentRound.setupBonus(currentRound.getAssociatedBonus(), teamId);
+        } else {
+            // No bonus for this tossup, skip to completed
+            currentRound.setRoundState(RoundState.COMPLETED);
+        }
+    }
+
+    /**
+     * Completes the bonus phase and marks round as completed.
+     */
+    public void completeBonusPhase() {
         currentRound.setRoundState(RoundState.COMPLETED);
     }
 

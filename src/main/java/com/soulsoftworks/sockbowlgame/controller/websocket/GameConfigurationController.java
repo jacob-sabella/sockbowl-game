@@ -4,6 +4,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdateGameSettings;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
@@ -59,6 +60,15 @@ public class GameConfigurationController {
                 .build();
 
         messageService.sendMessage(getGameState);
+    }
+
+    @MessageMapping("/update-game-settings")
+    public void updateGameSettings(GameSessionInjection gameSessionInjection, UpdateGameSettings updateGameSettings) {
+
+        updateGameSettings.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        updateGameSettings.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(updateGameSettings);
     }
 
 }

@@ -60,4 +60,12 @@ public class GameMessageController {
         messageService.sendMessage(advanceRound);
     }
 
+    @MessageMapping("/bonus-part-outcome")
+    public void bonusPartOutcome(GameSessionInjection gameSessionInjection, BonusPartOutcome bonusPartOutcome) {
+        bonusPartOutcome.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        bonusPartOutcome.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(bonusPartOutcome);
+    }
+
 }

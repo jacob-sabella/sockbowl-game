@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdateGameSettings;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
@@ -33,6 +34,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         processorMapping.registerProcessor(SetProctor.class, this::setPlayerAsProctor);
         processorMapping.registerProcessor(SetMatchPacket.class, this::setPacketForMatch);
         processorMapping.registerProcessor(GetGameState.class, this::sendGameState);
+        processorMapping.registerProcessor(UpdateGameSettings.class, this::updateGameSettings);
     }
 
     /**
@@ -258,5 +260,30 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Sanitize and return the session
         GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, playerMode);
         return GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
+    }
+
+    /**
+     * Updates game settings including bonuses enabled flag.
+     * Only the game owner can update settings.
+     *
+     * @param updateGameSettingsMsg Message containing new settings
+     * @return GameSessionUpdate or ProcessError
+     */
+    public SockbowlOutMessage updateGameSettings(SockbowlInMessage updateGameSettingsMsg) {
+        UpdateGameSettings updateGameSettings = (UpdateGameSettings) updateGameSettingsMsg;
+        GameSession gameSession = updateGameSettingsMsg.getGameSession();
+
+        // Check if player is game owner
+        if (!gameSession.getPlayerById(updateGameSettingsMsg.getOriginatingPlayerId()).isGameOwner()) {
+            return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
+        }
+
+        // Update settings
+        gameSession.setGameSettings(updateGameSettings.getGameSettings());
+
+        // Return full game session update
+        return GameSessionUpdate.builder()
+                .gameSession(gameSession)
+                .build();
     }
 }

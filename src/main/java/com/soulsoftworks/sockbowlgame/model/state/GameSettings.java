@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 public class GameSettings {
     ProctorType proctorType;
     GameMode gameMode;
+    boolean bonusesEnabled;
 }
