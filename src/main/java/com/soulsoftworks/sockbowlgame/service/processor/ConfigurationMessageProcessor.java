@@ -130,8 +130,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.wrongStateMessage(message);
         }
 
-        // Check if the player making the request is the game owner
-        if (!gameSession.isPlayerGameOwner(message.getOriginatingPlayerId())) {
+        // Check if the player making the request is the proctor
+        if (gameSession.getProctor() == null ||
+            !gameSession.getProctor().getPlayerId().equals(message.getOriginatingPlayerId())) {
             // If not, return an access denied error message
             return ProcessError.accessDeniedMessage(message);
         }

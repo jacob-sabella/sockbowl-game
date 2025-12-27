@@ -34,6 +34,9 @@ public class GameMessageProcessor extends MessageProcessor {
         processorMapping.registerProcessor(TimeoutRound.class, this::timeout);
         processorMapping.registerProcessor(FinishedReading.class, this::finishedReading);
         processorMapping.registerProcessor(AdvanceRound.class, this::advanceRound);
+        processorMapping.registerProcessor(FinishedReadingBonusPreamble.class, this::finishedReadingBonusPreamble);
+        processorMapping.registerProcessor(FinishedReadingBonusPart.class, this::finishedReadingBonusPart);
+        processorMapping.registerProcessor(TimeoutBonusPart.class, this::timeoutBonusPart);
     }
 
 
@@ -395,7 +398,7 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         // Check if we're in the correct state
-        if (gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BONUS_ANSWER) {
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_AWAITING_ANSWER) {
             return ProcessError.builder()
                     .recipient(bonusPartOutcomeMsg.getOriginatingPlayerId())
                     .error("Bonus part answer processed when round is not awaiting bonus answer")
@@ -416,6 +419,9 @@ public class GameMessageProcessor extends MessageProcessor {
                 bonusPartOutcome.isCorrect()
         );
 
+        // Advance to next part
+        gameSession.getCurrentRound().advanceToNextBonusPart();
+
         // If all parts answered, complete the bonus phase and the round
         if (gameSession.getCurrentRound().getRoundState() == RoundState.BONUS_COMPLETED) {
             gameSession.getCurrentMatch().completeBonusPhase();
@@ -423,6 +429,102 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Create and return bonus update message
         return createBonusUpdateMessages(gameSession, bonusPartOutcome.getPartIndex(), bonusPartOutcome.isCorrect());
+    }
+
+    /**
+     * Handles the 'Finished Reading Bonus Preamble' event.
+     * Transitions from BONUS_READING_PREAMBLE to BONUS_READING_PART for the first part.
+     *
+     * @param message The incoming message
+     * @return SockbowlOutMessage containing round updates or error
+     */
+    public SockbowlOutMessage finishedReadingBonusPreamble(SockbowlInMessage message) {
+        GameSession gameSession = message.getGameSession();
+
+        // Check if the player is the proctor
+        if (gameSession.getPlayerModeById(message.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        // Check if the current round state is 'BONUS_READING_PREAMBLE'
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_READING_PREAMBLE) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Finished reading bonus preamble message processed in unsupported state")
+                    .build();
+        }
+
+        // Transition to reading first part
+        gameSession.getCurrentRound().setProctorFinishedReadingBonusPreamble(true);
+        gameSession.getCurrentRound().setRoundState(RoundState.BONUS_READING_PART);
+
+        return createRoundUpdateMessages(gameSession);
+    }
+
+    /**
+     * Handles the 'Finished Reading Bonus Part' event.
+     * Transitions from BONUS_READING_PART to BONUS_AWAITING_ANSWER and starts the timer.
+     *
+     * @param message The incoming message
+     * @return SockbowlOutMessage containing round updates or error
+     */
+    public SockbowlOutMessage finishedReadingBonusPart(SockbowlInMessage message) {
+        GameSession gameSession = message.getGameSession();
+
+        // Check if the player is the proctor
+        if (gameSession.getPlayerModeById(message.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        // Check if the current round state is 'BONUS_READING_PART'
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_READING_PART) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Finished reading bonus part message processed in unsupported state")
+                    .build();
+        }
+
+        // Start the timer for this part
+        gameSession.getCurrentRound().startBonusPartTimer();
+
+        return createRoundUpdateMessages(gameSession);
+    }
+
+    /**
+     * Handles timeout for a bonus part.
+     * Auto-marks the current part as incorrect and advances to the next part.
+     *
+     * @param message The incoming timeout message
+     * @return SockbowlOutMessage containing bonus update or error
+     */
+    public SockbowlOutMessage timeoutBonusPart(SockbowlInMessage message) {
+        GameSession gameSession = message.getGameSession();
+
+        // Check if the player is the proctor
+        if (gameSession.getPlayerModeById(message.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        // Check if the current round state is 'BONUS_AWAITING_ANSWER'
+        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_AWAITING_ANSWER) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Timeout bonus part message processed when not awaiting answer")
+                    .build();
+        }
+
+        int currentPartIndex = gameSession.getCurrentRound().getCurrentBonusPartIndex();
+
+        // Handle timeout (auto-mark incorrect and advance)
+        gameSession.getCurrentRound().timeoutBonusPart();
+
+        // If all parts complete, complete the bonus phase
+        if (gameSession.getCurrentRound().getRoundState() == RoundState.BONUS_COMPLETED) {
+            gameSession.getCurrentMatch().completeBonusPhase();
+        }
+
+        // Return bonus update message
+        return createBonusUpdateMessages(gameSession, currentPartIndex, false);
     }
 
     /**

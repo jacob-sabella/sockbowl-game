@@ -30,6 +30,8 @@ public class Round {
     private List<BonusPartAnswer> bonusPartAnswers = new ArrayList<>();
     private int currentBonusPartIndex = 0;
     private String bonusEligibleTeamId;  // Team that earned the right to answer bonus
+    private boolean proctorFinishedReadingBonusPreamble = false;
+    private boolean proctorFinishedReadingCurrentPart = false;
 
     /**
      * Processes a buzz action. Adds the current buzz to the buzz list if it exists,
@@ -141,11 +143,14 @@ public class Round {
         this.bonusEligibleTeamId = teamId;
         this.currentBonusPartIndex = 0;
         this.bonusPartAnswers = new ArrayList<>();
-        this.roundState = RoundState.AWAITING_BONUS_ANSWER;
+        this.proctorFinishedReadingBonusPreamble = false;
+        this.proctorFinishedReadingCurrentPart = false;
+        this.roundState = RoundState.BONUS_READING_PREAMBLE;
     }
 
     /**
      * Processes a bonus part answer from the proctor.
+     * Note: Does not change state - that is handled by advanceToNextBonusPart().
      *
      * @param partIndex Index of the bonus part (0-2)
      * @param correct Whether the answer was correct
@@ -155,13 +160,46 @@ public class Round {
         bonusPartAnswer.setPartIndex(partIndex);
         bonusPartAnswer.setCorrect(correct);
         bonusPartAnswers.add(bonusPartAnswer);
+    }
 
+    /**
+     * Transitions from reading state to awaiting answer with timer.
+     */
+    public void startBonusPartTimer() {
+        this.proctorFinishedReadingCurrentPart = true;
+        this.roundState = RoundState.BONUS_AWAITING_ANSWER;
+    }
+
+    /**
+     * Advances to the next bonus part after current part is judged.
+     * Sets up reading state for the next part or completes bonus phase.
+     */
+    public void advanceToNextBonusPart() {
         currentBonusPartIndex++;
 
-        // If all 3 parts answered, move to BONUS_COMPLETED
         if (currentBonusPartIndex >= 3) {
+            // All parts complete
             this.roundState = RoundState.BONUS_COMPLETED;
+        } else {
+            // Move to reading next part
+            this.proctorFinishedReadingCurrentPart = false;
+            this.roundState = RoundState.BONUS_READING_PART;
         }
+    }
+
+    /**
+     * Handles timeout for current bonus part.
+     * Marks the current part as incorrect and advances to next part.
+     */
+    public void timeoutBonusPart() {
+        // Auto-mark current part as incorrect
+        BonusPartAnswer bonusPartAnswer = new BonusPartAnswer();
+        bonusPartAnswer.setPartIndex(currentBonusPartIndex);
+        bonusPartAnswer.setCorrect(false);
+        bonusPartAnswers.add(bonusPartAnswer);
+
+        // Advance to next part
+        advanceToNextBonusPart();
     }
 
     /**

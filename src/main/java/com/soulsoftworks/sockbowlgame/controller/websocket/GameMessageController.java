@@ -68,4 +68,28 @@ public class GameMessageController {
         messageService.sendMessage(bonusPartOutcome);
     }
 
+    @MessageMapping("/finished-reading-bonus-preamble")
+    public void finishedReadingBonusPreamble(GameSessionInjection gameSessionInjection, FinishedReadingBonusPreamble finishedReadingBonusPreamble) {
+        finishedReadingBonusPreamble.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        finishedReadingBonusPreamble.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(finishedReadingBonusPreamble);
+    }
+
+    @MessageMapping("/finished-reading-bonus-part")
+    public void finishedReadingBonusPart(GameSessionInjection gameSessionInjection, FinishedReadingBonusPart finishedReadingBonusPart) {
+        finishedReadingBonusPart.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        finishedReadingBonusPart.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(finishedReadingBonusPart);
+    }
+
+    @MessageMapping("/timeout-bonus-part")
+    public void timeoutBonusPart(GameSessionInjection gameSessionInjection, TimeoutBonusPart timeoutBonusPart) {
+        timeoutBonusPart.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        timeoutBonusPart.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(timeoutBonusPart);
+    }
+
 }

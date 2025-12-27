@@ -86,6 +86,9 @@ public class ConfigurationMessageProcessorTest {
         when(mockGameSession.isPlayerGameOwner(gameOwner.getPlayerId())).thenReturn(true);
         when(mockGameSession.isPlayerGameOwner(otherPlayer.getPlayerId())).thenReturn(false);
 
+        // Stubbing getProctor to return the game owner (who is also the proctor)
+        when(mockGameSession.getProctor()).thenReturn(gameOwner);
+
         Difficulty difficulty = PacketBuilderHelper.createDifficulty("1", "Easy");
         Category category = PacketBuilderHelper.createCategory("1", "Science");
         Subcategory subcategory = PacketBuilderHelper.createSubcategory("1", "Physics", category);
@@ -210,8 +213,8 @@ public class ConfigurationMessageProcessorTest {
     class PacketTests {
 
         @Test
-        @DisplayName("Game owner sets the match packet successfully")
-        void setPacketForMatch_OwnerPlayerSetsPacket_SuccessfullySetsPacket() {
+        @DisplayName("Proctor sets the match packet successfully")
+        void setPacketForMatch_ProctorSetsPacket_SuccessfullySetsPacket() {
             SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(gameOwner.getPlayerId())
@@ -228,31 +231,12 @@ public class ConfigurationMessageProcessorTest {
 
 
         @Test
-        @DisplayName("Non-owner player tries to set the match packet causes error")
-        void setPacketForMatch_NonOwnerPlayerTriesToSetPacket_ReturnsProcessErrorMessage() {
-            // Ensure the game session has a current match set up
-            Match currentMatch = new Match();
-            mockGameSession.setCurrentMatch(currentMatch);
-
-            // Create and add players to the game session, marking the first as the game owner
-            Player gameOwner = Player.builder()
-                    .playerId("ownerId")
-                    .isGameOwner(true)
-                    .name("Owner")
-                    .build();
-
-            Player nonOwner = Player.builder()
-                    .playerId("nonOwnerId")
-                    .isGameOwner(false)
-                    .name("Non Owner")
-                    .build();
-
-            mockGameSession.getPlayerList().addAll(List.of(gameOwner, nonOwner));
-
-            // Attempt to set the match packet by the non-owner player
+        @DisplayName("Non-proctor player tries to set the match packet causes error")
+        void setPacketForMatch_NonProctorPlayerTriesToSetPacket_ReturnsProcessErrorMessage() {
+            // Attempt to set the match packet by the non-proctor player (otherPlayer)
             SetMatchPacket message = SetMatchPacket.builder()
                     .gameSession(mockGameSession)
-                    .originatingPlayerId(nonOwner.getPlayerId())
+                    .originatingPlayerId(otherPlayer.getPlayerId())
                     .packetId("1000")
                     .build();
 
