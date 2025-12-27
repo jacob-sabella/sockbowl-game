@@ -28,8 +28,9 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = endMatchMessage.getGameSession();
 
-        // Check if the player making the request is the game owner
-        if (!gameSession.isPlayerGameOwner(endMatchMessage.getOriginatingPlayerId())) {
+        // Check if the player making the request is the proctor
+        if (gameSession.getProctor() == null ||
+            !gameSession.getProctor().getPlayerId().equals(endMatchMessage.getOriginatingPlayerId())) {
             // If not, return access denied error message
             return ProcessError.accessDeniedMessage(endMatchMessage);
         }
@@ -57,8 +58,9 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = startMatchMessage.getGameSession();
 
-        // Check if the player making the request is the game owner
-        if (!gameSession.isPlayerGameOwner(startMatchMessage.getOriginatingPlayerId())) {
+        // Check if the player making the request is the proctor
+        if (gameSession.getProctor() == null ||
+            !gameSession.getProctor().getPlayerId().equals(startMatchMessage.getOriginatingPlayerId())) {
             // If not, return access denied error message
             return ProcessError.accessDeniedMessage(startMatchMessage);
         }

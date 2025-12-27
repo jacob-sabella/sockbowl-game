@@ -55,8 +55,8 @@ public class ProgressionMessageProcessorTest {
     }
 
     @Test
-    @DisplayName("Non-owner player tries to start the match causes error")
-    void startMatch_NonOwnerPlayerTriesToStartMatch_ReturnsProcessErrorMessage() {
+    @DisplayName("Non-proctor player tries to start the match causes error")
+    void startMatch_NonProctorPlayerTriesToStartMatch_ReturnsProcessErrorMessage() {
         StartMatch message = StartMatch.builder()
                 .gameSession(mockGameSession)
                 .originatingPlayerId(playerList.get(1).getPlayerId())
@@ -70,8 +70,8 @@ public class ProgressionMessageProcessorTest {
     }
 
     @Test
-    @DisplayName("Game owner starts the match successfully")
-    void startMatch_OwnerPlayerStartsMatch_SuccessfullyStartsMatch() {
+    @DisplayName("Proctor starts the match successfully")
+    void startMatch_ProctorPlayerStartsMatch_SuccessfullyStartsMatch() {
         StartMatch message = StartMatch.builder()
                 .gameSession(mockGameSession)
                 .originatingPlayerId(playerList.get(0).getPlayerId())
