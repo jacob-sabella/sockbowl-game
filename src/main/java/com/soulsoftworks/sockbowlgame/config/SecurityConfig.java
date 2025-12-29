@@ -3,6 +3,8 @@ package com.soulsoftworks.sockbowlgame.config;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.env.Environment;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -12,7 +14,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -38,8 +39,11 @@ import java.util.List;
 @ConditionalOnProperty(name = "sockbowl.auth.enabled", havingValue = "true")
 public class SecurityConfig {
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
-    private String issuerUri;
+    private final Environment environment;
+
+    public SecurityConfig(Environment environment) {
+        this.environment = environment;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -108,9 +112,12 @@ public class SecurityConfig {
     /**
      * JWT decoder for validating Keycloak tokens.
      * Automatically configured from the issuer URI.
+     * Lazy initialization prevents connection attempts at startup.
      */
     @Bean
+    @Lazy
     public JwtDecoder jwtDecoder() {
+        String issuerUri = environment.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri");
         return JwtDecoders.fromIssuerLocation(issuerUri);
     }
 }
