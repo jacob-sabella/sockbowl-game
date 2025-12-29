@@ -13,7 +13,15 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 public class SockbowlGameApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(SockbowlGameApplication.class, args);
+		SpringApplication app = new SpringApplication(SockbowlGameApplication.class);
+
+		// Conditionally exclude autoconfiguration based on auth.enabled property
+		String authEnabled = System.getenv("SOCKBOWL_AUTH_ENABLED");
+		if (authEnabled == null || authEnabled.equals("false")) {
+			app.setAdditionalProfiles("no-auth");
+		}
+
+		app.run(args);
 	}
 
 }
