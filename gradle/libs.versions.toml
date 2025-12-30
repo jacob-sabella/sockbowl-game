@@ -6,7 +6,7 @@ typescript-generator = "3.2.1263"
 
 # Spring Cloud
 spring-cloud = "2025.1.0"
-spring-cloud-feign = "4.3.0"
+spring-cloud-feign = "5.0.0"
 
 # Feign
 feign = "13.6"
