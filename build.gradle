@@ -4,10 +4,10 @@ import cz.habarta.typescript.generator.TypeScriptFileType
 import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
-    id 'org.springframework.boot' version '3.5.7'
-    id 'io.spring.dependency-management' version '1.1.6'
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
     id 'java'
-    id 'cz.habarta.typescript-generator' version '3.2.1263'
+    alias(libs.plugins.typescript.generator)
 }
 
 group = 'com.soulsoftworks'
@@ -30,17 +30,17 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.3.0'
-    implementation 'org.springframework.cloud:spring-cloud-dependencies:2025.0.0'
-    implementation 'io.github.openfeign:feign-okhttp:13.6'
-    implementation 'io.github.openfeign:feign-httpclient:13.6'
+    implementation libs.spring.cloud.starter.openfeign
+    implementation libs.spring.cloud.dependencies
+    implementation libs.feign.okhttp
+    implementation libs.feign.httpclient
     implementation 'org.springframework.kafka:spring-kafka'
-    implementation 'com.redis.om:redis-om-spring:1.0.1'
-    implementation 'com.google.code.gson:gson:2.13.1'
-    implementation 'org.projectlombok:lombok:1.18.38'
+    implementation libs.redis.om.spring
+    implementation libs.gson
+    implementation libs.lombok
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
-    implementation 'com.github.victools:jsonschema-generator:4.38.0'
-    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.1.1'
+    implementation libs.jsonschema.generator
+    implementation libs.graphql.dgs.codegen.gradle
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Spring Security & OAuth2/OIDC
@@ -50,21 +50,21 @@ dependencies {
 
     // Database & JPA for User persistence
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.postgresql:postgresql'
+    implementation libs.postgresql
 
     testImplementation 'org.springframework.graphql:spring-graphql-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework:spring-webflux'
     testImplementation 'io.projectreactor:reactor-test'
 
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
+    compileOnly libs.lombok
+    annotationProcessor libs.lombok
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.testcontainers:testcontainers:1.21.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
-    testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
-    testImplementation 'org.awaitility:awaitility:4.3.0'
+    testImplementation libs.testcontainers
+    testImplementation libs.testcontainers.junit.jupiter
+    testImplementation libs.testcontainers.redis
+    testImplementation libs.awaitility
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 }
 

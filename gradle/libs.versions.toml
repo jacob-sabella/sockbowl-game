@@ -1,0 +1,74 @@
+[versions]
+# Plugin versions
+spring-boot = "3.5.7"
+spring-dependency-management = "1.1.6"
+typescript-generator = "3.2.1263"
+
+# Spring Cloud
+spring-cloud = "2025.0.0"
+spring-cloud-feign = "4.3.0"
+
+# Feign
+feign = "13.6"
+
+# Redis OM
+redis-om = "1.0.1"
+
+# Gson
+gson = "2.13.1"
+
+# Lombok
+lombok = "1.18.38"
+
+# JSON Schema
+jsonschema-generator = "4.38.0"
+
+# GraphQL DGS
+graphql-dgs-codegen = "8.1.1"
+
+# Testcontainers
+testcontainers = "1.21.3"
+testcontainers-redis = "1.4.6"
+
+# Awaitility
+awaitility = "4.3.0"
+
+[libraries]
+# Spring Cloud
+spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
+spring-cloud-starter-openfeign = { module = "org.springframework.cloud:spring-cloud-starter-openfeign", version.ref = "spring-cloud-feign" }
+
+# Feign
+feign-okhttp = { module = "io.github.openfeign:feign-okhttp", version.ref = "feign" }
+feign-httpclient = { module = "io.github.openfeign:feign-httpclient", version.ref = "feign" }
+
+# Redis
+redis-om-spring = { module = "com.redis.om:redis-om-spring", version.ref = "redis-om" }
+
+# Gson
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+
+# Lombok
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+
+# JSON Schema
+jsonschema-generator = { module = "com.github.victools:jsonschema-generator", version.ref = "jsonschema-generator" }
+
+# GraphQL DGS
+graphql-dgs-codegen-gradle = { module = "com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle", version.ref = "graphql-dgs-codegen" }
+
+# PostgreSQL
+postgresql = { module = "org.postgresql:postgresql" }
+
+# Testcontainers
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis-junit-jupiter", version.ref = "testcontainers-redis" }
+
+# Awaitility
+awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
+typescript-generator = { id = "cz.habarta.typescript-generator", version.ref = "typescript-generator" }
