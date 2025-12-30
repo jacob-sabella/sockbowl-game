@@ -24,7 +24,7 @@ lombok = "1.18.38"
 jsonschema-generator = "4.38.0"
 
 # GraphQL DGS
-graphql-dgs-codegen = "8.1.1"
+graphql-dgs-codegen = "8.3.0"
 
 # Testcontainers
 testcontainers = "1.21.3"
