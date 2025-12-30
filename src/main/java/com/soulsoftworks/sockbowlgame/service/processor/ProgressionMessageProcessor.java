@@ -42,6 +42,12 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         Match completedMatch = DeepCopyUtil.deepCopy(currentMatch, Match.class);
         gameSession.getPreviousMatches().add(completedMatch);
 
+        // Clear all timers before ending match
+        if (gameSession.getCurrentRound() != null) {
+            gameSession.getCurrentRound().clearTossupTimer();
+            gameSession.getCurrentRound().clearBonusTimer();
+        }
+
         // Set up a new match in config mode
         Match newMatch = new Match();
         gameSession.setCurrentMatch(newMatch);

@@ -264,8 +264,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     }
 
     /**
-     * Updates game settings including bonuses enabled flag.
-     * Only the game owner can update settings.
+     * Updates game settings including bonuses enabled flag and timer settings.
+     * Only the proctor can update settings.
      *
      * @param updateGameSettingsMsg Message containing new settings
      * @return GameSessionUpdate or ProcessError
@@ -274,8 +274,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         UpdateGameSettings updateGameSettings = (UpdateGameSettings) updateGameSettingsMsg;
         GameSession gameSession = updateGameSettingsMsg.getGameSession();
 
-        // Check if player is game owner
-        if (!gameSession.getPlayerById(updateGameSettingsMsg.getOriginatingPlayerId()).isGameOwner()) {
+        // Check if player is the proctor
+        if (gameSession.getPlayerModeById(updateGameSettingsMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
         }
 

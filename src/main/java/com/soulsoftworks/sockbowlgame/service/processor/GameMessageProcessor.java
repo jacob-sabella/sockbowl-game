@@ -87,6 +87,9 @@ public class GameMessageProcessor extends MessageProcessor {
                 gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId()
         );
 
+        // Clear tossup timer (player buzzed)
+        gameSession.getCurrentRound().clearTossupTimer();
+
         // Create round update messages
         PlayerBuzzed fullContextPlayerBuzzed = PlayerBuzzed.builder()
                 .playerId(playerBuzz.getOriginatingPlayerId())
@@ -154,6 +157,12 @@ public class GameMessageProcessor extends MessageProcessor {
 
             if (shouldCompleteRound) {
                 gameSession.getCurrentMatch().completeRound();
+            } else {
+                // Restart tossup timer if returning to AWAITING_BUZZ
+                if (gameSession.getCurrentRound().getRoundState() == RoundState.AWAITING_BUZZ) {
+                    int timerDuration = gameSession.getGameSettings().getTimerSettings().getTossupTimerSeconds();
+                    gameSession.getCurrentRound().startTossupTimer(timerDuration);
+                }
             }
         } else {
             // Process correct answer
@@ -211,6 +220,9 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
+        // Clear tossup timer
+        gameSession.getCurrentRound().clearTossupTimer();
+
         // Set the round state to completed
         gameSession.getCurrentMatch().completeRound();
 
@@ -243,6 +255,10 @@ public class GameMessageProcessor extends MessageProcessor {
         // Set the round state to 'AWAITING_BUZZ' and update the reading state
         gameSession.getCurrentRound().setRoundState(RoundState.AWAITING_BUZZ);
         gameSession.getCurrentRound().setProctorFinishedReading(true);
+
+        // Start tossup timer
+        int timerDuration = gameSession.getGameSettings().getTimerSettings().getTossupTimerSeconds();
+        gameSession.getCurrentRound().startTossupTimer(timerDuration);
 
         return createRoundUpdateMessages(gameSession);
     }
@@ -419,6 +435,9 @@ public class GameMessageProcessor extends MessageProcessor {
                 bonusPartOutcome.isCorrect()
         );
 
+        // Clear bonus timer
+        gameSession.getCurrentRound().clearBonusTimer();
+
         // Advance to next part
         gameSession.getCurrentRound().advanceToNextBonusPart();
 
@@ -487,6 +506,10 @@ public class GameMessageProcessor extends MessageProcessor {
         // Start the timer for this part
         gameSession.getCurrentRound().startBonusPartTimer();
 
+        // Start bonus timer with configured duration
+        int timerDuration = gameSession.getGameSettings().getTimerSettings().getBonusTimerSeconds();
+        gameSession.getCurrentRound().startBonusTimer(timerDuration);
+
         return createRoundUpdateMessages(gameSession);
     }
 
@@ -514,6 +537,9 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         int currentPartIndex = gameSession.getCurrentRound().getCurrentBonusPartIndex();
+
+        // Clear bonus timer
+        gameSession.getCurrentRound().clearBonusTimer();
 
         // Handle timeout (auto-mark incorrect and advance)
         gameSession.getCurrentRound().timeoutBonusPart();

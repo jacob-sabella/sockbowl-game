@@ -33,6 +33,11 @@ public class Round {
     private boolean proctorFinishedReadingBonusPreamble = false;
     private boolean proctorFinishedReadingCurrentPart = false;
 
+    // Timer-related fields
+    private Integer remainingTossupTimerSeconds;  // null = no active timer
+    private Integer remainingBonusTimerSeconds;   // null = no active timer
+    private Long timerStartedAtMillis;            // timestamp when timer started
+
     /**
      * Processes a buzz action. Adds the current buzz to the buzz list if it exists,
      * then creates a new buzz with the given player and team IDs, and changes the round state
@@ -220,6 +225,60 @@ public class Round {
      */
     public boolean hasAssociatedBonus() {
         return associatedBonus != null;
+    }
+
+    /**
+     * Starts the tossup timer with the specified duration.
+     *
+     * @param durationSeconds Timer duration in seconds
+     */
+    public void startTossupTimer(int durationSeconds) {
+        this.remainingTossupTimerSeconds = durationSeconds;
+        this.timerStartedAtMillis = System.currentTimeMillis();
+    }
+
+    /**
+     * Starts the bonus timer with the specified duration.
+     *
+     * @param durationSeconds Timer duration in seconds
+     */
+    public void startBonusTimer(int durationSeconds) {
+        this.remainingBonusTimerSeconds = durationSeconds;
+        this.timerStartedAtMillis = System.currentTimeMillis();
+    }
+
+    /**
+     * Clears the tossup timer.
+     */
+    public void clearTossupTimer() {
+        this.remainingTossupTimerSeconds = null;
+        this.timerStartedAtMillis = null;
+    }
+
+    /**
+     * Clears the bonus timer.
+     */
+    public void clearBonusTimer() {
+        this.remainingBonusTimerSeconds = null;
+        this.timerStartedAtMillis = null;
+    }
+
+    /**
+     * Checks if the tossup timer is currently active.
+     *
+     * @return true if timer is active and has time remaining, false otherwise
+     */
+    public boolean isTossupTimerActive() {
+        return remainingTossupTimerSeconds != null && remainingTossupTimerSeconds > 0;
+    }
+
+    /**
+     * Checks if the bonus timer is currently active.
+     *
+     * @return true if timer is active and has time remaining, false otherwise
+     */
+    public boolean isBonusTimerActive() {
+        return remainingBonusTimerSeconds != null && remainingBonusTimerSeconds > 0;
     }
 
 }

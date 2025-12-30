@@ -13,4 +13,11 @@ public class GameSettings {
     ProctorType proctorType;
     GameMode gameMode;
     boolean bonusesEnabled;
+
+    /**
+     * Timer configuration settings for tossup and bonus timers.
+     * Includes timer durations and auto-timeout behavior.
+     */
+    @Builder.Default
+    TimerSettings timerSettings = new TimerSettings();
 }

@@ -16,6 +16,12 @@ public class Match {
     private Round currentRound = new Round();
 
     public void advanceRound() {
+        // Clear timers from previous round
+        if (currentRound != null) {
+            currentRound.clearTossupTimer();
+            currentRound.clearBonusTimer();
+        }
+
         int nextRoundNumber = currentRound.getRoundNumber() + 1;
 
         // Check if the nextRoundNumber exceeds the number of tossups in the packet

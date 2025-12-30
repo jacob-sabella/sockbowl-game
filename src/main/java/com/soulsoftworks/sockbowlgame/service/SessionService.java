@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -211,6 +212,20 @@ public class SessionService {
         response.setUserId(user.getId().toString());
 
         return response;
+    }
+
+    /**
+     * Retrieves all active game sessions (sessions with matches currently in progress).
+     * Used by GameTimerService to process timers for all active games.
+     *
+     * @return List of GameSession objects with MatchState.IN_GAME
+     */
+    public List<GameSession> getAllActiveSessions() {
+        return gameSessionRepository.findAll()
+                .stream()
+                .filter(session -> session.getCurrentMatch() != null &&
+                        session.getCurrentMatch().getMatchState() == MatchState.IN_GAME)
+                .toList();
     }
 }
 
