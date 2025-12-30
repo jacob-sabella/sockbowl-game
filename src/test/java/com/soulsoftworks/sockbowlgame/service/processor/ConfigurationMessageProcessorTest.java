@@ -89,6 +89,16 @@ public class ConfigurationMessageProcessorTest {
         // Stubbing getProctor to return the game owner (who is also the proctor)
         when(mockGameSession.getProctor()).thenReturn(gameOwner);
 
+        // Stubbing getPlayerModeById to return the correct player modes
+        when(mockGameSession.getPlayerModeById(gameOwner.getPlayerId())).thenReturn(PlayerMode.PROCTOR);
+        when(mockGameSession.getPlayerModeById(otherPlayer.getPlayerId())).thenReturn(PlayerMode.BUZZER);
+
+        // Stubbing getGameSettings to return a default GameSettings with TimerSettings
+        GameSettings gameSettings = GameSettings.builder()
+                .timerSettings(new TimerSettings())
+                .build();
+        when(mockGameSession.getGameSettings()).thenReturn(gameSettings);
+
         Difficulty difficulty = PacketBuilderHelper.createDifficulty("1", "Easy");
         Category category = PacketBuilderHelper.createCategory("1", "Science");
         Subcategory subcategory = PacketBuilderHelper.createSubcategory("1", "Physics", category);

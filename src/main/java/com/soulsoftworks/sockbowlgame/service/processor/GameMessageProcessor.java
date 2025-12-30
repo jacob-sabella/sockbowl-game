@@ -245,6 +245,13 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Check if the current round state is 'PROCTOR_READING' or 'AWAITING_BUZZ'
         RoundState currentRoundState = gameSession.getCurrentRound().getRoundState();
+
+        // If already in AWAITING_BUZZ, this is an idempotent retry - just return success
+        if (currentRoundState == RoundState.AWAITING_BUZZ) {
+            return createRoundUpdateMessages(gameSession);
+        }
+
+        // Only allow transition from PROCTOR_READING state
         if (currentRoundState != RoundState.PROCTOR_READING) {
             return ProcessError.builder()
                     .recipient(finishedReadingMessage.getOriginatingPlayerId())
@@ -465,8 +472,15 @@ public class GameMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(message);
         }
 
-        // Check if the current round state is 'BONUS_READING_PREAMBLE'
-        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_READING_PREAMBLE) {
+        RoundState currentRoundState = gameSession.getCurrentRound().getRoundState();
+
+        // If already in BONUS_READING_PART, this is an idempotent retry - just return success
+        if (currentRoundState == RoundState.BONUS_READING_PART) {
+            return createRoundUpdateMessages(gameSession);
+        }
+
+        // Only allow transition from BONUS_READING_PREAMBLE state
+        if (currentRoundState != RoundState.BONUS_READING_PREAMBLE) {
             return ProcessError.builder()
                     .recipient(message.getOriginatingPlayerId())
                     .error("Finished reading bonus preamble message processed in unsupported state")
@@ -495,8 +509,15 @@ public class GameMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(message);
         }
 
-        // Check if the current round state is 'BONUS_READING_PART'
-        if (gameSession.getCurrentRound().getRoundState() != RoundState.BONUS_READING_PART) {
+        RoundState currentRoundState = gameSession.getCurrentRound().getRoundState();
+
+        // If already in BONUS_AWAITING_ANSWER, this is an idempotent retry - just return success
+        if (currentRoundState == RoundState.BONUS_AWAITING_ANSWER) {
+            return createRoundUpdateMessages(gameSession);
+        }
+
+        // Only allow transition from BONUS_READING_PART state
+        if (currentRoundState != RoundState.BONUS_READING_PART) {
             return ProcessError.builder()
                     .recipient(message.getOriginatingPlayerId())
                     .error("Finished reading bonus part message processed in unsupported state")
