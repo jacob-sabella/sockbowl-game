@@ -13,9 +13,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
+@org.springframework.context.annotation.Import(com.soulsoftworks.sockbowlgame.config.TestConfig.class)
 public class GameSessionControllerTest {
 
     @Autowired
@@ -41,17 +42,18 @@ public class GameSessionControllerTest {
 
     private final Gson gson = new Gson();
 
-    @MockBean
+    @MockitoBean
     private SessionService sessionService;
 
-    @InjectMocks
-    MockHttpSession mockHttpSession;
+    private MockHttpSession mockHttpSession;
 
     private GameSession gameSession;
     private CreateGameRequest createGameRequest;
 
     @BeforeEach
     public void beforeAll() {
+        mockHttpSession = new MockHttpSession();
+
         GameSettings gameSettings = GameSettings.builder()
                 .gameMode(GameMode.QUIZ_BOWL_CLASSIC)
                 .proctorType(ProctorType.ONLINE_PROCTOR)

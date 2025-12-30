@@ -118,7 +118,7 @@ public class MessageServiceTest {
         headers.add("gameSessionId", gameSession.getId());
 
         // Create STOMP sessions
-        stompSession = stompClient.connect(stompUrl, headers, new StompSessionHandlerAdapter(){}).get(600, SECONDS);
+        stompSession = stompClient.connectAsync(stompUrl, headers, new StompSessionHandlerAdapter(){}).get(600, SECONDS);
 
         // Get updated game session
         gameSession = sessionService.getGameSessionById(gameSession.getId());

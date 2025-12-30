@@ -8,7 +8,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-@EnableWebMvc
+// @EnableWebMvc - Commented out for Spring Boot 4.0 compatibility; Spring Boot's autoconfiguration handles MVC setup
 public class WebConfig implements WebMvcConfigurer {
 
     @Value("${sockbowl.websocket.allowed-origins}")

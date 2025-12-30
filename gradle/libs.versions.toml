@@ -1,18 +1,18 @@
 [versions]
 # Plugin versions
-spring-boot = "3.5.7"
-spring-dependency-management = "1.1.6"
+spring-boot = "4.0.1"
+spring-dependency-management = "1.1.7"
 typescript-generator = "3.2.1263"
 
 # Spring Cloud
-spring-cloud = "2025.0.0"
+spring-cloud = "2025.1.0"
 spring-cloud-feign = "4.3.0"
 
 # Feign
 feign = "13.6"
 
 # Redis OM
-redis-om = "1.0.1"
+redis-om = "2.0.1"
 
 # Gson
 gson = "2.13.2"
@@ -24,11 +24,11 @@ lombok = "1.18.42"
 jsonschema-generator = "4.38.0"
 
 # GraphQL DGS
-graphql-dgs-codegen = "8.1.1"
+graphql-dgs-codegen = "8.3.0"
 
 # Testcontainers
-testcontainers = "1.21.3"
-testcontainers-redis = "1.4.6"
+testcontainers = "2.0.2"
+testcontainers-redis = "2.2.4"
 
 # Awaitility
 awaitility = "4.3.0"
@@ -62,8 +62,8 @@ postgresql = { module = "org.postgresql:postgresql" }
 
 # Testcontainers
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
-testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
-testcontainers-redis = { module = "com.redis.testcontainers:testcontainers-redis-junit-jupiter", version.ref = "testcontainers-redis" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
+testcontainers-redis = { module = "com.redis:testcontainers-redis", version.ref = "testcontainers-redis" }
 
 # Awaitility
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
