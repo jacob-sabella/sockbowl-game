@@ -15,7 +15,7 @@ feign = "13.6"
 redis-om = "1.0.1"
 
 # Gson
-gson = "2.13.1"
+gson = "2.13.2"
 
 # Lombok
 lombok = "1.18.38"
