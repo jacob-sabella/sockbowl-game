@@ -18,7 +18,7 @@ redis-om = "1.0.1"
 gson = "2.13.1"
 
 # Lombok
-lombok = "1.18.38"
+lombok = "1.18.42"
 
 # JSON Schema
 jsonschema-generator = "4.38.0"
