@@ -18,6 +18,7 @@ import org.junit.jupiter.api.*;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,8 +128,8 @@ public class ConfigurationMessageProcessorTest {
         Packet mockPacket = PacketBuilderHelper.createPacket("1", "Default Packet", difficulty,
                 new ArrayList<>(List.of(containsTossup)), new ArrayList<>(List.of(containsBonus)));
 
-        // Mock packetClient to return the constructed packet
-        when(packetClient.getPacketById("1").block()).thenReturn(mockPacket);
+        // Mock packetClient to return the constructed packet wrapped in a Mono
+        when(packetClient.getPacketById("1")).thenReturn(Mono.just(mockPacket));
     }
 
     @AfterEach
@@ -308,6 +309,9 @@ public class ConfigurationMessageProcessorTest {
         @Test
         @DisplayName("Player tries to set themselves as proctor successfully")
         void setPlayerAsProctor_PlayerSetsThemselvesAsProctor_SuccessfullySetsProctor() {
+            // Override the mock to return null for getProctor() in this test only
+            when(mockGameSession.getProctor()).thenReturn(null);
+
             SetProctor message = SetProctor.builder()
                     .gameSession(mockGameSession)
                     .originatingPlayerId(mockGameSession.getPlayerList().get(1).getPlayerId()) // non-owner player
