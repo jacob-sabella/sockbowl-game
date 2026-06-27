@@ -27,6 +27,16 @@ public class GameSession {
     @NonNull
     private GameSettings gameSettings;
 
+    /**
+     * Keycloak subject (sub claim) of the user who created this session, when it
+     * was created by an authenticated user. Null for guest-created sessions, in
+     * which case ownership falls back to the first-join-wins
+     * {@link Player#isGameOwner()} flag. The authorization policy uses this to
+     * tie session ownership to a durable identity rather than an ephemeral
+     * in-session player id.
+     */
+    private String gameOwnerId;
+
     @Builder.Default
     private List<Player> playerList = new ArrayList<>();
 

@@ -13,9 +13,9 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.util.PacketBuilderHelper;
 import org.junit.jupiter.api.*;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import reactor.core.publisher.Mono;
@@ -31,11 +31,15 @@ import static org.mockito.Mockito.when;
 
 public class ConfigurationMessageProcessorTest {
 
-    @InjectMocks
     private ConfigurationMessageProcessor processor;
 
     @Mock
     private PacketClient packetClient;
+
+    // Real policy with auth disabled: session ownership falls back to the
+    // in-memory isGameOwner flag, exercising the policy-based authorization path.
+    private final GameAuthorizationPolicy authorizationPolicy =
+            new GameAuthorizationPolicy(false, null);
 
     private GameSession mockGameSession;
     private Player gameOwner;
@@ -46,6 +50,8 @@ public class ConfigurationMessageProcessorTest {
     @BeforeEach
     void setup() {
         closeable = MockitoAnnotations.openMocks(this);
+
+        processor = new ConfigurationMessageProcessor(packetClient, authorizationPolicy);
 
         gameOwner = Player.builder()
                 .playerId("gameOwner")

@@ -39,6 +39,17 @@ public class SessionService {
     }
 
     public GameSession createNewGame(CreateGameRequest createGameRequest) {
+        return createNewGame(createGameRequest, null);
+    }
+
+    /**
+     * Create a new game session, optionally owned by an authenticated user.
+     *
+     * @param createGameRequest the requested game settings
+     * @param gameOwnerId       Keycloak subject of the creating user, or null for
+     *                          a guest-created session (first-join-wins ownership)
+     */
+    public GameSession createNewGame(CreateGameRequest createGameRequest, String gameOwnerId) {
 
         // Get the player settings for the game mode
         PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(createGameRequest.getGameSettings().getGameMode());
@@ -55,6 +66,7 @@ public class SessionService {
         GameSession gameSession = GameSession.builder()
                 .gameSettings(createGameRequest.getGameSettings())
                 .joinCode(joinCode)
+                .gameOwnerId(gameOwnerId)
                 .build();
 
         // Add teams to game session
@@ -191,6 +203,7 @@ public class SessionService {
         // Create player with user link
         Player player = gameSession.addPlayer(joinGameRequest);
         player.setUserId(user.getId().toString());
+        player.setKeycloakId(keycloakId);  // Tie player to durable Keycloak identity
         player.setGuest(false);
         player.setName(user.getName());  // Use Keycloak name
 

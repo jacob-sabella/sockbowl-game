@@ -1,11 +1,13 @@
 package com.soulsoftworks.sockbowlgame.controller.resolver;
 
 import com.soulsoftworks.sockbowlgame.controller.exception.PlayerVerificationException;
+import com.soulsoftworks.sockbowlgame.model.security.AuthenticatedUser;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.model.request.PlayerIdentifiers;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,7 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
     private static final Logger log = LoggerFactory.getLogger(GameSessionInjectionResolver.class);
 
     private final SessionService sessionService;
+    private final GameAuthorizationPolicy authorizationPolicy;
 
     @Value("${sockbowl.auth.enabled:false}")
     private boolean authEnabled;
@@ -40,8 +43,10 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
     @Autowired(required = false)
     private JwtDecoder jwtDecoder;
 
-    public GameSessionInjectionResolver(SessionService sessionService) {
+    public GameSessionInjectionResolver(SessionService sessionService,
+                                        GameAuthorizationPolicy authorizationPolicy) {
         this.sessionService = sessionService;
+        this.authorizationPolicy = authorizationPolicy;
     }
 
 
@@ -90,11 +95,23 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
                 Player player = playerOptional.get();
                 log.info("Found player: {} (guest: {})", playerId, player.isGuest());
                 boolean isValid = false;
+                AuthenticatedUser identity = AuthenticatedUser.guest();
 
                 // Validate based on auth type
                 if (jwt != null && !player.isGuest()) {
-                    // Authenticated user: JWT is valid (already decoded successfully)
-                    // Could add additional validation here (e.g., verify userId matches)
+                    // Authenticated user: the JWT decoded successfully. Ensure the
+                    // token's subject matches the player's stored Keycloak id so a
+                    // valid token cannot be used to drive another user's player.
+                    if (player.getKeycloakId() != null
+                            && !player.getKeycloakId().equals(jwt.getSubject())) {
+                        log.error("JWT subject {} does not match player {} keycloakId {}",
+                                jwt.getSubject(), playerId, player.getKeycloakId());
+                        throw new PlayerVerificationException(
+                                "Authentication token does not match this player session.");
+                    }
+                    identity = AuthenticatedUser.fromJwt(jwt);
+                    // Reject banned users for any in-session WebSocket action.
+                    authorizationPolicy.ensureNotBanned(identity);
                     log.info("Validated authenticated player: {}", playerId);
                     isValid = true;
                 } else if (player.isGuest() && playerSessionSecret != null) {
@@ -120,7 +137,8 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
                     return new GameSessionInjection(
                         new PlayerIdentifiers(playerId, playerSessionSecret),
                         gameSessionId,
-                        gameSession
+                        gameSession,
+                        identity
                     );
                 } else {
                     log.error("Invalid credentials for player: {}", playerId);

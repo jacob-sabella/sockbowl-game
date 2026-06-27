@@ -70,8 +70,8 @@ public class GameSessionControllerTest {
     @Test
     public void createNewGame_gameSessionIdentifiersAreReturnedAsExpected() throws Exception {
 
-        // Return game session when asked via service
-        when(sessionService.createNewGame(any())).thenReturn(gameSession);
+        // Return game session when asked via service (guest mode: null owner)
+        when(sessionService.createNewGame(any(), any())).thenReturn(gameSession);
 
         // Create expected output
         GameSessionIdentifiers expectedGameSessionIdentifiers = GameSessionIdentifiers.builder()

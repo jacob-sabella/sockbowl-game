@@ -22,6 +22,14 @@ public class Player {
     private String userId;
 
     /**
+     * Keycloak subject (sub claim) of the authenticated user backing this player
+     * (null for guest players). Used by the authorization policy to verify
+     * session ownership against the JWT-validated identity, preventing
+     * cross-user impersonation within a session.
+     */
+    private String keycloakId;
+
+    /**
      * Indicates whether this player is a guest (true) or authenticated user (false).
      * Guest players use header-based authentication with playerSecret.
      * Authenticated players use JWT tokens from Keycloak.

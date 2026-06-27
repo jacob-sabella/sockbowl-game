@@ -15,6 +15,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -23,9 +24,12 @@ import java.util.Comparator;
 public class ConfigurationMessageProcessor extends MessageProcessor {
 
     private final PacketClient packetClient;
+    private final GameAuthorizationPolicy authorizationPolicy;
 
-    public ConfigurationMessageProcessor(PacketClient packetClient) {
+    public ConfigurationMessageProcessor(PacketClient packetClient,
+                                         GameAuthorizationPolicy authorizationPolicy) {
         this.packetClient = packetClient;
+        this.authorizationPolicy = authorizationPolicy;
     }
 
     @Override
@@ -71,7 +75,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
 
         // Validating if the player who initiated the request is allowed to change the team of the target player
-        if (!canAskingPlayerChangeTeamForTargetPlayer(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(), message.getTargetPlayer())) {
+        if (!authorizationPolicy.canChangeTeam(gameSession, updatePlayerTeamMessage.getOriginatingPlayerId(), message.getTargetPlayer())) {
             // If not, returning an error message
             return ProcessError.accessDeniedMessage(message);
         }
@@ -180,8 +184,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
 
-        // Check if the player making the request is the game owner or the target player when no proctor is set
-        if (!(gameSession.isPlayerGameOwner(message.getOriginatingPlayerId()) || (message.getTargetPlayer().equals(message.getOriginatingPlayerId()) && gameSession.getProctor() == null))) {
+        // Check if the player making the request is allowed to manage the proctor
+        // (session owner, or claiming the role for themselves while none is set)
+        if (!authorizationPolicy.canManageProctor(gameSession, message.getOriginatingPlayerId(), message.getTargetPlayer())) {
             // If not, return access denied error message
             return ProcessError.accessDeniedMessage(message);
         }
@@ -210,31 +215,6 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // Return a PlayerRosterUpdate
         return PlayerRosterUpdate.fromGameSession(gameSession);
-    }
-
-
-    /**
-     * Determines whether the asking player is allowed to change the team for the target player.
-     *
-     * <p>The method allows for team change under the following conditions:
-     * <ul>
-     *     <li>If the asking player and the target player are the same, the method returns true.</li>
-     *     <li>If the asking player is not the target player, the method checks whether the asking player
-     *     is the game owner. If the asking player is the game owner, the method returns true; otherwise, it
-     *     returns false.</li>
-     * </ul>
-     *
-     * @param gameSession  the current GameSession containing the list of players
-     * @param askingPlayer the id of the player who is asking to change the team
-     * @param targetPlayer the id of the player who is team is being changed
-     * @return true if the asking player can change the team of the target player, false otherwise
-     */
-    private boolean canAskingPlayerChangeTeamForTargetPlayer(GameSession gameSession, String askingPlayer, String targetPlayer) {
-        if (askingPlayer.equals(targetPlayer)) {
-            return true;
-        } else {
-            return gameSession.isPlayerGameOwner(askingPlayer);
-        }
     }
 
 

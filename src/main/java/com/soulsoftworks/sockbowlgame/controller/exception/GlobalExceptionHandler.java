@@ -19,6 +19,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(UserBannedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseEntity<String> handleUserBannedException(UserBannedException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<String> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
