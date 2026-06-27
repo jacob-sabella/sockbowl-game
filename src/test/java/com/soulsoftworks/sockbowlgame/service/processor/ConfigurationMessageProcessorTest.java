@@ -1,10 +1,10 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.model.packet.nodes.*;
-import com.soulsoftworks.sockbowlgame.model.packet.relationships.ContainsBonus;
-import com.soulsoftworks.sockbowlgame.model.packet.relationships.ContainsTossup;
-import com.soulsoftworks.sockbowlgame.model.packet.relationships.HasBonusPart;
+import com.soulsoftworks.sockbowlgame.generated.packet.types.*;
+import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsBonus;
+import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsTossup;
+import com.soulsoftworks.sockbowlgame.generated.packet.types.HasBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
@@ -120,7 +120,7 @@ public class ConfigurationMessageProcessorTest {
 
         // Assuming Bonus needs to be updated to include a list of BonusParts
         Bonus bonus = PacketBuilderHelper.createBonus("1", "About Newton's laws", subcategory);
-        bonus.setBonusParts(new ArrayList<>(List.of(new HasBonusPart(1, bonusPart))));
+        bonus.setBonusParts(new ArrayList<>(List.of(new HasBonusPart(null, 1, bonusPart))));
 
         ContainsBonus containsBonus = PacketBuilderHelper.createBonus(1L, 1, bonus);
 

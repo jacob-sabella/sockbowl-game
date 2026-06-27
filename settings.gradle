@@ -1,1 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    // The DGS codegen Gradle plugin is published as a plain library artifact
+    // (graphql-dgs-codegen-gradle) without a plugin-marker artifact, so the
+    // plugins{} id must be mapped to its module explicitly.
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'com.netflix.dgs.codegen') {
+                useModule("com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:${requested.version}")
+            }
+        }
+    }
+}
+
 rootProject.name = 'sockbowl-game'
