@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.controller.api;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
@@ -11,11 +11,10 @@ import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,11 +40,10 @@ public class GameSessionControllerTest {
 
     private final Gson gson = new Gson();
 
-    @MockBean
+    @MockitoBean
     private SessionService sessionService;
 
-    @InjectMocks
-    MockHttpSession mockHttpSession;
+    MockHttpSession mockHttpSession = new MockHttpSession();
 
     private GameSession gameSession;
     private CreateGameRequest createGameRequest;

@@ -45,7 +45,7 @@ class HeartbeatControllerTest {
         WebSocketStompClient stompClient = new WebSocketStompClient(new SockJsClient(createTransportClient()));
         stompClient.setMessageConverter(new StringMessageConverter());
         String url =  "ws://localhost:" + port + WebSocketConfig.STOMP_ENDPOINT;
-        StompSession stompSession = stompClient.connect(url, new StompSessionHandlerAdapter(){})
+        StompSession stompSession = stompClient.connectAsync(url, new StompSessionHandlerAdapter(){})
                 .get(1, SECONDS);
 
         // Subscribe to response endpoint

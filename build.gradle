@@ -4,15 +4,24 @@ import cz.habarta.typescript.generator.TypeScriptFileType
 import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
-    id 'org.springframework.boot' version '3.5.7'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
-    id 'cz.habarta.typescript-generator' version '3.2.1263'
+    id 'cz.habarta.typescript-generator' version '4.1.1'
 }
 
 group = 'com.soulsoftworks'
 version = resolveVersion()
-sourceCompatibility = '17'
+
+java {
+    sourceCompatibility = '17'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2025.1.2'
+    }
+}
 
 configurations {
     compileOnly {
@@ -30,17 +39,16 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.3.0'
-    implementation 'org.springframework.cloud:spring-cloud-dependencies:2025.0.0'
-    implementation 'io.github.openfeign:feign-okhttp:13.6'
-    implementation 'io.github.openfeign:feign-httpclient:13.6'
-    implementation 'org.springframework.kafka:spring-kafka'
-    implementation 'com.redis.om:redis-om-spring:1.0.1'
-    implementation 'com.google.code.gson:gson:2.13.1'
-    implementation 'org.projectlombok:lombok:1.18.38'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    implementation 'io.github.openfeign:feign-okhttp:13.13'
+    implementation 'io.github.openfeign:feign-httpclient:13.13'
+    implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation 'com.redis.om:redis-om-spring:2.0.7'
+    implementation 'com.google.code.gson:gson:2.14.0'
+    implementation 'org.projectlombok:lombok:1.18.46'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
-    implementation 'com.github.victools:jsonschema-generator:4.38.0'
-    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.1.1'
+    implementation 'com.github.victools:jsonschema-generator:5.0.0'
+    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.5.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Spring Security & OAuth2/OIDC
@@ -61,8 +69,9 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.testcontainers:testcontainers:1.21.3'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
     testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
