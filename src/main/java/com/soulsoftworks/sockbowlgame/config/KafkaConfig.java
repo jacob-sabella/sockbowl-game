@@ -21,8 +21,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.kafka.support.serializer.JacksonJsonDeserializer;
+import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
@@ -51,7 +51,7 @@ public class KafkaConfig {
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class);
         return new DefaultKafkaProducerFactory<>(props);
     }
 
@@ -66,7 +66,7 @@ public class KafkaConfig {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "game-consumers");
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT");
         return props;
@@ -74,8 +74,10 @@ public class KafkaConfig {
 
     @Bean
     public ConsumerFactory<String, SockbowlInMessage> consumerFactory() {
-        JsonDeserializer<SockbowlInMessage> deserializer = new JsonDeserializer<>(SockbowlInMessage.class);
-        deserializer.addTrustedPackages("*");
+        JacksonJsonDeserializer<SockbowlInMessage> deserializer = new JacksonJsonDeserializer<>(SockbowlInMessage.class);
+        // Trust only our own message packages, not "*" — avoids deserializing
+        // arbitrary attacker-supplied types from the game topic.
+        deserializer.addTrustedPackages("com.soulsoftworks.sockbowlgame");
         return new DefaultKafkaConsumerFactory<>(consumerConfigs(), new StringDeserializer(), deserializer);
     }
 
