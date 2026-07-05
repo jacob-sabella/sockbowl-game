@@ -148,6 +148,10 @@ public class SecurityConfig {
             Collection<GrantedAuthority> authorities = new ArrayList<>(scopesConverter.convert(jwt));
             for (String role : extractRealmRoles(jwt)) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                // Also emit the raw realm role name (e.g. "game:host", "user:ban")
+                // so fine-grained hasAuthority(...) checks work directly against
+                // Keycloak permission-style realm roles.
+                authorities.add(new SimpleGrantedAuthority(role));
             }
             return authorities;
         });

@@ -35,6 +35,10 @@ public class GameAuthorizationPolicy {
     public static final String ROLE_USER = "user";
     public static final String ROLE_ADMIN = "admin";
 
+    /** Fine-grained permission authority names (Keycloak realm role names). */
+    private static final String GAME_HOST = "game:host";
+    private static final String USER_BAN = "user:ban";
+
     private final boolean authEnabled;
 
     /**
@@ -59,7 +63,7 @@ public class GameAuthorizationPolicy {
      * <ul>
      *   <li>Auth disabled: guest mode is fully preserved - anyone may create.</li>
      *   <li>Auth enabled: requires an authenticated, non-banned user holding the
-     *       {@code user} (or {@code admin}) capability role.</li>
+     *       {@code game:host} permission authority.</li>
      * </ul>
      */
     public boolean canCreateGame(AuthenticatedUser identity) {
@@ -72,7 +76,7 @@ public class GameAuthorizationPolicy {
         if (isBanned(identity)) {
             return false;
         }
-        return identity.hasRole(ROLE_USER) || identity.isAdmin();
+        return identity.hasAuthority(GAME_HOST);
     }
 
     /**
@@ -87,7 +91,7 @@ public class GameAuthorizationPolicy {
      * Whether an identity may manage bans (view/add/remove).
      */
     public boolean canManageBans(AuthenticatedUser identity) {
-        return isAdmin(identity);
+        return identity != null && identity.hasAuthority(USER_BAN);
     }
 
     /**

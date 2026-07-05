@@ -20,15 +20,15 @@ import java.util.UUID;
 /**
  * Admin REST API for managing user bans.
  *
- * <p>Every method requires the {@code admin} realm role, enforced both by the URL
- * rule in {@link com.soulsoftworks.sockbowlgame.config.SecurityConfig} and by
- * method security ({@link PreAuthorize}). Only active when authentication is
- * enabled.
+ * <p>Every method requires the {@code user:ban} permission authority, enforced
+ * both by the URL rule in
+ * {@link com.soulsoftworks.sockbowlgame.config.SecurityConfig} and by method
+ * security ({@link PreAuthorize}). Only active when authentication is enabled.
  */
 @RestController
 @RequestMapping("/api/v1/admin/bans")
 @ConditionalOnProperty(name = "sockbowl.auth.enabled", havingValue = "true")
-@PreAuthorize("hasRole('admin')")
+@PreAuthorize("hasAuthority('user:ban')")
 public class AdminBanController {
 
     private final BanService banService;

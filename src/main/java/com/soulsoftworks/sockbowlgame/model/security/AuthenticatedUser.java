@@ -131,6 +131,18 @@ public final class AuthenticatedUser {
         return roles.contains(role);
     }
 
+    /**
+     * Exact match against a raw granted-authority name (e.g. {@code game:host},
+     * {@code user:ban}) as opposed to a {@code ROLE_}-prefixed realm role. Since
+     * {@link #of(String, String, String, List)} and {@link #fromJwt(Jwt)} both
+     * normalise {@code ROLE_}-prefixed authorities down to their bare name, and
+     * fine-grained permission authorities are never prefixed, this can be checked
+     * against the same underlying set of names.
+     */
+    public boolean hasAuthority(String authority) {
+        return roles.contains(authority);
+    }
+
     public boolean isAdmin() {
         return hasRole("admin");
     }

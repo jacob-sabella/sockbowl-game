@@ -16,11 +16,21 @@ import static org.mockito.Mockito.when;
 class GameAuthorizationPolicyTest {
 
     private static AuthenticatedUser user() {
-        return AuthenticatedUser.of("kc-user", "alice", "alice@example.com", List.of("ROLE_user"));
+        // Holds the "game:host" permission authority (raw realm role name, no
+        // ROLE_ prefix - mirrors what the Keycloak JWT converter now emits).
+        return AuthenticatedUser.of("kc-user", "alice", "alice@example.com", List.of("game:host"));
+    }
+
+    private static AuthenticatedUser userWithoutGameHost() {
+        return AuthenticatedUser.of("kc-user2", "bob", "bob@example.com", List.of());
     }
 
     private static AuthenticatedUser admin() {
         return AuthenticatedUser.of("kc-admin", "root", "root@example.com", List.of("ROLE_admin"));
+    }
+
+    private static AuthenticatedUser userWithBanAuthority() {
+        return AuthenticatedUser.of("kc-mod", "moderator", "mod@example.com", List.of("user:ban"));
     }
 
     /* -------------------- canCreateGame -------------------- */
@@ -39,17 +49,25 @@ class GameAuthorizationPolicyTest {
     }
 
     @Test
-    void authEnabledAllowsUserRoleCreate() {
+    void authEnabledAllowsUserWithGameHostAuthorityToCreate() {
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
         assertTrue(policy.canCreateGame(user()));
-        assertTrue(policy.canCreateGame(admin()));
     }
 
     @Test
-    void bannedUserCannotCreate() {
+    void authEnabledDeniesUserWithoutGameHostAuthority() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        assertFalse(policy.canCreateGame(userWithoutGameHost()));
+        // Holding the admin role alone no longer implies game:host.
+        assertFalse(policy.canCreateGame(admin()));
+    }
+
+    @Test
+    void bannedUserWithGameHostAuthorityStillCannotCreate() {
         BanService banService = mock(BanService.class);
         when(banService.isBanned("kc-user")).thenReturn(true);
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, banService);
+        // Ban check precedes the authority check, even though this user holds game:host.
         assertFalse(policy.canCreateGame(user()));
     }
 
@@ -85,10 +103,20 @@ class GameAuthorizationPolicyTest {
     void adminCapabilityRequiresAdminRole() {
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
         assertTrue(policy.isAdmin(admin()));
-        assertTrue(policy.canManageBans(admin()));
         assertFalse(policy.isAdmin(user()));
-        assertFalse(policy.canManageBans(user()));
         assertFalse(policy.isAdmin(AuthenticatedUser.guest()));
+    }
+
+    /* -------------------- canManageBans -------------------- */
+
+    @Test
+    void canManageBansRequiresUserBanAuthority() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        assertTrue(policy.canManageBans(userWithBanAuthority()));
+        // Holding the admin role alone no longer implies user:ban.
+        assertFalse(policy.canManageBans(admin()));
+        assertFalse(policy.canManageBans(user()));
+        assertFalse(policy.canManageBans(AuthenticatedUser.guest()));
     }
 
     /* -------------------- session ownership -------------------- */
