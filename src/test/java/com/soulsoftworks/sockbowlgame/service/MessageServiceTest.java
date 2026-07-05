@@ -43,6 +43,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EmbeddedKafka(partitions = 1, brokerProperties = {"listeners=PLAINTEXT://localhost:9092", "port=9092"})
+// TODO(stabilize 0.6): re-enable. The Redis-host property bug is now fixed
+// (.host -> .hostname), but this @SpringBootTest still cannot load the full
+// context because SessionService depends on the JPA UserRepository while the
+// test profile excludes DataSource/Hibernate autoconfig. Enabling requires a
+// test datasource (H2 or a Testcontainers Postgres) wired for these E2E tests.
 @Disabled
 public class MessageServiceTest {
 
@@ -65,7 +70,7 @@ public class MessageServiceTest {
 
     @DynamicPropertySource
     private static void registerRedisProperties(DynamicPropertyRegistry registry) {
-        registry.add("sockbowl.redis.game-cache.host", REDIS_CONTAINER::getHost);
+        registry.add("sockbowl.redis.game-cache.hostname", REDIS_CONTAINER::getHost);
         registry.add("sockbowl.redis.game-cache.port", () -> REDIS_CONTAINER.getMappedPort(6379).toString());
     }
 
