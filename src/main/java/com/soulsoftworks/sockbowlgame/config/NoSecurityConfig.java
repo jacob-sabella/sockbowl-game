@@ -17,7 +17,10 @@ import org.springframework.security.web.SecurityFilterChain;
  */
 @Configuration
 @EnableWebSecurity
-@ConditionalOnProperty(name = "sockbowl.auth.enabled", havingValue = "false", matchIfMissing = false)
+// matchIfMissing=true: if the property is absent, default to auth-disabled
+// (matches the application.properties :false default) so a missing value can't
+// silently fall through to Spring Boot's generated-password lockdown.
+@ConditionalOnProperty(name = "sockbowl.auth.enabled", havingValue = "false", matchIfMissing = true)
 public class NoSecurityConfig {
 
     @Bean
