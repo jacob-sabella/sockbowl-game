@@ -9,14 +9,13 @@ import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
-import org.apache.commons.lang3.RandomStringUtils;
+import java.security.SecureRandom;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -135,9 +134,19 @@ public class SessionService {
         return gameSession.isPresent();
     }
 
+    /** Unambiguous uppercase alphabet (no O/0/I/1) for guest join codes. */
+    private static final char[] JOIN_CODE_ALPHABET =
+            "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
+    private static final int JOIN_CODE_LENGTH = 6;
+    private static final SecureRandom JOIN_CODE_RANDOM = new SecureRandom();
+
     private String generateJoinCode() {
         //TODO Replace this with a pool of pre-populated join codes
-        return RandomStringUtils.random(4, true, true).toUpperCase(Locale.ROOT);
+        StringBuilder code = new StringBuilder(JOIN_CODE_LENGTH);
+        for (int i = 0; i < JOIN_CODE_LENGTH; i++) {
+            code.append(JOIN_CODE_ALPHABET[JOIN_CODE_RANDOM.nextInt(JOIN_CODE_ALPHABET.length)]);
+        }
+        return code.toString();
     }
 
     /**
