@@ -91,8 +91,14 @@ public class SecurityConfig {
                 .requestMatchers("/login/**").permitAll()
                 .requestMatchers("/oauth2/**").permitAll()
 
-                // Admin endpoints (require the admin realm role)
-                .requestMatchers("/api/v1/admin/**").hasRole("admin")
+                // Admin endpoints. Ban management is gated by the fine-grained
+                // user:ban authority (so moderators, not just admins, can ban);
+                // the more-specific /admin/bans/** matcher MUST come before the
+                // general /admin/** matcher since Spring Security is first-match-wins.
+                // Both the bare path and the /** form are listed to remove any
+                // ambiguity about whether /** matches the base path itself.
+                .requestMatchers("/api/v1/admin/bans", "/api/v1/admin/bans/**").hasAuthority("user:ban")
+                .requestMatchers("/api/v1/admin/**").hasAuthority("admin:access")
 
                 // Protected user endpoints (require authentication)
                 .requestMatchers("/api/v1/user/**").authenticated()
