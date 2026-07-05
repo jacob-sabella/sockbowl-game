@@ -74,6 +74,9 @@ dependencies {
     testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+    // Matches the okhttp-jvm 5.x brought in transitively (e.g. by feign-okhttp);
+    // the legacy 4.x 'mockwebserver' artifact is binary-incompatible with it.
+    testImplementation 'com.squareup.okhttp3:mockwebserver3:5.4.0'
 }
 
 tasks.named('test') {
