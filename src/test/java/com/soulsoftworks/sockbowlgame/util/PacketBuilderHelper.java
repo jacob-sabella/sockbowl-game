@@ -1,9 +1,9 @@
 package com.soulsoftworks.sockbowlgame.util;
 
 
-import com.soulsoftworks.sockbowlgame.generated.packet.types.*;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsBonus;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsTossup;
+import com.soulsoftworks.sockbowlquestions.models.nodes.*;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsBonus;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
 
 import java.util.List;
 
@@ -21,7 +21,7 @@ public class PacketBuilderHelper {
 
     public static ContainsTossup createTossup(long linkId, int order, Tossup tossup) {
         ContainsTossup packetTossup = new ContainsTossup();
-        packetTossup.setId(String.valueOf(linkId));
+        packetTossup.setId(linkId);
         packetTossup.setTossup(tossup);
         packetTossup.setOrder(order);
         return packetTossup;
@@ -29,7 +29,7 @@ public class PacketBuilderHelper {
 
     public static ContainsBonus createBonus(long linkId, int order, Bonus bonus) {
         ContainsBonus packetBonus = new ContainsBonus();
-        packetBonus.setId(String.valueOf(linkId));
+        packetBonus.setId(linkId);
         packetBonus.setBonus(bonus);
         packetBonus.setOrder(order);
         return packetBonus;

@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.client;
 
 import com.soulsoftworks.sockbowlgame.config.SockbowlQuestionsConfig;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.Packet;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;

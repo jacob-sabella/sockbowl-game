@@ -1,10 +1,10 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.*;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsBonus;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsTossup;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.HasBonusPart;
+import com.soulsoftworks.sockbowlquestions.models.nodes.*;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsBonus;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
+import com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;

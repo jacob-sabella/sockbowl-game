@@ -47,6 +47,7 @@ dependencies {
     // The published entities carry Spring Data Neo4j annotations; provide them at
     // compile time only (game never persists — it deserializes GraphQL into them).
     compileOnly 'org.springframework.boot:spring-boot-starter-data-neo4j'
+    testCompileOnly 'org.springframework.boot:spring-boot-starter-data-neo4j'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
