@@ -59,6 +59,11 @@ public class GameMessageProcessor extends MessageProcessor {
         // Retrieve the current game session from the player's buzz
         GameSession gameSession = playerBuzz.getGameSession();
 
+        // Single player has no proctor — it uses SubmitAnswer, not a bare buzz.
+        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+            return ProcessError.accessDeniedMessage(playerBuzz);
+        }
+
         // Get the teamId of the player who buzzed
         String teamId = gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId();
 
@@ -324,6 +329,11 @@ public class GameMessageProcessor extends MessageProcessor {
      */
     public SockbowlOutMessage finishedReading(SockbowlInMessage finishedReadingMessage) {
         GameSession gameSession = finishedReadingMessage.getGameSession();
+
+        // Single player has no proctor reading aloud.
+        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+            return ProcessError.accessDeniedMessage(finishedReadingMessage);
+        }
 
         // Check if the current round state is 'PROCTOR_READING' or 'AWAITING_BUZZ'
         RoundState currentRoundState = gameSession.getCurrentRound().getRoundState();

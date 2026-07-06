@@ -107,13 +107,7 @@ public class SessionService {
             joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
         } else {
             newPlayer = gameSession.addPlayer(joinGameRequest);
-            // Single player: seat the lone joiner as the buzzer on the only team, so no
-            // team/proctor config step is needed before the match can start.
-            if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER
-                    && !gameSession.getTeamList().isEmpty()) {
-                newPlayer.setPlayerMode(PlayerMode.BUZZER);
-                gameSession.getTeamList().get(0).addPlayerToTeam(newPlayer);
-            }
+            seatSinglePlayerJoiner(gameSession, newPlayer);
             saveGameSession(gameSession);
             joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         }
@@ -125,6 +119,19 @@ public class SessionService {
         }
 
         return joinGameResponse;
+    }
+
+    /**
+     * Single player: seat the lone joiner as the buzzer on the only team, so no
+     * team/proctor config step is needed before the match can start. No-op for
+     * other game modes.
+     */
+    private void seatSinglePlayerJoiner(GameSession gameSession, Player player) {
+        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER
+                && !gameSession.getTeamList().isEmpty()) {
+            player.setPlayerMode(PlayerMode.BUZZER);
+            gameSession.getTeamList().get(0).addPlayerToTeam(player);
+        }
     }
 
     public void saveGameSession(GameSession gameSession) {
@@ -227,6 +234,7 @@ public class SessionService {
         player.setKeycloakId(keycloakId);  // Tie player to durable Keycloak identity
         player.setGuest(false);
         player.setName(user.getName());  // Use Keycloak name
+        seatSinglePlayerJoiner(gameSession, player);
 
         saveGameSession(gameSession);
 

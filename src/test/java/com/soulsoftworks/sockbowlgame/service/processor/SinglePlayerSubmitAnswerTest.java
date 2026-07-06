@@ -118,4 +118,26 @@ class SinglePlayerSubmitAnswerTest {
         SockbowlOutMessage result = processor.playerSubmitAnswer(submit("Napoleon"));
         assertInstanceOf(ProcessError.class, result);
     }
+
+    @Test
+    @DisplayName("A bare buzz is rejected in single-player (would NPE on the missing proctor)")
+    void bareBuzzRejectedInSinglePlayer() {
+        com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz buzz =
+                com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz.builder()
+                        .gameSession(session)
+                        .originatingPlayerId(player.getPlayerId())
+                        .build();
+        assertInstanceOf(ProcessError.class, processor.playerBuzz(buzz));
+    }
+
+    @Test
+    @DisplayName("finished-reading is rejected in single-player (no proctor reads)")
+    void finishedReadingRejectedInSinglePlayer() {
+        com.soulsoftworks.sockbowlgame.model.socket.in.game.FinishedReading finished =
+                com.soulsoftworks.sockbowlgame.model.socket.in.game.FinishedReading.builder()
+                        .gameSession(session)
+                        .originatingPlayerId(player.getPlayerId())
+                        .build();
+        assertInstanceOf(ProcessError.class, processor.finishedReading(finished));
+    }
 }

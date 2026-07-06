@@ -28,10 +28,15 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = endMatchMessage.getGameSession();
 
-        // Check if the player making the request is the proctor
-        if (gameSession.getProctor() == null ||
-            !gameSession.getProctor().getPlayerId().equals(endMatchMessage.getOriginatingPlayerId())) {
-            // If not, return access denied error message
+        // Authorize: single player has no proctor, so the game owner ends the match;
+        // otherwise only the proctor may.
+        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+            Player ender = gameSession.getPlayerById(endMatchMessage.getOriginatingPlayerId());
+            if (ender == null || !ender.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(endMatchMessage);
+            }
+        } else if (gameSession.getProctor() == null ||
+                !gameSession.getProctor().getPlayerId().equals(endMatchMessage.getOriginatingPlayerId())) {
             return ProcessError.accessDeniedMessage(endMatchMessage);
         }
 
