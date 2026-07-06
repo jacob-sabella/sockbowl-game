@@ -115,4 +115,50 @@ class AutoProctorTossupTest {
     void noAnswerBeforeBuzz() {
         assertInstanceOf(ProcessError.class, submit(p1, "Napoleon"));
     }
+
+    /* ------------------------------- bonuses ------------------------------ */
+
+    private void attachBonus() {
+        session.getGameSettings().setBonusesEnabled(true);
+        com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus =
+            com.soulsoftworks.sockbowlquestions.models.nodes.Bonus.builder()
+                .preamble("A three-part bonus.")
+                .bonusParts(List.of(
+                    part(0, "<u>alpha</u>"), part(1, "<u>beta</u>"), part(2, "<u>gamma</u>")))
+                .build();
+        round().setAssociatedBonus(bonus);
+    }
+
+    private com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart part(int order, String answer) {
+        return com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart.builder()
+                .order(order)
+                .bonusPart(com.soulsoftworks.sockbowlquestions.models.nodes.BonusPart.builder()
+                        .question("q" + order).answer(answer).build())
+                .build();
+    }
+
+    @Test
+    @DisplayName("Correct tossup enters the bonus for the winning team; 3 parts complete the round")
+    void bonusFlow() {
+        attachBonus();
+        buzz(p1);
+        submit(p1, "Napoleon");
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        assertEquals("TEST-TEAM-1", round().getBonusEligibleTeamId());
+
+        submit(p1, "alpha");
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        submit(p1, "beta");
+        submit(p1, "gamma");
+        assertEquals(RoundState.COMPLETED, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("Only the team that won the tossup may answer the bonus")
+    void onlyEligibleTeamAnswersBonus() {
+        attachBonus();
+        buzz(p1);
+        submit(p1, "Napoleon");
+        assertInstanceOf(ProcessError.class, submit(p2, "alpha"));
+    }
 }

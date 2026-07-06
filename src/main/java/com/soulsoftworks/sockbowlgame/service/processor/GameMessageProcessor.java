@@ -302,25 +302,34 @@ public class GameMessageProcessor extends MessageProcessor {
      * teams, a right answer scores the tossup (bonuses are a later increment). Broadcast to all.
      */
     private SockbowlOutMessage autoProctorSubmit(GameSession gameSession, SubmitAnswer submitAnswer) {
+        RoundState state = gameSession.getCurrentRound().getRoundState();
+        if (state == RoundState.BONUS_AWAITING_ANSWER) {
+            return autoProctorBonusAnswer(gameSession, submitAnswer);
+        }
+
         String playerId = submitAnswer.getOriginatingPlayerId();
         Round round = gameSession.getCurrentRound();
-
-        if (round.getRoundState() != RoundState.AWAITING_ANSWER) {
+        if (state != RoundState.AWAITING_ANSWER) {
             return ProcessError.builder().recipient(playerId)
-                    .error("No active buzz to answer").build();
+                    .error("No active question to answer").build();
         }
         if (round.getCurrentBuzz() == null || !playerId.equals(round.getCurrentBuzz().getPlayerId())) {
             return ProcessError.builder().recipient(playerId)
                     .error("Only the buzzed-in player may answer").build();
         }
 
-        JudgeResult verdict = answerJudgeService.judge(round.getAnswer(), submitAnswer.getAnswerText());
-        boolean correct = verdict.isAccept();
+        String eligibleTeam = round.getCurrentBuzz().getTeamId();
+        boolean correct = answerJudgeService.judge(round.getAnswer(), submitAnswer.getAnswerText()).isAccept();
 
         if (correct) {
             round.processCorrectAnswer();
-            // Bonuses for auto-proctor arrive in a later increment; score the tossup for now.
-            gameSession.getCurrentMatch().completeRound();
+            if (gameSession.getGameSettings().isBonusesEnabled() && round.hasAssociatedBonus()) {
+                // Move to the bonus for the team that got the tossup; auto-drive the reading states.
+                gameSession.getCurrentMatch().startBonusPhase(eligibleTeam);
+                autoBonusReady(round);
+            } else {
+                gameSession.getCurrentMatch().completeRound();
+            }
         } else {
             round.processIncorrectAnswer();
             // Complete only once every team has a wrong buzz; otherwise other teams may buzz.
@@ -333,6 +342,53 @@ public class GameMessageProcessor extends MessageProcessor {
             }
         }
         return createProctorlessAnswerUpdate(gameSession, correct);
+    }
+
+    /** Auto-judged bonus part answer from the eligible team; advances the bonus or completes the round. */
+    private SockbowlOutMessage autoProctorBonusAnswer(GameSession gameSession, SubmitAnswer submitAnswer) {
+        String playerId = submitAnswer.getOriginatingPlayerId();
+        Round round = gameSession.getCurrentRound();
+
+        Team team = gameSession.getTeamByPlayerId(playerId);
+        if (team == null || !team.getTeamId().equals(round.getBonusEligibleTeamId())) {
+            return ProcessError.builder().recipient(playerId)
+                    .error("Only the team that won the tossup may answer the bonus").build();
+        }
+
+        int idx = round.getCurrentBonusPartIndex();
+        boolean correct = answerJudgeService.judge(bonusPartAnswerAt(round, idx), submitAnswer.getAnswerText()).isAccept();
+        round.processBonusPartAnswer(idx, correct);
+        round.advanceToNextBonusPart();
+
+        if (round.getRoundState() == RoundState.BONUS_COMPLETED) {
+            gameSession.getCurrentMatch().completeRound();
+        } else {
+            autoBonusReady(round);
+        }
+        return createProctorlessAnswerUpdate(gameSession, correct);
+    }
+
+    /** Collapse the proctor-read bonus states straight to "awaiting answer" — there's no proctor. */
+    private void autoBonusReady(Round round) {
+        RoundState s = round.getRoundState();
+        if (s == RoundState.BONUS_READING_PREAMBLE || s == RoundState.BONUS_READING_PART) {
+            round.setRoundState(RoundState.BONUS_AWAITING_ANSWER);
+        }
+    }
+
+    /** The answer of the bonus part at the given index (by order, falling back to list position). */
+    private static String bonusPartAnswerAt(Round round, int idx) {
+        if (round.getCurrentBonus() == null || round.getCurrentBonus().getBonusParts() == null) {
+            return "";
+        }
+        java.util.List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts =
+                round.getCurrentBonus().getBonusParts();
+        return parts.stream()
+                .filter(p -> p.getOrder() != null && p.getOrder() == idx && p.getBonusPart() != null)
+                .findFirst()
+                .map(p -> p.getBonusPart().getAnswer())
+                .orElseGet(() -> (idx < parts.size() && parts.get(idx).getBonusPart() != null)
+                        ? parts.get(idx).getBonusPart().getAnswer() : "");
     }
 
     /** Broadcast an AnswerUpdate to all players — full round when completed (answer revealed), else answer hidden. */

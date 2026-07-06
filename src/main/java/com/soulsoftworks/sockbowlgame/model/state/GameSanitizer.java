@@ -75,7 +75,21 @@ public class GameSanitizer {
     public static Round revealQuestionHideAnswer(Round round) {
         Round copy = DeepCopyUtil.deepCopy(round, Round.class);
         copy.setAnswer("");
+        // Also hide bonus part answers so a player can't read them off the wire mid-bonus.
+        hideBonusAnswers(copy.getCurrentBonus());
+        hideBonusAnswers(copy.getAssociatedBonus());
         return copy;
+    }
+
+    private static void hideBonusAnswers(com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus) {
+        if (bonus == null || bonus.getBonusParts() == null) {
+            return;
+        }
+        bonus.getBonusParts().forEach(part -> {
+            if (part != null && part.getBonusPart() != null) {
+                part.getBonusPart().setAnswer("");
+            }
+        });
     }
 
 
