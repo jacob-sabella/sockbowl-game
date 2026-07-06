@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.state;
 
-import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
+import com.soulsoftworks.sockbowlgame.model.packet.nodes.Bonus;
 import lombok.Data;
 
 import java.util.ArrayList;

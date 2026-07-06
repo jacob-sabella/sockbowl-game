@@ -4,24 +4,15 @@ import cz.habarta.typescript.generator.TypeScriptFileType
 import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
-    id 'org.springframework.boot' version '4.1.0'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.6'
     id 'java'
-    id 'cz.habarta.typescript-generator' version '4.1.1'
+    id 'cz.habarta.typescript-generator' version '3.2.1263'
 }
 
 group = 'com.soulsoftworks'
 version = resolveVersion()
-
-java {
-    sourceCompatibility = '17'
-}
-
-dependencyManagement {
-    imports {
-        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2025.1.2'
-    }
-}
+sourceCompatibility = '17'
 
 configurations {
     compileOnly {
@@ -31,35 +22,25 @@ configurations {
 
 repositories {
     mavenCentral()
-    maven {
-        name = 'GitHubPackages'
-        url = uri("https://maven.pkg.github.com/${System.getenv('GITHUB_REPOSITORY_OWNER') ?: 'jacob-sabella'}/sockbowl-questions")
-        credentials {
-            username = (System.getenv('GITHUB_ACTOR') ?: (findProperty('gpr.user') ?: '')) as String
-            password = (System.getenv('GITHUB_TOKEN') ?: (findProperty('gpr.key') ?: '')) as String
-        }
-    }
 }
 
 dependencies {
-    // Packet/question domain contract — single source of truth: sockbowl-questions.
-    implementation "com.soulsoftworks:sockbowlquestions-models:${sockbowlModelsVersion}"
-    // The published entities carry Spring Data Neo4j annotations; provide them at
-    // compile time only (game never persists — it deserializes GraphQL into them).
-    compileOnly 'org.springframework.boot:spring-boot-starter-data-neo4j'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    implementation 'io.github.openfeign:feign-okhttp:13.13'
-    implementation 'io.github.openfeign:feign-httpclient:13.13'
-    implementation 'org.springframework.boot:spring-boot-starter-kafka'
-    implementation 'com.redis.om:redis-om-spring:2.0.7'
-    implementation 'com.google.code.gson:gson:2.14.0'
-    implementation 'org.projectlombok:lombok:1.18.46'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.3.0'
+    implementation 'org.springframework.cloud:spring-cloud-dependencies:2025.0.0'
+    implementation 'io.github.openfeign:feign-okhttp:13.6'
+    implementation 'io.github.openfeign:feign-httpclient:13.6'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'com.redis.om:redis-om-spring:1.0.1'
+    implementation 'com.google.code.gson:gson:2.13.1'
+    implementation 'org.projectlombok:lombok:1.18.38'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
-    implementation 'com.github.victools:jsonschema-generator:5.0.0'
+    implementation 'com.github.victools:jsonschema-generator:4.38.0'
+    implementation 'com.netflix.graphql.dgs.codegen:graphql-dgs-codegen-gradle:8.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
     // Spring Security & OAuth2/OIDC
@@ -80,25 +61,16 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
-    testImplementation 'org.testcontainers:testcontainers:1.21.4'
-    testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
+    testImplementation 'org.testcontainers:testcontainers:1.21.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
     testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    // Matches the okhttp-jvm 5.x brought in transitively (e.g. by feign-okhttp);
-    // the legacy 4.x 'mockwebserver' artifact is binary-incompatible with it.
-    testImplementation 'com.squareup.okhttp3:mockwebserver3:5.4.0'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
-
-// The packet/question domain contract lives in sockbowl-questions (single
-// source of truth). The canonical GraphQL schema is synced into this repo via
-// scripts/sync-schema.sh and the packet model POJOs are generated from it here
-// instead of being hand-maintained.
 
 generateTypeScript {
     jsonLibrary = 'jackson2'
@@ -107,13 +79,7 @@ generateTypeScript {
             'com.soulsoftworks.sockbowlgame.model.state.GameSessionSanitizer',
             'com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage'
     ]
-    // Packet types are generated from the questions GraphQL schema; they are a
-    // separate published contract (handled by ng codegen) and must NOT leak
-    // into game's gameplay/message TypeScript output.
-    excludeClassPatterns = [
-            'com.soulsoftworks.sockbowlgame.model.**Builder**',
-            'com.soulsoftworks.sockbowlgame.generated.packet.**'
-    ]
+    excludeClassPatterns = ['com.soulsoftworks.sockbowlgame.model.**Builder**']
     outputKind = 'module'
     outputFile = "build/typescript-generation/sockbowl-interfaces.ts"
     outputFileType = TypeScriptFileType.implementationFile

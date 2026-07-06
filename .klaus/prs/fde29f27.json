@@ -1,0 +1,18 @@
+{
+  "id": "fde29f27",
+  "task_id": "36ca5b09",
+  "author_role": "engineer",
+  "title": "Untitled change",
+  "summary": "",
+  "diff": "",
+  "status": "ready_for_dev",
+  "reviews": [
+    {
+      "author_role": "reviewer",
+      "verdict": "comment",
+      "body": "Nothing to review here. The PR has no title, no summary, and no diff.\n\nPlease resubmit with:\n- A descriptive **title**\n- A **summary** of what changed and why\n- The actual **diff**\n\nCan't approve or request changes on an empty submission.",
+      "created_at": "2026-05-13T00:33:06Z"
+    }
+  ],
+  "created_at": "2026-05-13T00:32:25Z"
+}
