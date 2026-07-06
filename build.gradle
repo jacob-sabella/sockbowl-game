@@ -8,7 +8,6 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
     id 'java'
     id 'cz.habarta.typescript-generator' version '4.1.1'
-    id 'com.netflix.dgs.codegen' version '8.5.0'
 }
 
 group = 'com.soulsoftworks'
@@ -32,9 +31,22 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven {
+        name = 'GitHubPackages'
+        url = uri("https://maven.pkg.github.com/${System.getenv('GITHUB_REPOSITORY_OWNER') ?: 'jacob-sabella'}/sockbowl-questions")
+        credentials {
+            username = (System.getenv('GITHUB_ACTOR') ?: (findProperty('gpr.user') ?: '')) as String
+            password = (System.getenv('GITHUB_TOKEN') ?: (findProperty('gpr.key') ?: '')) as String
+        }
+    }
 }
 
 dependencies {
+    // Packet/question domain contract — single source of truth: sockbowl-questions.
+    implementation "com.soulsoftworks:sockbowlquestions-models:${sockbowlModelsVersion}"
+    // The published entities carry Spring Data Neo4j annotations; provide them at
+    // compile time only (game never persists — it deserializes GraphQL into them).
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-neo4j'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -83,18 +95,10 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
-/* ---------------------------- DGS GraphQL codegen -------------------------- */
 // The packet/question domain contract lives in sockbowl-questions (single
 // source of truth). The canonical GraphQL schema is synced into this repo via
 // scripts/sync-schema.sh and the packet model POJOs are generated from it here
 // instead of being hand-maintained.
-generateJava {
-    schemaPaths = ["${projectDir}/src/main/resources/graphql/questions-schema.graphqls"]
-    packageName = 'com.soulsoftworks.sockbowlgame.generated.packet'
-    generateClient = false
-    generateInterfaces = false
-    typeMapping = ['ID': 'java.lang.String']
-}
 
 generateTypeScript {
     jsonLibrary = 'jackson2'

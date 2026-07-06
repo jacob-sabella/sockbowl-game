@@ -1,8 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.Packet;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.ContainsTossup;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;

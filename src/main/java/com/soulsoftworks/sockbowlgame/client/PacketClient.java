@@ -1,7 +1,7 @@
 package com.soulsoftworks.sockbowlgame.client;
 
 import com.soulsoftworks.sockbowlgame.config.SockbowlQuestionsConfig;
-import com.soulsoftworks.sockbowlgame.generated.packet.types.Packet;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;

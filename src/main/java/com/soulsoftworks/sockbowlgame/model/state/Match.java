@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.state;
 
-import com.soulsoftworks.sockbowlgame.generated.packet.types.Packet;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
