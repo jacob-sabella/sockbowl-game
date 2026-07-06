@@ -60,23 +60,21 @@ public class GameAuthorizationPolicy {
 
     /**
      * Whether an identity may create a new game session.
-     * <ul>
-     *   <li>Auth disabled: guest mode is fully preserved - anyone may create.</li>
-     *   <li>Auth enabled: requires an authenticated, non-banned user holding the
-     *       {@code game:host} permission authority.</li>
-     * </ul>
+     *
+     * <p>Auth is <b>additive</b>: enabling it never takes hosting away from guests —
+     * it only unlocks per-account features (question de-duplication, stats, history)
+     * for signed-in users. So anyone may host; only a ban blocks it.
      */
     public boolean canCreateGame(AuthenticatedUser identity) {
         if (!authEnabled) {
             return true;
         }
+        // Guests may still host when auth is enabled.
         if (identity == null || !identity.isAuthenticated()) {
-            return false;
+            return true;
         }
-        if (isBanned(identity)) {
-            return false;
-        }
-        return identity.hasAuthority(GAME_HOST);
+        // Signed-in users host too — a ban is the only thing that blocks it.
+        return !isBanned(identity);
     }
 
     /**

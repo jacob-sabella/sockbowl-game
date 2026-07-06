@@ -43,23 +43,19 @@ class GameAuthorizationPolicyTest {
     }
 
     @Test
-    void authEnabledDeniesGuestCreate() {
+    void authEnabledStillAllowsGuestCreate() {
+        // Auth is additive: enabling it never removes hosting from guests.
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
-        assertFalse(policy.canCreateGame(AuthenticatedUser.guest()));
+        assertTrue(policy.canCreateGame(AuthenticatedUser.guest()));
     }
 
     @Test
-    void authEnabledAllowsUserWithGameHostAuthorityToCreate() {
+    void authEnabledAllowsAnySignedInUserToCreate() {
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
         assertTrue(policy.canCreateGame(user()));
-    }
-
-    @Test
-    void authEnabledDeniesUserWithoutGameHostAuthority() {
-        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
-        assertFalse(policy.canCreateGame(userWithoutGameHost()));
-        // Holding the admin role alone no longer implies game:host.
-        assertFalse(policy.canCreateGame(admin()));
+        // No special game:host role is required — signing in only ADDS features.
+        assertTrue(policy.canCreateGame(userWithoutGameHost()));
+        assertTrue(policy.canCreateGame(admin()));
     }
 
     @Test
