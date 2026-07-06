@@ -4,6 +4,7 @@ import com.soulsoftworks.sockbowlgame.model.entity.User;
 import com.soulsoftworks.sockbowlgame.model.entity.UserGameHistory;
 import com.soulsoftworks.sockbowlgame.model.entity.UserStats;
 import com.soulsoftworks.sockbowlgame.service.UserService;
+import com.soulsoftworks.sockbowlgame.service.UserUsedQuestionService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,12 +13,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Controller for user-related endpoints.
@@ -31,9 +36,34 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final UserUsedQuestionService usedQuestionService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, UserUsedQuestionService usedQuestionService) {
         this.userService = userService;
+        this.usedQuestionService = usedQuestionService;
+    }
+
+    /** Resolve (or lazily create) the authenticated user from the JWT. */
+    private User requireUser(Jwt jwt) {
+        if (jwt == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        return userService.findOrCreateUser(
+                jwt.getSubject(), jwt.getClaimAsString("email"), jwt.getClaimAsString("name"));
+    }
+
+    /** The qbreader question ids this user has already been served (for de-duplication). */
+    @GetMapping("/used-questions")
+    public ResponseEntity<Set<String>> getUsedQuestions(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(usedQuestionService.getUsedRemoteIds(requireUser(jwt).getId()));
+    }
+
+    /** Record qbreader question ids just served to this user. Returns how many were newly stored. */
+    @PostMapping("/used-questions")
+    public ResponseEntity<Map<String, Object>> recordUsedQuestions(
+            @AuthenticationPrincipal Jwt jwt, @RequestBody List<String> remoteIds) {
+        int recorded = usedQuestionService.recordUsed(requireUser(jwt).getId(), remoteIds);
+        return ResponseEntity.ok(Map.of("recorded", recorded));
     }
 
     /**
