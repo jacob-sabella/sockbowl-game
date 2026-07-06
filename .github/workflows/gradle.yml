@@ -14,12 +14,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Credentials for resolving the sockbowlquestions-models artifact from GitHub
+# Packages (game's build.gradle reads these). The default GITHUB_TOKEN works
+# once the package grants sockbowl-game read access; otherwise set a
+# PACKAGES_TOKEN secret (a PAT with read:packages).
+env:
+  GITHUB_ACTOR: ${{ github.actor }}
+  GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       checks: write
+      packages: read
 
     steps:
       - name: Checkout
