@@ -12,6 +12,8 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.game.PlayerBuzzed;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.judge.AnswerJudgeService;
+import com.soulsoftworks.sockbowlgame.judge.model.JudgeResult;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,10 +28,14 @@ public class GameMessageProcessor extends MessageProcessor {
     /**
      * Method to initialize the mapping for the processor.
      */
+    /** Automated proctor for single-player mode. Stateless; safe to share. */
+    private final AnswerJudgeService answerJudgeService = new AnswerJudgeService();
+
     @Override
     protected void initializeProcessorMapping() {
         processorMapping.registerProcessor(PlayerIncomingBuzz.class, this::playerBuzz);
         processorMapping.registerProcessor(AnswerOutcome.class, this::playerAnswer);
+        processorMapping.registerProcessor(SubmitAnswer.class, this::playerSubmitAnswer);
         processorMapping.registerProcessor(BonusPartOutcome.class, this::bonusPartAnswer);
         processorMapping.registerProcessor(TimeoutRound.class, this::timeout);
         processorMapping.registerProcessor(FinishedReading.class, this::finishedReading);
@@ -204,6 +210,82 @@ public class GameMessageProcessor extends MessageProcessor {
      * @return SockbowlOutMessage containing round updates or a ProcessError message.
      * @throws NullPointerException if the timeoutMessage or its nested objects are null.
      */
+    /**
+     * Processes a single-player typed answer: the lone player buzzes and answers in one
+     * step, and the {@link AnswerJudgeService} adjudicates instead of a human proctor.
+     * Valid only in {@link GameMode#SINGLE_PLAYER}. One guess resolves the tossup — an
+     * ACCEPT scores it correct, anything else (PROMPT/REJECT) marks it incorrect — then
+     * the round completes and the full round (answer included) is revealed to the player.
+     *
+     * @param message the incoming {@link SubmitAnswer}
+     * @return an AnswerUpdate broadcast, or a ProcessError
+     */
+    public SockbowlOutMessage playerSubmitAnswer(SockbowlInMessage message) {
+        SubmitAnswer submitAnswer = (SubmitAnswer) message;
+        GameSession gameSession = message.getGameSession();
+
+        // Single-player only — reject the message in a proctored game.
+        if (gameSession.getGameSettings().getGameMode() != GameMode.SINGLE_PLAYER) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        // Only a BUZZER-mode player may submit.
+        if (gameSession.getPlayerModeById(message.getOriginatingPlayerId()) != PlayerMode.BUZZER) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Player mode is not buzzer")
+                    .build();
+        }
+
+        // Must be awaiting a buzz (equivalently: mid-read).
+        RoundState state = gameSession.getCurrentRound().getRoundState();
+        if (state != RoundState.AWAITING_BUZZ && state != RoundState.PROCTOR_READING) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Answer submitted when round is in unsupported state")
+                    .build();
+        }
+
+        String teamId = gameSession.getTeamByPlayerId(message.getOriginatingPlayerId()).getTeamId();
+
+        // Register the buzz (moves the round to AWAITING_ANSWER) and stop the timer.
+        gameSession.getCurrentRound().processBuzz(message.getOriginatingPlayerId(), teamId);
+        gameSession.getCurrentRound().clearTossupTimer();
+
+        // Judge the guess against the tossup's answer line.
+        JudgeResult verdict = answerJudgeService.judge(
+                gameSession.getCurrentRound().getAnswer(), submitAnswer.getAnswerText());
+        boolean correct = verdict.isAccept();
+
+        if (correct) {
+            gameSession.getCurrentRound().processCorrectAnswer();
+        } else {
+            gameSession.getCurrentRound().processIncorrectAnswer();
+        }
+        // One guess per tossup in single player — complete the round either way (bonuses
+        // are disabled for this mode, so a correct answer has no bonus phase to enter).
+        gameSession.getCurrentMatch().completeRound();
+
+        return createSinglePlayerAnswerUpdate(gameSession, correct);
+    }
+
+    /**
+     * Builds the answer broadcast for single-player mode. There is no proctor, so this
+     * never dereferences {@code getProctor()}: the round is COMPLETED when this runs, so
+     * the full round (with the revealed answer) goes to the lone player unfiltered.
+     */
+    private SockbowlOutMessage createSinglePlayerAnswerUpdate(GameSession gameSession, boolean isCorrect) {
+        AnswerUpdate answerUpdate = AnswerUpdate.builder()
+                .currentRound(gameSession.getCurrentRound())
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .correct(isCorrect)
+                .build(); // no recipient → broadcast to the session
+
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(answerUpdate)
+                .build();
+    }
+
     public SockbowlOutMessage timeout(SockbowlInMessage timeoutMessage) {
         GameSession gameSession = timeoutMessage.getGameSession();
 

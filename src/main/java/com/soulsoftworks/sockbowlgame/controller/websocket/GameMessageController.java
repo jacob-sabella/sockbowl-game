@@ -32,6 +32,14 @@ public class GameMessageController {
         messageService.sendMessage(playerIncomingBuzz);
     }
 
+    @MessageMapping("/submit-answer")
+    public void submitAnswer(GameSessionInjection gameSessionInjection, SubmitAnswer submitAnswer) {
+        submitAnswer.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        submitAnswer.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(submitAnswer);
+    }
+
     @MessageMapping("/timeout-round")
     public void timeoutRound(GameSessionInjection gameSessionInjection, TimeoutRound timeoutRound) {
         timeoutRound.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
