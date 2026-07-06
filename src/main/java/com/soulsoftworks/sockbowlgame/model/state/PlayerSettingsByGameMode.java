@@ -10,6 +10,7 @@ public class PlayerSettingsByGameMode {
         PLAYER_SETTINGS_BY_GAME_MODE = new HashMap<>();
         PLAYER_SETTINGS_BY_GAME_MODE.put(GameMode.QUIZ_BOWL_CLASSIC, new PlayerSettings(4, 2));
         PLAYER_SETTINGS_BY_GAME_MODE.put(GameMode.SINGLE_PLAYER, new PlayerSettings(1, 1));
+        PLAYER_SETTINGS_BY_GAME_MODE.put(GameMode.AUTO_PROCTOR, new PlayerSettings(4, 2));
     }
 }
 

@@ -20,4 +20,9 @@ public class GameSettings {
      */
     @Builder.Default
     TimerSettings timerSettings = new TimerSettings();
+
+    /** True when the mode has no human proctor (null-safe). */
+    public boolean isProctorless() {
+        return gameMode != null && gameMode.isProctorless();
+    }
 }

@@ -101,6 +101,17 @@ public class GameMessageProcessor extends MessageProcessor {
         // Clear tossup timer (player buzzed)
         gameSession.getCurrentRound().clearTossupTimer();
 
+        // Auto-proctor: no proctor to receive a full-context copy — broadcast the buzz to
+        // everyone with the question visible and the answer hidden.
+        if (gameSession.getGameSettings().getGameMode() == GameMode.AUTO_PROCTOR) {
+            PlayerBuzzed buzzed = PlayerBuzzed.builder()
+                    .playerId(playerBuzz.getOriginatingPlayerId())
+                    .teamId(teamId)
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .build();
+            return SockbowlMultiOutMessage.builder().sockbowlOutMessage(buzzed).build();
+        }
+
         // Create round update messages
         PlayerBuzzed fullContextPlayerBuzzed = PlayerBuzzed.builder()
                 .playerId(playerBuzz.getOriginatingPlayerId())
@@ -229,8 +240,14 @@ public class GameMessageProcessor extends MessageProcessor {
         SubmitAnswer submitAnswer = (SubmitAnswer) message;
         GameSession gameSession = message.getGameSession();
 
-        // Single-player only — reject the message in a proctored game.
-        if (gameSession.getGameSettings().getGameMode() != GameMode.SINGLE_PLAYER) {
+        GameMode mode = gameSession.getGameSettings().getGameMode();
+        // Auto-proctor is multiplayer: the player buzzed first (PlayerIncomingBuzz), then
+        // submits an answer the judge adjudicates with the same wrong/right flow as a proctor.
+        if (mode == GameMode.AUTO_PROCTOR) {
+            return autoProctorSubmit(gameSession, submitAnswer);
+        }
+        // Otherwise this message is single-player only.
+        if (mode != GameMode.SINGLE_PLAYER) {
             return ProcessError.accessDeniedMessage(message);
         }
 
@@ -279,6 +296,59 @@ public class GameMessageProcessor extends MessageProcessor {
      * never dereferences {@code getProctor()}: the round is COMPLETED when this runs, so
      * the full round (with the revealed answer) goes to the lone player unfiltered.
      */
+    /**
+     * Auto-proctor answer: the buzzed-in player's typed answer is judged, then handled with
+     * the same wrong/right flow as a proctored game — a wrong answer returns play to the other
+     * teams, a right answer scores the tossup (bonuses are a later increment). Broadcast to all.
+     */
+    private SockbowlOutMessage autoProctorSubmit(GameSession gameSession, SubmitAnswer submitAnswer) {
+        String playerId = submitAnswer.getOriginatingPlayerId();
+        Round round = gameSession.getCurrentRound();
+
+        if (round.getRoundState() != RoundState.AWAITING_ANSWER) {
+            return ProcessError.builder().recipient(playerId)
+                    .error("No active buzz to answer").build();
+        }
+        if (round.getCurrentBuzz() == null || !playerId.equals(round.getCurrentBuzz().getPlayerId())) {
+            return ProcessError.builder().recipient(playerId)
+                    .error("Only the buzzed-in player may answer").build();
+        }
+
+        JudgeResult verdict = answerJudgeService.judge(round.getAnswer(), submitAnswer.getAnswerText());
+        boolean correct = verdict.isAccept();
+
+        if (correct) {
+            round.processCorrectAnswer();
+            // Bonuses for auto-proctor arrive in a later increment; score the tossup for now.
+            gameSession.getCurrentMatch().completeRound();
+        } else {
+            round.processIncorrectAnswer();
+            // Complete only once every team has a wrong buzz; otherwise other teams may buzz.
+            boolean allTeamsMissed = gameSession.getTeamList().stream().allMatch(team ->
+                    round.getBuzzList().stream()
+                            .filter(b -> b.getTeamId().equals(team.getTeamId()))
+                            .anyMatch(b -> !b.isCorrect()));
+            if (allTeamsMissed) {
+                gameSession.getCurrentMatch().completeRound();
+            }
+        }
+        return createProctorlessAnswerUpdate(gameSession, correct);
+    }
+
+    /** Broadcast an AnswerUpdate to all players — full round when completed (answer revealed), else answer hidden. */
+    private SockbowlOutMessage createProctorlessAnswerUpdate(GameSession gameSession, boolean correct) {
+        Round round = gameSession.getCurrentRound();
+        Round view = round.getRoundState() == RoundState.COMPLETED
+                ? round
+                : GameSanitizer.revealQuestionHideAnswer(round);
+        AnswerUpdate update = AnswerUpdate.builder()
+                .currentRound(view)
+                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .correct(correct)
+                .build();
+        return SockbowlMultiOutMessage.builder().sockbowlOutMessage(update).build();
+    }
+
     private SockbowlOutMessage createSinglePlayerAnswerUpdate(GameSession gameSession, boolean isCorrect) {
         AnswerUpdate answerUpdate = AnswerUpdate.builder()
                 .currentRound(gameSession.getCurrentRound())
@@ -376,11 +446,11 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage advanceRound(SockbowlInMessage sockbowlInMessage) {
         GameSession gameSession = sockbowlInMessage.getGameSession();
 
-        boolean singlePlayer = gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER;
+        boolean proctorless = gameSession.getGameSettings().isProctorless();
 
         // Authorize: single player has no proctor, so the game owner advances; otherwise
         // only the proctor may.
-        if (singlePlayer) {
+        if (proctorless) {
             Player advancer = gameSession.getPlayerById(sockbowlInMessage.getOriginatingPlayerId());
             if (advancer == null || !advancer.isGameOwner()) {
                 return ProcessError.accessDeniedMessage(sockbowlInMessage);
@@ -409,7 +479,7 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         // Single player: broadcast the next round with the question visible, answer hidden.
-        if (singlePlayer) {
+        if (proctorless) {
             RoundUpdate roundUpdate = RoundUpdate.builder()
                     .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
                     .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())

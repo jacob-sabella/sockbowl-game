@@ -28,9 +28,9 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = endMatchMessage.getGameSession();
 
-        // Authorize: single player has no proctor, so the game owner ends the match;
+        // Authorize: proctorless modes have no proctor, so the game owner ends the match;
         // otherwise only the proctor may.
-        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+        if (gameSession.getGameSettings().isProctorless()) {
             Player ender = gameSession.getPlayerById(endMatchMessage.getOriginatingPlayerId());
             if (ender == null || !ender.isGameOwner()) {
                 return ProcessError.accessDeniedMessage(endMatchMessage);
@@ -69,11 +69,11 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = startMatchMessage.getGameSession();
 
-        boolean singlePlayer = gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER;
+        boolean proctorless = gameSession.getGameSettings().isProctorless();
 
         // Authorize the starter: single player has no proctor, so the game owner starts;
         // otherwise the proctor must be the one starting.
-        if (singlePlayer) {
+        if (proctorless) {
             Player starter = gameSession.getPlayerById(startMatchMessage.getOriginatingPlayerId());
             if (starter == null || !starter.isGameOwner()) {
                 return ProcessError.accessDeniedMessage(startMatchMessage);
@@ -90,7 +90,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         }
 
         // Verify that a proctored match has a proctor (single player needs none)
-        if (!singlePlayer && gameSession.getProctor() == null) {
+        if (!proctorless && gameSession.getProctor() == null) {
             return ProcessError.builder().error("No proctor assigned to the match.").build();
         }
 
@@ -110,7 +110,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         // Single player: one broadcast round update with the question visible and the
         // answer hidden — no proctor to receive a full-context copy.
-        if (singlePlayer) {
+        if (proctorless) {
             RoundUpdate roundUpdate = RoundUpdate.builder()
                     .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
                     .build();
