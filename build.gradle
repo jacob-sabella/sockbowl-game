@@ -29,6 +29,14 @@ configurations {
     }
 }
 
+configurations.all {
+    // The models jar is a moving target; always resolve the latest 1.0.+ .
+    resolutionStrategy {
+        cacheDynamicVersionsFor 0, 'seconds'
+        cacheChangingModulesFor 0, 'seconds'
+    }
+}
+
 repositories {
     mavenCentral()
     maven {
