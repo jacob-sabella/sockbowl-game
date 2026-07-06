@@ -64,10 +64,17 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         GameSession gameSession = startMatchMessage.getGameSession();
 
-        // Check if the player making the request is the proctor
-        if (gameSession.getProctor() == null ||
-            !gameSession.getProctor().getPlayerId().equals(startMatchMessage.getOriginatingPlayerId())) {
-            // If not, return access denied error message
+        boolean singlePlayer = gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER;
+
+        // Authorize the starter: single player has no proctor, so the game owner starts;
+        // otherwise the proctor must be the one starting.
+        if (singlePlayer) {
+            Player starter = gameSession.getPlayerById(startMatchMessage.getOriginatingPlayerId());
+            if (starter == null || !starter.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(startMatchMessage);
+            }
+        } else if (gameSession.getProctor() == null ||
+                !gameSession.getProctor().getPlayerId().equals(startMatchMessage.getOriginatingPlayerId())) {
             return ProcessError.accessDeniedMessage(startMatchMessage);
         }
 
@@ -77,9 +84,8 @@ public class ProgressionMessageProcessor extends MessageProcessor {
             return ProcessError.builder().error("A packet must be selected for the match.").build();
         }
 
-        // Verify that the match has a proctor
-        if (gameSession.getProctor() == null) {
-            // If no proctor, return error message
+        // Verify that a proctored match has a proctor (single player needs none)
+        if (!singlePlayer && gameSession.getProctor() == null) {
             return ProcessError.builder().error("No proctor assigned to the match.").build();
         }
 
@@ -96,6 +102,18 @@ public class ProgressionMessageProcessor extends MessageProcessor {
 
         // Set up the first round
         gameSession.getCurrentMatch().advanceRound();
+
+        // Single player: one broadcast round update with the question visible and the
+        // answer hidden — no proctor to receive a full-context copy.
+        if (singlePlayer) {
+            RoundUpdate roundUpdate = RoundUpdate.builder()
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .build();
+            return SockbowlMultiOutMessage.builder()
+                    .sockbowlOutMessage(new GameStartedMessage())
+                    .sockbowlOutMessage(roundUpdate)
+                    .build();
+        }
 
         // Create a full context round update message to send to proctor
         RoundUpdate fullContextRoundUpdate = RoundUpdate

@@ -68,6 +68,11 @@ public class SessionService {
                 .gameOwnerId(gameOwnerId)
                 .build();
 
+        // Single player has no proctor to adjudicate bonuses — force them off.
+        if (createGameRequest.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+            gameSession.getGameSettings().setBonusesEnabled(false);
+        }
+
         // Add teams to game session
         for(int i = 1; i <= playerSettings.getNumTeams(); i++){
             Team team = new Team();
@@ -102,6 +107,13 @@ public class SessionService {
             joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
         } else {
             newPlayer = gameSession.addPlayer(joinGameRequest);
+            // Single player: seat the lone joiner as the buzzer on the only team, so no
+            // team/proctor config step is needed before the match can start.
+            if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER
+                    && !gameSession.getTeamList().isEmpty()) {
+                newPlayer.setPlayerMode(PlayerMode.BUZZER);
+                gameSession.getTeamList().get(0).addPlayerToTeam(newPlayer);
+            }
             saveGameSession(gameSession);
             joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         }

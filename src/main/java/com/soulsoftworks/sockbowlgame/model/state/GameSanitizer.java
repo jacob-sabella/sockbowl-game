@@ -64,6 +64,20 @@ public class GameSanitizer {
         return sanitizedRound;
     }
 
+    /**
+     * Single-player view of a round: the player reads the question on screen (there is
+     * no proctor reading aloud), so the question stays visible while the answer is hidden
+     * until the round completes.
+     *
+     * @param round the round to copy
+     * @return a deep copy with the answer cleared and the question intact
+     */
+    public static Round revealQuestionHideAnswer(Round round) {
+        Round copy = DeepCopyUtil.deepCopy(round, Round.class);
+        copy.setAnswer("");
+        return copy;
+    }
+
 
     /**
      * Removes the playerSecret from all Player instances in the provided player list.

@@ -366,8 +366,16 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage advanceRound(SockbowlInMessage sockbowlInMessage) {
         GameSession gameSession = sockbowlInMessage.getGameSession();
 
-        // Check if the originating player is the proctor
-        if (gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+        boolean singlePlayer = gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER;
+
+        // Authorize: single player has no proctor, so the game owner advances; otherwise
+        // only the proctor may.
+        if (singlePlayer) {
+            Player advancer = gameSession.getPlayerById(sockbowlInMessage.getOriginatingPlayerId());
+            if (advancer == null || !advancer.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(sockbowlInMessage);
+            }
+        } else if (gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(sockbowlInMessage);
         }
 
@@ -387,6 +395,17 @@ public class GameMessageProcessor extends MessageProcessor {
             GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
             return GameSessionUpdate.builder()
                     .gameSession(gameSessionSanitized)
+                    .build();
+        }
+
+        // Single player: broadcast the next round with the question visible, answer hidden.
+        if (singlePlayer) {
+            RoundUpdate roundUpdate = RoundUpdate.builder()
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                    .build();
+            return SockbowlMultiOutMessage.builder()
+                    .sockbowlOutMessage(roundUpdate)
                     .build();
         }
 
