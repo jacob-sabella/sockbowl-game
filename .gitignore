@@ -161,3 +161,4 @@ secrets.yml
 
 
 !/src/main/java/com/soulsoftworks/sockbowlgame/model/socket/out/
+.klaus/
