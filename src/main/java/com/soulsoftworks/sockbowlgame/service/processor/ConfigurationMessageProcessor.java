@@ -134,9 +134,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.wrongStateMessage(message);
         }
 
-        // Authorize: single player has no proctor, so the game owner sets the packet;
+        // Authorize: proctorless modes have no proctor, so the game owner sets the packet;
         // otherwise only the proctor may.
-        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+        if (gameSession.getGameSettings().isProctorless()) {
             Player setter = gameSession.getPlayerById(message.getOriginatingPlayerId());
             if (setter == null || !setter.isGameOwner()) {
                 return ProcessError.accessDeniedMessage(message);
@@ -259,8 +259,14 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         UpdateGameSettings updateGameSettings = (UpdateGameSettings) updateGameSettingsMsg;
         GameSession gameSession = updateGameSettingsMsg.getGameSession();
 
-        // Check if player is the proctor
-        if (gameSession.getPlayerModeById(updateGameSettingsMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+        // Authorize: proctorless modes have no proctor, so the game owner updates settings;
+        // otherwise only the proctor may.
+        if (gameSession.getGameSettings().isProctorless()) {
+            Player editor = gameSession.getPlayerById(updateGameSettingsMsg.getOriginatingPlayerId());
+            if (editor == null || !editor.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
+            }
+        } else if (gameSession.getPlayerModeById(updateGameSettingsMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
         }
 
