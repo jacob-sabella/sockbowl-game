@@ -50,6 +50,9 @@ repositories {
 }
 
 dependencies {
+    // Answer judging (single-player auto-proctor): fuzzy string + phonetic match
+    implementation 'org.apache.commons:commons-text:1.12.0'
+    implementation 'commons-codec:commons-codec:1.17.1'
     // Packet/question domain contract — single source of truth: sockbowl-questions.
     implementation "com.soulsoftworks:sockbowlquestions-models:${sockbowlModelsVersion}"
     // The published entities carry Spring Data Neo4j annotations; provide them at
