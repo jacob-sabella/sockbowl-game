@@ -134,10 +134,15 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.wrongStateMessage(message);
         }
 
-        // Check if the player making the request is the proctor
-        if (gameSession.getProctor() == null ||
-            !gameSession.getProctor().getPlayerId().equals(message.getOriginatingPlayerId())) {
-            // If not, return an access denied error message
+        // Authorize: single player has no proctor, so the game owner sets the packet;
+        // otherwise only the proctor may.
+        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+            Player setter = gameSession.getPlayerById(message.getOriginatingPlayerId());
+            if (setter == null || !setter.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(message);
+            }
+        } else if (gameSession.getProctor() == null ||
+                !gameSession.getProctor().getPlayerId().equals(message.getOriginatingPlayerId())) {
             return ProcessError.accessDeniedMessage(message);
         }
 
