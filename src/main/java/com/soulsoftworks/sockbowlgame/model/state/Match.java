@@ -23,9 +23,12 @@ public class Match {
         }
 
         int nextRoundNumber = currentRound.getRoundNumber() + 1;
+        // Rounds are numbered from 1 for display; the tossup they read is the 0-based
+        // index one lower, so round 1 reads the FIRST tossup (previously it was skipped).
+        int tossupIndex = nextRoundNumber - 1;
 
-        // Check if the nextRoundNumber exceeds the number of tossups in the packet
-        if (nextRoundNumber >= packet.getTossups().size()) {
+        // Check if the tossup index exceeds the number of tossups in the packet
+        if (tossupIndex >= packet.getTossups().size()) {
             // No more tossups left, complete the match
             matchState = MatchState.COMPLETED;
 
@@ -36,20 +39,20 @@ public class Match {
             currentRound = null; // Null out the current round
         } else {
             // Proceed with setting up the next round
-            String nextRoundQuestion = packet.getTossups().get(nextRoundNumber).getTossup().getQuestion();
-            String nextRoundAnswer = packet.getTossups().get(nextRoundNumber).getTossup().getAnswer();
-	    
+            String nextRoundQuestion = packet.getTossups().get(tossupIndex).getTossup().getQuestion();
+            String nextRoundAnswer = packet.getTossups().get(tossupIndex).getTossup().getAnswer();
+
 
 	    String nextRoundSubcategory = "";
             String nextRoundCategory = "";
 
             try {
-            	nextRoundSubcategory = packet.getTossups().get(nextRoundNumber).getTossup().getSubcategory().getName();
-                nextRoundCategory = packet.getTossups().get(nextRoundNumber).getTossup().getSubcategory().getCategory().getName();
+            	nextRoundSubcategory = packet.getTossups().get(tossupIndex).getTossup().getSubcategory().getName();
+                nextRoundCategory = packet.getTossups().get(tossupIndex).getTossup().getSubcategory().getCategory().getName();
 	    } catch (Exception e){
 	        //
 	    }
-	   	
+
             if(nextRoundNumber - 1 != 0){
                 previousRounds.add(currentRound);
             }
@@ -58,9 +61,9 @@ public class Match {
             currentRound.setupRound(nextRoundNumber, nextRoundQuestion, nextRoundAnswer, nextRoundCategory, nextRoundSubcategory);
 
             // Check if there's a bonus for this tossup (same index)
-            if (packet.getBonuses() != null && nextRoundNumber < packet.getBonuses().size()) {
+            if (packet.getBonuses() != null && tossupIndex < packet.getBonuses().size()) {
                 try {
-                    currentRound.setAssociatedBonus(packet.getBonuses().get(nextRoundNumber).getBonus());
+                    currentRound.setAssociatedBonus(packet.getBonuses().get(tossupIndex).getBonus());
                 } catch (Exception e) {
                     // Bonus might be null, that's okay
                 }
