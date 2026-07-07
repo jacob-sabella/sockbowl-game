@@ -160,8 +160,12 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
 
-        // Return a MatchPacketUpdate
-        return MatchPacketUpdate.builder().packetId(packet.getId()).packetName(packet.getName()).build();
+        // Return a MatchPacketUpdate (with the tossup count for "Tossup N of M" progress)
+        return MatchPacketUpdate.builder()
+                .packetId(packet.getId())
+                .packetName(packet.getName())
+                .tossupCount(packet.getTossups().size())
+                .build();
     }
 
     /**

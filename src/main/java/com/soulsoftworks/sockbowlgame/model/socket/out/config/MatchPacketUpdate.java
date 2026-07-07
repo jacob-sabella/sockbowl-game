@@ -13,6 +13,8 @@ public class MatchPacketUpdate extends SockbowlOutMessage {
 
     private String packetId;
     private String packetName;
+    /** Number of tossups in the packet, so clients can show "Tossup N of M" progress. */
+    private int tossupCount;
 
     @Override
     public MessageTypes getMessageType() {
