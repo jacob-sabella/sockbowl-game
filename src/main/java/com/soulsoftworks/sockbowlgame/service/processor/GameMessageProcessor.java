@@ -420,13 +420,27 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage timeout(SockbowlInMessage timeoutMessage) {
         GameSession gameSession = timeoutMessage.getGameSession();
 
-        // Check if the player is the proctor, if not return an error message
-        if (gameSession.getPlayerModeById(timeoutMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
+        boolean proctorless = gameSession.getGameSettings().isProctorless();
+
+        // Authorize: proctorless (auto-proctor) games have no real proctor, so only the
+        // game owner may force the buzz window closed; otherwise only the proctor may.
+        if (proctorless) {
+            Player originator = gameSession.getPlayerById(timeoutMessage.getOriginatingPlayerId());
+            if (originator == null || !originator.isGameOwner()) {
+                return ProcessError.accessDeniedMessage(timeoutMessage);
+            }
+        } else if (gameSession.getPlayerModeById(timeoutMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(timeoutMessage);
         }
 
-        // Check if the current round state is 'AWAITING_BUZZ'
-        if (gameSession.getCurrentRound().getRoundState() != RoundState.AWAITING_BUZZ) {
+        // Check if the current round state allows a timeout. Auto-proctor games never
+        // receive a FinishedReading message, so the round may still be sitting in
+        // PROCTOR_READING when nobody buzzes; accept that state too when proctorless.
+        RoundState currentRoundState = gameSession.getCurrentRound().getRoundState();
+        boolean validState = proctorless
+                ? (currentRoundState == RoundState.PROCTOR_READING || currentRoundState == RoundState.AWAITING_BUZZ)
+                : currentRoundState == RoundState.AWAITING_BUZZ;
+        if (!validState) {
             return ProcessError.builder()
                     .recipient(timeoutMessage.getOriginatingPlayerId())
                     .error("Timeout message processed when round is not awaiting buzz")
@@ -438,6 +452,13 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Set the round state to completed
         gameSession.getCurrentMatch().completeRound();
+
+        // Proctorless completions always reveal the full round to everyone (there's no
+        // human proctor to keep secrets from) — match the broadcast pattern used by
+        // autoProctorSubmit/autoProctorBonusAnswer. Nobody buzzed, so there's no correct answer.
+        if (proctorless) {
+            return createProctorlessAnswerUpdate(gameSession, false);
+        }
 
         return createRoundUpdateMessages(gameSession);
     }

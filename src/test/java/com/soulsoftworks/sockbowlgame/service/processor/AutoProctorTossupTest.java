@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.AnswerUpdate;
@@ -160,5 +161,42 @@ class AutoProctorTossupTest {
         buzz(p1);
         submit(p1, "Napoleon");
         assertInstanceOf(ProcessError.class, submit(p2, "alpha"));
+    }
+
+    /* ------------------------------- buzz timeout (proctorless) ------------------------------- */
+
+    private SockbowlOutMessage timeout(Player p) {
+        return processor.timeout(TimeoutRound.builder()
+                .gameSession(session).originatingPlayerId(p.getPlayerId()).build());
+    }
+
+    @Test
+    @DisplayName("Owner's TimeoutRound completes the round when nobody buzzed (still PROCTOR_READING)")
+    void ownerTimeoutCompletesRoundWhileStillReading() {
+        round().setRoundState(RoundState.PROCTOR_READING);
+        SockbowlOutMessage result = timeout(p1);
+        assertInstanceOf(SockbowlMultiOutMessage.class, result);
+        assertEquals(RoundState.COMPLETED, round().getRoundState());
+        AnswerUpdate update = (AnswerUpdate) ((SockbowlMultiOutMessage) result).getSockbowlOutMessages().get(0);
+        assertFalse(update.isCorrect());
+    }
+
+    @Test
+    @DisplayName("Non-owner's TimeoutRound is rejected; round stays unchanged")
+    void nonOwnerTimeoutRejected() {
+        round().setRoundState(RoundState.PROCTOR_READING);
+        SockbowlOutMessage result = timeout(p2);
+        assertInstanceOf(ProcessError.class, result);
+        assertEquals(RoundState.PROCTOR_READING, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("Classic (non-proctorless) mode: a non-proctor's TimeoutRound is still rejected")
+    void classicModeNonProctorTimeoutRejected() {
+        session.getGameSettings().setGameMode(GameMode.QUIZ_BOWL_CLASSIC);
+        round().setRoundState(RoundState.AWAITING_BUZZ);
+        SockbowlOutMessage result = timeout(p1);
+        assertInstanceOf(ProcessError.class, result);
+        assertEquals(RoundState.AWAITING_BUZZ, round().getRoundState());
     }
 }
