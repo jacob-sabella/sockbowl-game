@@ -107,7 +107,7 @@ public class GameMessageProcessor extends MessageProcessor {
             PlayerBuzzed buzzed = PlayerBuzzed.builder()
                     .playerId(playerBuzz.getOriginatingPlayerId())
                     .teamId(teamId)
-                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), GameMode.AUTO_PROCTOR))
                     .build();
             return SockbowlMultiOutMessage.builder().sockbowlOutMessage(buzzed).build();
         }
@@ -339,6 +339,12 @@ public class GameMessageProcessor extends MessageProcessor {
                             .anyMatch(b -> !b.isCorrect()));
             if (allTeamsMissed) {
                 gameSession.getCurrentMatch().completeRound();
+            } else if (round.getRoundState() == RoundState.AWAITING_BUZZ) {
+                // Question was already fully read before this wrong buzz — the reveal-tick
+                // loop won't re-arm the timer (it only arms on the reveal-complete transition),
+                // so restart it here exactly as the human-proctor flow does in playerAnswer().
+                int timerDuration = gameSession.getGameSettings().getTimerSettings().getTossupTimerSeconds();
+                round.startTossupTimer(timerDuration);
             }
         }
         return createProctorlessAnswerUpdate(gameSession, correct);
@@ -396,7 +402,7 @@ public class GameMessageProcessor extends MessageProcessor {
         Round round = gameSession.getCurrentRound();
         Round view = round.getRoundState() == RoundState.COMPLETED
                 ? round
-                : GameSanitizer.revealQuestionHideAnswer(round);
+                : GameSanitizer.revealQuestionHideAnswer(round, gameSession.getGameSettings().getGameMode());
         AnswerUpdate update = AnswerUpdate.builder()
                 .currentRound(view)
                 .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
@@ -558,7 +564,7 @@ public class GameMessageProcessor extends MessageProcessor {
         // Single player: broadcast the next round with the question visible, answer hidden.
         if (proctorless) {
             RoundUpdate roundUpdate = RoundUpdate.builder()
-                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), gameSession.getGameSettings().getGameMode()))
                     .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                     .build();
             return SockbowlMultiOutMessage.builder()

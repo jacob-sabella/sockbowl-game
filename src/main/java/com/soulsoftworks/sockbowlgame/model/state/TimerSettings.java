@@ -36,4 +36,12 @@ public class TimerSettings {
      */
     @Builder.Default
     private boolean autoTimerEnabled = true;
+
+    /**
+     * Words revealed per second during the AUTO_PROCTOR server-driven reading pace.
+     * Host-set, applies to every player identically. Range: 1..10.
+     * Default: 4
+     */
+    @Builder.Default
+    private int readingWordsPerSecond = 4;
 }

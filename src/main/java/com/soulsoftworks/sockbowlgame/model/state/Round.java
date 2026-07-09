@@ -1,5 +1,6 @@
 package com.soulsoftworks.sockbowlgame.model.state;
 
+import com.soulsoftworks.sockbowlgame.util.QuestionTokenizer;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import lombok.Data;
 
@@ -37,6 +38,10 @@ public class Round {
     private Integer remainingTossupTimerSeconds;  // null = no active timer
     private Integer remainingBonusTimerSeconds;   // null = no active timer
     private Long timerStartedAtMillis;            // timestamp when timer started
+
+    // Reveal-related fields (AUTO_PROCTOR only; unused/zero for other modes)
+    private int revealedWordCount = 0;
+    private int totalWordCount = 0;
 
     /**
      * Processes a buzz action. Adds the current buzz to the buzz list if it exists,
@@ -117,6 +122,8 @@ public class Round {
         this.roundState = RoundState.PROCTOR_READING;
 	this.category = category;
 	this.subcategory = subcategory;
+        this.revealedWordCount = 0;
+        this.totalWordCount = QuestionTokenizer.tokenize(question).size();
     }
 
     /**

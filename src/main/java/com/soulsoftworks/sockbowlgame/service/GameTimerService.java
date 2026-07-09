@@ -2,8 +2,10 @@ package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
+import com.soulsoftworks.sockbowlgame.model.socket.out.game.ReadingUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.TimerUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.util.QuestionTokenizer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -90,6 +92,36 @@ public class GameTimerService {
             }
         }
 
+        // Process AUTO_PROCTOR question reveal
+        GameMode gameMode = session.getGameSettings().getGameMode();
+        if (gameMode == GameMode.AUTO_PROCTOR) {
+            RoundState state = currentRound.getRoundState();
+            boolean revealable = state == RoundState.PROCTOR_READING || state == RoundState.AWAITING_BUZZ;
+
+            if (revealable && currentRound.getRevealedWordCount() < currentRound.getTotalWordCount()) {
+                int wordsPerSecond = Math.max(1, Math.min(10, timerSettings.getReadingWordsPerSecond()));
+                int newRevealed = Math.min(
+                        currentRound.getTotalWordCount(),
+                        currentRound.getRevealedWordCount() + wordsPerSecond);
+                currentRound.setRevealedWordCount(newRevealed);
+
+                String revealedText = QuestionTokenizer.truncate(currentRound.getQuestion(), newRevealed);
+                broadcastReadingUpdate(session, revealedText, newRevealed, currentRound.getTotalWordCount());
+
+                if (newRevealed >= currentRound.getTotalWordCount()) {
+                    // Reveal complete: arm the existing tossup timer exactly as finishedReading()
+                    // does in classic mode. From here on, the existing tick/expiry/auto-timeout
+                    // machinery (the block above, gated on isTossupTimerActive() && AWAITING_BUZZ)
+                    // takes over unmodified.
+                    currentRound.setProctorFinishedReading(true);
+                    if (currentRound.getRoundState() != RoundState.AWAITING_BUZZ) {
+                        currentRound.setRoundState(RoundState.AWAITING_BUZZ);
+                    }
+                    currentRound.startTossupTimer(timerSettings.getTossupTimerSeconds());
+                }
+            }
+        }
+
         // Save updated session back to Redis
         sessionService.saveGameSession(session);
     }
@@ -109,7 +141,7 @@ public class GameTimerService {
             // Auto-timeout: create TimeoutRound message and send via Kafka
             TimeoutRound timeoutMsg = TimeoutRound.builder()
                     .gameSessionId(session.getId())
-                    .originatingPlayerId(session.getProctor().getPlayerId())
+                    .originatingPlayerId(timerExpiryOriginatorId(session))
                     .isAutoTimeout(true)
                     .build();
 
@@ -135,7 +167,7 @@ public class GameTimerService {
             // Auto-timeout: create TimeoutBonusPart message and send via Kafka
             TimeoutBonusPart timeoutMsg = TimeoutBonusPart.builder()
                     .gameSessionId(session.getId())
-                    .originatingPlayerId(session.getProctor().getPlayerId())
+                    .originatingPlayerId(timerExpiryOriginatorId(session))
                     .isAutoTimeout(true)
                     .build();
 
@@ -144,6 +176,29 @@ public class GameTimerService {
         } else {
             log.debug("Bonus timer expired for session {}, awaiting manual timeout", session.getId());
         }
+    }
+
+    /**
+     * The player id to attribute a server-initiated auto-timeout to. Classic (proctored)
+     * games route it through the human proctor, exactly as before. Proctorless games
+     * (SINGLE_PLAYER/AUTO_PROCTOR) have no PROCTOR-mode player — {@link GameSession#getProctor()}
+     * returns null there — so fall back to the game owner, who is the authorized proctorless
+     * actor for these messages (see the {@code proctorless} branches in
+     * {@code GameMessageProcessor#timeout} and {@code #timeoutBonusPart}).
+     *
+     * @param session GameSession that owns the expiring timer
+     * @return a player id to attribute the auto-timeout to, or null if none can be found
+     */
+    private String timerExpiryOriginatorId(GameSession session) {
+        Player proctor = session.getProctor();
+        if (proctor != null) {
+            return proctor.getPlayerId();
+        }
+        return session.getPlayerList().stream()
+                .filter(Player::isGameOwner)
+                .findFirst()
+                .map(Player::getPlayerId)
+                .orElse(null);
     }
 
     /**
@@ -157,6 +212,25 @@ public class GameTimerService {
         TimerUpdate update = TimerUpdate.builder()
                 .timerType(timerType)
                 .remainingSeconds(remainingSeconds)
+                .build();
+
+        String destination = "/queue/event/" + session.getId();
+        messagingTemplate.convertAndSend(destination, update);
+    }
+
+    /**
+     * Broadcasts a reading (reveal) update message to all players in the session.
+     *
+     * @param session GameSession
+     * @param revealedText Cumulative revealed text so far
+     * @param revealedWordCount Number of words revealed so far
+     * @param totalWordCount Total words in the tossup question
+     */
+    private void broadcastReadingUpdate(GameSession session, String revealedText, int revealedWordCount, int totalWordCount) {
+        ReadingUpdate update = ReadingUpdate.builder()
+                .revealedText(revealedText)
+                .revealedWordCount(revealedWordCount)
+                .totalWordCount(totalWordCount)
                 .build();
 
         String destination = "/queue/event/" + session.getId();

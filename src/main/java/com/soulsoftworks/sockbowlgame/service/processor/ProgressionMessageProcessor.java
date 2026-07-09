@@ -112,7 +112,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         // answer hidden — no proctor to receive a full-context copy.
         if (proctorless) {
             RoundUpdate roundUpdate = RoundUpdate.builder()
-                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound()))
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), gameSession.getGameSettings().getGameMode()))
                     .build();
             return SockbowlMultiOutMessage.builder()
                     .sockbowlOutMessage(new GameStartedMessage())

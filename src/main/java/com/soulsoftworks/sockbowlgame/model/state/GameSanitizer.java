@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.model.state;
 
 import com.google.common.reflect.TypeToken;
 import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
+import com.soulsoftworks.sockbowlgame.util.QuestionTokenizer;
 
 import java.util.List;
 
@@ -33,11 +34,13 @@ public class GameSanitizer {
                 sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
 
                 RoundState roundState = gameSession.getCurrentMatch().getCurrentRound().getRoundState();
+                GameMode gameMode = gameSession.getGameSettings().getGameMode();
 
-                if(roundState != RoundState.COMPLETED){
-                    sanitizedGameSession.getCurrentMatch().setCurrentRound(
-                            sanitizeRound(sanitizedGameSession.getCurrentRound()));
-
+                if (roundState != RoundState.COMPLETED) {
+                    Round replacement = (gameMode == GameMode.AUTO_PROCTOR)
+                            ? revealQuestionHideAnswer(sanitizedGameSession.getCurrentRound(), GameMode.AUTO_PROCTOR)
+                            : sanitizeRound(sanitizedGameSession.getCurrentRound());
+                    sanitizedGameSession.getCurrentMatch().setCurrentRound(replacement);
                 }
         }
 
@@ -78,6 +81,24 @@ public class GameSanitizer {
         // Also hide bonus part answers so a player can't read them off the wire mid-bonus.
         hideBonusAnswers(copy.getCurrentBonus());
         hideBonusAnswers(copy.getAssociatedBonus());
+        return copy;
+    }
+
+    /**
+     * AUTO_PROCTOR-aware variant: truncates the question to only what the server has
+     * revealed so far (server-authoritative reveal — never leak unrevealed text). Every
+     * other mode (including SINGLE_PLAYER) keeps the existing full-text behavior.
+     *
+     * @param round the round to copy
+     * @param mode  the game's mode, used only to decide whether to truncate
+     * @return a deep copy with the answer cleared, and — for AUTO_PROCTOR mid-round —
+     *         the question truncated to {@code round.getRevealedWordCount()} words
+     */
+    public static Round revealQuestionHideAnswer(Round round, GameMode mode) {
+        Round copy = revealQuestionHideAnswer(round);
+        if (mode == GameMode.AUTO_PROCTOR && round.getRoundState() != RoundState.COMPLETED) {
+            copy.setQuestion(QuestionTokenizer.truncate(round.getQuestion(), round.getRevealedWordCount()));
+        }
         return copy;
     }
 
