@@ -43,6 +43,7 @@ public class GameMessageProcessor extends MessageProcessor {
         processorMapping.registerProcessor(FinishedReadingBonusPreamble.class, this::finishedReadingBonusPreamble);
         processorMapping.registerProcessor(FinishedReadingBonusPart.class, this::finishedReadingBonusPart);
         processorMapping.registerProcessor(TimeoutBonusPart.class, this::timeoutBonusPart);
+        processorMapping.registerProcessor(StartBonus.class, this::startBonus);
     }
 
 
@@ -324,9 +325,12 @@ public class GameMessageProcessor extends MessageProcessor {
         if (correct) {
             round.processCorrectAnswer();
             if (gameSession.getGameSettings().isBonusesEnabled() && round.hasAssociatedBonus()) {
-                // Move to the bonus for the team that got the tossup; auto-drive the reading states.
+                // Set up the bonus (currentBonus / bonusEligibleTeamId / part index 0) but pause
+                // before it starts. The tossup result (revealed by the sanitizer for BONUS_PENDING)
+                // is shown first; an explicit StartBonus message from the eligible team or the
+                // owner advances to BONUS_AWAITING_ANSWER — see #startBonus below.
                 gameSession.getCurrentMatch().startBonusPhase(eligibleTeam);
-                autoBonusReady(round);
+                round.setRoundState(RoundState.BONUS_PENDING);
             } else {
                 gameSession.getCurrentMatch().completeRound();
             }
@@ -573,6 +577,53 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         return createRoundUpdateMessages(gameSession);
+    }
+
+    /**
+     * Starts the bonus phase from BONUS_PENDING, entering BONUS_AWAITING_ANSWER at part 0
+     * exactly where startBonusPhase()+autoBonusReady() used to leave the round before this
+     * pause existed. Callable by any player on the bonus-eligible team, or the game owner
+     * (mirrors the owner-may-act-for-the-room pattern used by timeout()/advanceRound()).
+     * Idempotent if the bonus has already started; rejected otherwise.
+     *
+     * @param message the incoming {@link StartBonus}
+     * @return an AnswerUpdate broadcast, or a ProcessError
+     */
+    public SockbowlOutMessage startBonus(SockbowlInMessage message) {
+        GameSession gameSession = message.getGameSession();
+        Round round = gameSession.getCurrentRound();
+        String originatingPlayerId = message.getOriginatingPlayerId();
+
+        Player originator = gameSession.getPlayerById(originatingPlayerId);
+        Team eligibleTeam = gameSession.getTeamList().stream()
+                .filter(t -> t.getTeamId().equals(round.getBonusEligibleTeamId()))
+                .findFirst()
+                .orElse(null);
+        boolean isEligiblePlayer = eligibleTeam != null && eligibleTeam.isPlayerOnTeam(originatingPlayerId);
+        boolean isOwner = originator != null && originator.isGameOwner();
+
+        if (!isEligiblePlayer && !isOwner) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        RoundState state = round.getRoundState();
+
+        // Idempotent retry: bonus already started, nothing to do.
+        if (state == RoundState.BONUS_AWAITING_ANSWER) {
+            return createProctorlessAnswerUpdate(gameSession, true);
+        }
+
+        if (state != RoundState.BONUS_PENDING) {
+            return ProcessError.builder()
+                    .recipient(originatingPlayerId)
+                    .error("Start bonus message processed when round is not pending a bonus start")
+                    .build();
+        }
+
+        // Enter the bonus exactly where autoBonusReady would have left it: part 0, awaiting answer.
+        round.setRoundState(RoundState.BONUS_AWAITING_ANSWER);
+
+        return createProctorlessAnswerUpdate(gameSession, true);
     }
 
 

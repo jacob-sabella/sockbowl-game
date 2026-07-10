@@ -77,7 +77,13 @@ public class GameSanitizer {
      */
     public static Round revealQuestionHideAnswer(Round round) {
         Round copy = DeepCopyUtil.deepCopy(round, Round.class);
-        copy.setAnswer("");
+        // BONUS_PENDING: the tossup is over and its result is public (the bonus itself
+        // hasn't started yet), so reveal the tossup answer here unlike every other
+        // pre-COMPLETED state. Bonus part answers stay hidden via hideBonusAnswers below
+        // regardless of round state.
+        if (round.getRoundState() != RoundState.BONUS_PENDING) {
+            copy.setAnswer("");
+        }
         // Also hide bonus part answers so a player can't read them off the wire mid-bonus.
         hideBonusAnswers(copy.getCurrentBonus());
         hideBonusAnswers(copy.getAssociatedBonus());
@@ -97,7 +103,9 @@ public class GameSanitizer {
      */
     public static Round revealQuestionHideAnswer(Round round, GameMode mode) {
         Round copy = revealQuestionHideAnswer(round);
-        if (mode != null && mode.isAutoJudgedMultiplayer() && round.getRoundState() != RoundState.COMPLETED) {
+        boolean fullyRevealedState = round.getRoundState() == RoundState.COMPLETED
+                || round.getRoundState() == RoundState.BONUS_PENDING;
+        if (mode != null && mode.isAutoJudgedMultiplayer() && !fullyRevealedState) {
             copy.setQuestion(QuestionTokenizer.truncate(round.getQuestion(), round.getRevealedWordCount()));
         }
         return copy;

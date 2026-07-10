@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
@@ -76,6 +77,11 @@ class FreeForAllTossupTest {
     private SockbowlOutMessage submit(Player p, String text) {
         return processor.playerSubmitAnswer(SubmitAnswer.builder()
                 .gameSession(session).originatingPlayerId(p.getPlayerId()).answerText(text).build());
+    }
+
+    private SockbowlOutMessage startBonus(Player p) {
+        return processor.startBonus(StartBonus.builder()
+                .gameSession(session).originatingPlayerId(p.getPlayerId()).build());
     }
 
     private Round round() {
@@ -210,8 +216,11 @@ class FreeForAllTossupTest {
 
         buzz(p1);
         submit(p1, "Napoleon");
-        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
         assertEquals(teamIdOf(p1), round().getBonusEligibleTeamId());
+
+        startBonus(p1);
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
 
         // Another player may not answer the bonus.
         assertInstanceOf(ProcessError.class, submit(p2, "alpha"));
@@ -221,6 +230,28 @@ class FreeForAllTossupTest {
         submit(p1, "beta");
         submit(p1, "gamma");
         assertEquals(RoundState.COMPLETED, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("StartBonus from a non-eligible, non-owner player is rejected (FFA)")
+    void startBonusFromNonEligibleNonOwnerRejectedFfa() {
+        session.getGameSettings().setBonusesEnabled(true);
+        com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus =
+            com.soulsoftworks.sockbowlquestions.models.nodes.Bonus.builder()
+                .preamble("A three-part bonus.")
+                .bonusParts(List.of(
+                    part(0, "<u>alpha</u>"), part(1, "<u>beta</u>"), part(2, "<u>gamma</u>")))
+                .build();
+        round().setAssociatedBonus(bonus);
+
+        buzz(p1);
+        submit(p1, "Napoleon");
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
+
+        // p1 is both eligible and owner; p2/p3 are neither.
+        assertInstanceOf(ProcessError.class, startBonus(p2));
+        assertInstanceOf(ProcessError.class, startBonus(p3));
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
     }
 
     private String teamIdOf(Player p) {

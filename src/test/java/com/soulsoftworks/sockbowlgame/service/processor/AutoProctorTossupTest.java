@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
@@ -63,6 +64,11 @@ class AutoProctorTossupTest {
     private SockbowlOutMessage submit(Player p, String text) {
         return processor.playerSubmitAnswer(SubmitAnswer.builder()
                 .gameSession(session).originatingPlayerId(p.getPlayerId()).answerText(text).build());
+    }
+
+    private SockbowlOutMessage startBonus(Player p) {
+        return processor.startBonus(StartBonus.builder()
+                .gameSession(session).originatingPlayerId(p.getPlayerId()).build());
     }
 
     private Round round() {
@@ -144,8 +150,12 @@ class AutoProctorTossupTest {
         attachBonus();
         buzz(p1);
         submit(p1, "Napoleon");
-        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
         assertEquals("TEST-TEAM-1", round().getBonusEligibleTeamId());
+
+        startBonus(p1);
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        assertEquals(0, round().getCurrentBonusPartIndex());
 
         submit(p1, "alpha");
         assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
@@ -160,7 +170,54 @@ class AutoProctorTossupTest {
         attachBonus();
         buzz(p1);
         submit(p1, "Napoleon");
+        startBonus(p1);
         assertInstanceOf(ProcessError.class, submit(p2, "alpha"));
+    }
+
+    @Test
+    @DisplayName("StartBonus from a player neither on the eligible team nor the owner is rejected")
+    void startBonusFromNonEligibleNonOwnerRejected() {
+        attachBonus();
+        buzz(p1);
+        submit(p1, "Napoleon");
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
+
+        assertInstanceOf(ProcessError.class, startBonus(p2));
+        assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("The game owner may start the bonus even when not on the eligible team")
+    void ownerMayStartBonusEvenIfNotOnEligibleTeam() {
+        attachBonus();
+        buzz(p2);
+        submit(p2, "Napoleon");
+        assertEquals("TEST-TEAM-2", round().getBonusEligibleTeamId());
+
+        SockbowlOutMessage result = startBonus(p1);
+        assertInstanceOf(SockbowlMultiOutMessage.class, result);
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("StartBonus is idempotent once the bonus has already started")
+    void startBonusIdempotentWhenAlreadyStarted() {
+        attachBonus();
+        buzz(p1);
+        submit(p1, "Napoleon");
+        startBonus(p1);
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+
+        SockbowlOutMessage result = startBonus(p1);
+        assertInstanceOf(SockbowlMultiOutMessage.class, result);
+        assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+    }
+
+    @Test
+    @DisplayName("StartBonus is rejected outside BONUS_PENDING")
+    void startBonusRejectedOutsideBonusPending() {
+        round().setRoundState(RoundState.AWAITING_BUZZ);
+        assertInstanceOf(ProcessError.class, startBonus(p1));
     }
 
     /* ------------------------------- buzz timeout (proctorless) ------------------------------- */

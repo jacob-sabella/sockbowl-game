@@ -100,4 +100,12 @@ public class GameMessageController {
         messageService.sendMessage(timeoutBonusPart);
     }
 
+    @MessageMapping("/start-bonus")
+    public void startBonus(GameSessionInjection gameSessionInjection, StartBonus startBonus) {
+        startBonus.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
+        startBonus.setGameSessionId(gameSessionInjection.getGameSessionId());
+
+        messageService.sendMessage(startBonus);
+    }
+
 }

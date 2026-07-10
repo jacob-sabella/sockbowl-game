@@ -131,6 +131,18 @@ class SinglePlayerSubmitAnswerTest {
     }
 
     @Test
+    @DisplayName("Bonuses are force-disabled for single-player; correct answer completes the round directly")
+    void bonusesDisabledAndCorrectAnswerGoesStraightToCompleted() {
+        assertFalse(session.getGameSettings().isBonusesEnabled());
+
+        SockbowlOutMessage result = processor.playerSubmitAnswer(submit("Napoleon"));
+
+        AnswerUpdate update = firstAnswerUpdate(result);
+        assertTrue(update.isCorrect());
+        assertEquals(RoundState.COMPLETED, session.getCurrentRound().getRoundState());
+    }
+
+    @Test
     @DisplayName("finished-reading is rejected in single-player (no proctor reads)")
     void finishedReadingRejectedInSinglePlayer() {
         com.soulsoftworks.sockbowlgame.model.socket.in.game.FinishedReading finished =

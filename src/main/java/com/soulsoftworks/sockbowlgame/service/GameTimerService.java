@@ -54,6 +54,11 @@ public class GameTimerService {
      * Processes timers for a single game session.
      * Handles both tossup and bonus timers.
      *
+     * Invariant: BONUS_PENDING is intentionally excluded from every gate below (tossup timer
+     * requires AWAITING_BUZZ, bonus timer requires BONUS_AWAITING_ANSWER, reveal requires
+     * PROCTOR_READING/AWAITING_BUZZ). A round paused in BONUS_PENDING must never have a timer
+     * ticked or armed — do not add a BONUS_PENDING case to any branch here.
+     *
      * @param session GameSession to process
      */
     private void processSessionTimers(GameSession session) {
