@@ -25,4 +25,9 @@ public class GameSettings {
     public boolean isProctorless() {
         return gameMode != null && gameMode.isProctorless();
     }
+
+    /** True for auto-judged multiplayer modes (AUTO_PROCTOR / FREE_FOR_ALL), null-safe. */
+    public boolean isAutoJudgedMultiplayer() {
+        return gameMode != null && gameMode.isAutoJudgedMultiplayer();
+    }
 }

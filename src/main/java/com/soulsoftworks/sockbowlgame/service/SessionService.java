@@ -73,11 +73,15 @@ public class SessionService {
             gameSession.getGameSettings().setBonusesEnabled(false);
         }
 
-        // Add teams to game session
-        for(int i = 1; i <= playerSettings.getNumTeams(); i++){
-            Team team = new Team();
-            team.setTeamName("Team " + (i));
-            gameSession.getTeamList().add(team);
+        // Add teams to game session. Free-for-all teams are created one-per-player as
+        // players join (see seatFreeForAllJoiner) — the session starts with an empty
+        // teamList for that mode.
+        if (createGameRequest.getGameSettings().getGameMode() != GameMode.FREE_FOR_ALL) {
+            for(int i = 1; i <= playerSettings.getNumTeams(); i++){
+                Team team = new Team();
+                team.setTeamName("Team " + (i));
+                gameSession.getTeamList().add(team);
+            }
         }
 
         // Persist game session in Redis
@@ -108,6 +112,9 @@ public class SessionService {
         } else {
             newPlayer = gameSession.addPlayer(joinGameRequest);
             seatSinglePlayerJoiner(gameSession, newPlayer);
+            if (gameSession.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {
+                seatFreeForAllJoiner(gameSession, newPlayer);
+            }
             saveGameSession(gameSession);
             joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
         }
@@ -132,6 +139,20 @@ public class SessionService {
             player.setPlayerMode(PlayerMode.BUZZER);
             gameSession.getTeamList().get(0).addPlayerToTeam(player);
         }
+    }
+
+    /**
+     * Free-for-all: every joiner gets their own one-player team, named after them, so
+     * no manual team-pick step is needed before the match can start.
+     */
+    private void seatFreeForAllJoiner(GameSession gameSession, Player player) {
+        String teamName = (player.getName() == null || player.getName().isBlank())
+                ? "Player" : player.getName();
+        Team team = new Team();
+        team.setTeamName(teamName);
+        gameSession.getTeamList().add(team);
+        player.setPlayerMode(PlayerMode.BUZZER);
+        team.addPlayerToTeam(player);
     }
 
     public void saveGameSession(GameSession gameSession) {
@@ -235,6 +256,9 @@ public class SessionService {
         player.setGuest(false);
         player.setName(user.getName());  // Use Keycloak name
         seatSinglePlayerJoiner(gameSession, player);
+        if (gameSession.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {
+            seatFreeForAllJoiner(gameSession, player);
+        }
 
         saveGameSession(gameSession);
 

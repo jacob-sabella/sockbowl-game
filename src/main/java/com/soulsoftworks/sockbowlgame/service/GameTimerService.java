@@ -92,9 +92,9 @@ public class GameTimerService {
             }
         }
 
-        // Process AUTO_PROCTOR question reveal
+        // Process auto-judged-multiplayer (AUTO_PROCTOR / FREE_FOR_ALL) question reveal
         GameMode gameMode = session.getGameSettings().getGameMode();
-        if (gameMode == GameMode.AUTO_PROCTOR) {
+        if (gameMode != null && gameMode.isAutoJudgedMultiplayer()) {
             RoundState state = currentRound.getRoundState();
             boolean revealable = state == RoundState.PROCTOR_READING || state == RoundState.AWAITING_BUZZ;
 

@@ -103,11 +103,11 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Auto-proctor: no proctor to receive a full-context copy — broadcast the buzz to
         // everyone with the question visible and the answer hidden.
-        if (gameSession.getGameSettings().getGameMode() == GameMode.AUTO_PROCTOR) {
+        if (gameSession.getGameSettings().isAutoJudgedMultiplayer()) {
             PlayerBuzzed buzzed = PlayerBuzzed.builder()
                     .playerId(playerBuzz.getOriginatingPlayerId())
                     .teamId(teamId)
-                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), GameMode.AUTO_PROCTOR))
+                    .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), gameSession.getGameSettings().getGameMode()))
                     .build();
             return SockbowlMultiOutMessage.builder().sockbowlOutMessage(buzzed).build();
         }
@@ -243,7 +243,7 @@ public class GameMessageProcessor extends MessageProcessor {
         GameMode mode = gameSession.getGameSettings().getGameMode();
         // Auto-proctor is multiplayer: the player buzzed first (PlayerIncomingBuzz), then
         // submits an answer the judge adjudicates with the same wrong/right flow as a proctor.
-        if (mode == GameMode.AUTO_PROCTOR) {
+        if (mode != null && mode.isAutoJudgedMultiplayer()) {
             return autoProctorSubmit(gameSession, submitAnswer);
         }
         // Otherwise this message is single-player only.
