@@ -151,6 +151,26 @@ class GameSanitizerTest {
         assertEquals(TEN_WORD_ANSWER, sanitized.getCurrentMatch().getCurrentRound().getAnswer());
     }
 
+    @Test
+    void sanitizeRoundHidesAssociatedBonusPartAnswers() {
+        // associatedBonus is set at round start (Match.advanceRound), so a classic-mode
+        // limited-context round update must not carry the upcoming bonus's answers.
+        Round round = buildRound(RoundState.AWAITING_BUZZ, 3);
+        com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus =
+                com.soulsoftworks.sockbowlquestions.models.nodes.Bonus.builder()
+                        .preamble("A three-part bonus.")
+                        .bonusParts(java.util.List.of(part(0, "alpha"), part(1, "beta"), part(2, "gamma")))
+                        .build();
+        round.setAssociatedBonus(bonus);
+
+        Round result = GameSanitizer.sanitizeRound(round);
+
+        assertEquals("", result.getQuestion());
+        assertEquals("", result.getAnswer());
+        result.getAssociatedBonus().getBonusParts().forEach(p ->
+                assertEquals("", p.getBonusPart().getAnswer()));
+    }
+
     private com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart part(int order, String answer) {
         return com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart.builder()
                 .order(order)

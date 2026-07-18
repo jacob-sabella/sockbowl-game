@@ -64,6 +64,13 @@ public class GameSanitizer {
         sanitizedRound.setQuestion("");
         sanitizedRound.setAnswer("");
 
+        // Also hide bonus part answers. associatedBonus is populated at round start
+        // (Match.advanceRound), so without this a non-proctor's limited-context round
+        // update would carry the upcoming bonus's answers on the wire — readable before
+        // the bonus is even asked. Mirrors revealQuestionHideAnswer.
+        hideBonusAnswers(sanitizedRound.getCurrentBonus());
+        hideBonusAnswers(sanitizedRound.getAssociatedBonus());
+
         return sanitizedRound;
     }
 
