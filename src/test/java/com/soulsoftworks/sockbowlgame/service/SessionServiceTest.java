@@ -87,4 +87,29 @@ class SessionServiceTest {
         assertEquals("Alice", session.getTeamList().get(0).getTeamName());
         assertEquals("Bob", session.getTeamList().get(1).getTeamName());
     }
+
+    @Test
+    @DisplayName("Blank-name FREE_FOR_ALL joiners get distinct seat-numbered team names")
+    void ffaBlankNameJoinersGetDistinctSeatNumberedTeams() {
+        GameSettings settings = new GameSettings();
+        settings.setGameMode(GameMode.FREE_FOR_ALL);
+        CreateGameRequest request = CreateGameRequest.builder().gameSettings(settings).build();
+
+        GameSession session = sessionService.createNewGame(request);
+        when(gameSessionRepository.findGameSessionByJoinCode(session.getJoinCode()))
+                .thenReturn(Optional.of(session));
+
+        // One null-name joiner, one blank-name joiner — neither should collapse
+        // into an indistinguishable "Player" team.
+        sessionService.addPlayerToGameSessionWithJoinCode(JoinGameRequest.builder()
+                .joinCode(session.getJoinCode()).build());
+        sessionService.addPlayerToGameSessionWithJoinCode(JoinGameRequest.builder()
+                .joinCode(session.getJoinCode()).name("   ").build());
+
+        assertEquals(2, session.getTeamList().size());
+        assertEquals("Player 1", session.getTeamList().get(0).getTeamName());
+        assertEquals("Player 2", session.getTeamList().get(1).getTeamName());
+        assertNotEquals(session.getTeamList().get(0).getTeamName(),
+                session.getTeamList().get(1).getTeamName());
+    }
 }

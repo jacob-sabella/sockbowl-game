@@ -146,8 +146,11 @@ public class SessionService {
      * no manual team-pick step is needed before the match can start.
      */
     private void seatFreeForAllJoiner(GameSession gameSession, Player player) {
+        // Blank-name joiners fall back to a seat-numbered label ("Player 1",
+        // "Player 2", …) so multiple nameless players don't collapse into
+        // indistinguishable "Player" teams on the free-for-all scoreboard.
         String teamName = (player.getName() == null || player.getName().isBlank())
-                ? "Player" : player.getName();
+                ? "Player " + (gameSession.getTeamList().size() + 1) : player.getName();
         Team team = new Team();
         team.setTeamName(teamName);
         gameSession.getTeamList().add(team);
