@@ -498,8 +498,13 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage finishedReading(SockbowlInMessage finishedReadingMessage) {
         GameSession gameSession = finishedReadingMessage.getGameSession();
 
-        // Single player has no proctor reading aloud.
-        if (gameSession.getGameSettings().getGameMode() == GameMode.SINGLE_PLAYER) {
+        // FinishedReading is a human-proctor action. Reject every proctorless mode
+        // (SINGLE_PLAYER / AUTO_PROCTOR / FREE_FOR_ALL) — they have no proctor and the
+        // server drives the reveal, so proceeding would dereference a null proctor in
+        // createRoundUpdateMessages. Also require the sender to actually be the proctor,
+        // so a non-proctor player can't force the reading state to advance.
+        if (gameSession.getGameSettings().isProctorless()
+                || gameSession.getPlayerModeById(finishedReadingMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(finishedReadingMessage);
         }
 

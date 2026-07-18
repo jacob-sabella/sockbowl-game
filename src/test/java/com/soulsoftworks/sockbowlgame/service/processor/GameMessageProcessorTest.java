@@ -1,5 +1,6 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.FinishedReading;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
@@ -191,6 +192,58 @@ public class GameMessageProcessorTest {
 
             assertInstanceOf(ProcessError.class, result);
             assertEquals("Buzz processed when round is in unsupported state", ((ProcessError) result).getError());
+        }
+    }
+
+    @Nested
+    @DisplayName("Finished Reading Tests")
+    class FinishedReadingTests {
+
+        @Test
+        @DisplayName("Proctor finishing reading advances the round to AWAITING_BUZZ")
+        void finishedReading_ByProctor_AdvancesRound() {
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.PROCTOR_READING);
+
+            SockbowlOutMessage result = processor.finishedReading(FinishedReading.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId("proctorId")
+                    .build());
+
+            assertInstanceOf(SockbowlMultiOutMessage.class, result);
+            assertEquals(RoundState.AWAITING_BUZZ,
+                    mockGameSession.getCurrentMatch().getCurrentRound().getRoundState());
+        }
+
+        @Test
+        @DisplayName("Non-proctor player cannot finish reading")
+        void finishedReading_ByNonProctor_ReturnsProcessError() {
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.PROCTOR_READING);
+
+            SockbowlOutMessage result = processor.finishedReading(FinishedReading.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId("buzzerPlayerId")
+                    .build());
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals(RoundState.PROCTOR_READING,
+                    mockGameSession.getCurrentMatch().getCurrentRound().getRoundState());
+        }
+
+        @Test
+        @DisplayName("Proctorless (auto-proctor) mode rejects FinishedReading without an NPE")
+        void finishedReading_InProctorlessMode_ReturnsProcessError() {
+            // Auto-proctor has no human proctor; the old guard only excluded SINGLE_PLAYER
+            // and dereferenced a null proctor downstream in createRoundUpdateMessages.
+            mockGameSession.getGameSettings().setGameMode(GameMode.AUTO_PROCTOR);
+            mockGameSession.getPlayerById("proctorId").setPlayerMode(PlayerMode.SPECTATOR);
+            mockGameSession.getCurrentMatch().getCurrentRound().setRoundState(RoundState.PROCTOR_READING);
+
+            SockbowlOutMessage result = processor.finishedReading(FinishedReading.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId("buzzerPlayerId")
+                    .build());
+
+            assertInstanceOf(ProcessError.class, result);
         }
     }
 
