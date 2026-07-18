@@ -10,6 +10,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.game.RoundUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameStartedMessage;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
 import org.springframework.stereotype.Service;
 
@@ -83,9 +84,12 @@ public class ProgressionMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(startMatchMessage);
         }
 
-        // Verify that a packet has been selected
-        if ("".equals(gameSession.getCurrentMatch().getPacket().getId())) {
-            // If packet ID is 90, return error message
+        // Verify that a packet has been selected. A fresh Match holds a default
+        // `new Packet()` whose id is null (not ""), so a bare "".equals(id) check
+        // let an unselected packet slip through — then advanceRound() dereferences
+        // the empty packet's null tossup list and NPEs. Treat null/blank id as "none".
+        Packet selectedPacket = gameSession.getCurrentMatch().getPacket();
+        if (selectedPacket == null || selectedPacket.getId() == null || selectedPacket.getId().isBlank()) {
             return ProcessError.builder().error("A packet must be selected for the match.").build();
         }
 

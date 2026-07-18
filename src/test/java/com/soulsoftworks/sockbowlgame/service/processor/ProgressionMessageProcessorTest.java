@@ -38,6 +38,9 @@ public class ProgressionMessageProcessorTest {
         Match mockMatch = new Match();
         mockMatch.setMatchState(MatchState.CONFIG);
         mockMatch.setPacket(new Packet());
+        // A selected packet always carries its persisted id; the default new Packet()
+        // (id == null) is the "nothing selected yet" sentinel the start guard rejects.
+        mockMatch.getPacket().setId("PACKET-1");
         mockMatch.getPacket().setTossups(new ArrayList<>());
         mockMatch.getPacket().getTossups().add(new ContainsTossup());
         mockMatch.getPacket().getTossups().add(new ContainsTossup());
@@ -90,6 +93,24 @@ public class ProgressionMessageProcessorTest {
         assertTrue(multiOutMessage.getSockbowlOutMessages().get(2) instanceof LimitedContextTossupUpdate);*/
 
         assertEquals(MatchState.IN_GAME, mockGameSession.getCurrentMatch().getMatchState());
+    }
+
+    @Test
+    @DisplayName("Starting with no packet selected is rejected cleanly (not an NPE)")
+    void startMatch_NoPacketSelected_ReturnsProcessErrorMessage() {
+        // Default match packet: new Packet() with a null id — nothing selected.
+        mockGameSession.getCurrentMatch().setPacket(new Packet());
+
+        StartMatch message = StartMatch.builder()
+                .gameSession(mockGameSession)
+                .originatingPlayerId(playerList.get(0).getPlayerId()) // proctor
+                .build();
+
+        SockbowlOutMessage result = processor.startMatch(message);
+
+        assertInstanceOf(ProcessError.class, result);
+        assertEquals("A packet must be selected for the match.", ((ProcessError) result).getError());
+        assertEquals(MatchState.CONFIG, mockGameSession.getCurrentMatch().getMatchState());
     }
 
 }
