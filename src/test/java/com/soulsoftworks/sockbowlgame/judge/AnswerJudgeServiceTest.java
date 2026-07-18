@@ -73,7 +73,17 @@ class AnswerJudgeServiceTest {
                         "Marie Curie", Verdict.ACCEPT),
                 Arguments.of("prompt-on-core related person rejects",
                         "<b>Marie <u>Curie</u></b> [prompt on \"Curie\" alone; do not accept \"Pierre Curie\"]",
-                        "Pierre Curie", Verdict.REJECT)
+                        "Pierre Curie", Verdict.REJECT),
+                // --- regression: a bare-bracket alternate that starts with a directive
+                // keyword ("Oregon"/"orange" begin with "or") must NOT be misparsed as a
+                // directive and have its leading letters stripped ("egon"/"ange"). ---
+                Arguments.of("or-word bare alt accepts",
+                        "<u>tangerine</u> [orange]", "orange", Verdict.ACCEPT),
+                Arguments.of("or-word continuation alt accepts",
+                        "<u>Portland</u> [accept Rose City; Oregon]", "Oregon", Verdict.ACCEPT),
+                // the genuine "or X" conjunction continuation still strips correctly
+                Arguments.of("or-conjunction continuation still works",
+                        "<u>United States</u> [accept USA; or America]", "America", Verdict.ACCEPT)
         );
     }
 

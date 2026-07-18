@@ -130,13 +130,13 @@ public final class AnswerLineParser {
         String lower = clause.toLowerCase();
         Set<String> bucket;
         String body;
-        if (lower.startsWith("do not accept") || lower.startsWith("do not prompt") || lower.startsWith("reject")) {
+        if (startsWithKeyword(lower, "do not accept") || startsWithKeyword(lower, "do not prompt") || startsWithKeyword(lower, "reject")) {
             bucket = rejected;
             body = stripKeyword(clause, "do not accept", "do not prompt", "reject");
-        } else if (lower.startsWith("prompt on") || lower.startsWith("prompt")) {
+        } else if (startsWithKeyword(lower, "prompt on") || startsWithKeyword(lower, "prompt")) {
             bucket = promptable;
             body = stripKeyword(clause, "prompt on", "prompt");
-        } else if (lower.startsWith("also accept") || lower.startsWith("accept") || lower.startsWith("or")) {
+        } else if (startsWithKeyword(lower, "also accept") || startsWithKeyword(lower, "accept") || startsWithKeyword(lower, "or")) {
             bucket = accepted;
             body = stripKeyword(clause, "also accept", "accept", "or");
         } else {
@@ -155,11 +155,27 @@ public final class AnswerLineParser {
     private static String stripKeyword(String clause, String... keywords) {
         String lower = clause.toLowerCase();
         for (String kw : keywords) {
-            if (lower.startsWith(kw)) {
+            if (startsWithKeyword(lower, kw)) {
                 return clause.substring(kw.length()).trim();
             }
         }
         return clause;
+    }
+
+    /**
+     * True if {@code lower} begins with {@code kw} as a whole word — i.e. {@code kw}
+     * is followed by end-of-string or a non-alphanumeric char. Prevents a bare
+     * alternate that merely starts with a directive keyword ("Oregon", "orange",
+     * "acceptance") from being misread as a directive and having its leading letters
+     * stripped ("egon", "ange", "ance"), which would drop the real answer from the
+     * accepted set and reject a correct guess.
+     */
+    private static boolean startsWithKeyword(String lower, String kw) {
+        if (!lower.startsWith(kw)) {
+            return false;
+        }
+        int after = kw.length();
+        return after >= lower.length() || !Character.isLetterOrDigit(lower.charAt(after));
     }
 
     /** Word-boundary-ish keyword search so "prompt" doesn't match inside a word. */
