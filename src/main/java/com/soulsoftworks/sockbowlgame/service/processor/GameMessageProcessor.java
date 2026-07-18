@@ -65,22 +65,33 @@ public class GameMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(playerBuzz);
         }
 
+        // Check if the player is in the BUZZER mode, if not return an error message.
+        // This must precede the team lookup below: a proctor (removed from every team)
+        // or a spectator has no team, so dereferencing getTeamByPlayerId() first would
+        // NPE instead of returning this clean error.
+        Player buzzingPlayer = gameSession.getPlayerById(playerBuzz.getOriginatingPlayerId());
+        if (buzzingPlayer == null || buzzingPlayer.getPlayerMode() != PlayerMode.BUZZER) {
+            return ProcessError.builder()
+                    .recipient(playerBuzz.getOriginatingPlayerId())
+                    .error("Player mode is not buzzer")
+                    .build();
+        }
+
         // Get the teamId of the player who buzzed
-        String teamId = gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId()).getTeamId();
+        Team buzzingTeam = gameSession.getTeamByPlayerId(playerBuzz.getOriginatingPlayerId());
+        if (buzzingTeam == null) {
+            return ProcessError.builder()
+                    .recipient(playerBuzz.getOriginatingPlayerId())
+                    .error("Player is not on a team")
+                    .build();
+        }
+        String teamId = buzzingTeam.getTeamId();
 
         // Check if the team has already buzzed this round, if so return an error message
         if (gameSession.getCurrentRound().hasTeamBuzzed(teamId)) {
             return ProcessError.builder()
                     .recipient(playerBuzz.getOriginatingPlayerId())
                     .error("Team has already buzzed in this round")
-                    .build();
-        }
-
-        // Check if the player is in the BUZZER mode, if not return an error message
-        if (gameSession.getPlayerById(playerBuzz.getOriginatingPlayerId()).getPlayerMode() != PlayerMode.BUZZER) {
-            return ProcessError.builder()
-                    .recipient(playerBuzz.getOriginatingPlayerId())
-                    .error("Player mode is not buzzer")
                     .build();
         }
 

@@ -142,6 +142,41 @@ public class GameMessageProcessorTest {
         }
 
         @Test
+        @DisplayName("Proctor (removed from every team) buzzing returns a clean error, not an NPE")
+        void processPlayerBuzz_ProctorNotOnAnyTeam_ReturnsProcessErrorMessage() {
+            // Reflect reality: a proctor is removed from teams (see setPlayerAsProctor),
+            // so getTeamByPlayerId() is null. The mode check must run before the team
+            // lookup or this would NPE instead of returning a clean error.
+            mockGameSession.getTeamList().forEach(t -> t.removePlayerFromTeam("proctorId"));
+
+            PlayerIncomingBuzz message = PlayerIncomingBuzz.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId("proctorId")
+                    .build();
+
+            SockbowlOutMessage result = processor.playerBuzz(message);
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals("Player mode is not buzzer", ((ProcessError) result).getError());
+        }
+
+        @Test
+        @DisplayName("Buzzer-mode player with no team returns a clean error, not an NPE")
+        void processPlayerBuzz_BuzzerPlayerNotOnAnyTeam_ReturnsProcessErrorMessage() {
+            mockGameSession.getTeamList().forEach(t -> t.removePlayerFromTeam("buzzerPlayerId"));
+
+            PlayerIncomingBuzz message = PlayerIncomingBuzz.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId("buzzerPlayerId")
+                    .build();
+
+            SockbowlOutMessage result = processor.playerBuzz(message);
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals("Player is not on a team", ((ProcessError) result).getError());
+        }
+
+        @Test
         @DisplayName("Buzzer mode player buzzes in unsupported round state causes error")
         void processPlayerBuzz_BuzzerModePlayerBuzzesInUnsupportedRoundState_ReturnsProcessErrorMessage() {
             mockGameSession.getPlayerList().get(0).setPlayerMode(PlayerMode.BUZZER);
