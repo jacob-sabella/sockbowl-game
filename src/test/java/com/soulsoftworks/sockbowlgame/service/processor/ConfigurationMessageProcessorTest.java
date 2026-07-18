@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
 import com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdateGameSettings;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
@@ -327,6 +328,44 @@ public class ConfigurationMessageProcessorTest {
             SockbowlOutMessage result = processor.setPlayerAsProctor(message);
 
             assertInstanceOf(PlayerRosterUpdate.class, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("SettingsTests")
+    class SettingsTests {
+
+        @Test
+        @DisplayName("Proctor updates settings in CONFIG successfully")
+        void updateGameSettings_ProctorInConfig_ReturnsGameSessionUpdate() {
+            // Default setup: getCurrentMatch() is a fresh Match (CONFIG), gameOwner is proctor.
+            UpdateGameSettings message = UpdateGameSettings.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(gameOwner.getPlayerId())
+                    .gameSettings(GameSettings.builder().timerSettings(new TimerSettings()).build())
+                    .build();
+
+            SockbowlOutMessage result = processor.updateGameSettings(message);
+
+            assertFalse(result instanceof ProcessError, "should be accepted in CONFIG state");
+        }
+
+        @Test
+        @DisplayName("Settings update outside CONFIG is rejected (state guard)")
+        void updateGameSettings_NotConfigState_ReturnsProcessError() {
+            Match inGame = mock(Match.class);
+            when(inGame.getMatchState()).thenReturn(MatchState.IN_GAME);
+            when(mockGameSession.getCurrentMatch()).thenReturn(inGame);
+
+            UpdateGameSettings message = UpdateGameSettings.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(gameOwner.getPlayerId()) // even the owner can't swap settings mid-match
+                    .gameSettings(GameSettings.builder().timerSettings(new TimerSettings()).build())
+                    .build();
+
+            SockbowlOutMessage result = processor.updateGameSettings(message);
+
+            assertInstanceOf(ProcessError.class, result);
         }
     }
 

@@ -263,6 +263,13 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         UpdateGameSettings updateGameSettings = (UpdateGameSettings) updateGameSettingsMsg;
         GameSession gameSession = updateGameSettingsMsg.getGameSession();
 
+        // Only usable in the CONFIG state — the same gate the sibling config ops (team
+        // changes, packet selection) enforce. Swapping the whole GameSettings blob
+        // (game mode, bonuses, timers) mid-match would desync the active state machine.
+        if (gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG) {
+            return ProcessError.wrongStateMessage(updateGameSettingsMsg);
+        }
+
         // Authorize: proctorless modes have no proctor, so the game owner updates settings;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
