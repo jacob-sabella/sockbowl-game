@@ -33,7 +33,6 @@ import static com.soulsoftworks.sockbowlgame.support.InSessionFixture.OTHER_SUB;
 import static com.soulsoftworks.sockbowlgame.support.StompMappingClassification.SET_MATCH_PACKET;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -67,10 +66,16 @@ class SetMatchPacketVisibilityTest {
         return packet;
     }
 
-    private static PacketVisibility ephemeralOrSkip() {
+    /**
+     * The build requires models 1.0.2 or newer (gradle.properties), which has
+     * EPHEMERAL; a jar without it must fail here, not skip (G-03).
+     */
+    private static PacketVisibility ephemeral() {
         PacketVisibility ephemeral = Arrays.stream(PacketVisibility.values())
                 .filter(v -> v.name().equals("EPHEMERAL")).findFirst().orElse(null);
-        assumeTrue(ephemeral != null, "models jar without PacketVisibility.EPHEMERAL (WP-Q4, models 1.0.2)");
+        assertThat(ephemeral)
+                .as("models jar without PacketVisibility.EPHEMERAL (WP-Q4, models 1.0.2)")
+                .isNotNull();
         return ephemeral;
     }
 
@@ -132,7 +137,7 @@ class SetMatchPacketVisibilityTest {
 
     @Test
     void ephemeralPacketIsOkForAGuestProctor() {
-        PacketVisibility ephemeral = ephemeralOrSkip();
+        PacketVisibility ephemeral = ephemeral();
         Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
         String proctor = guestProctor(room);
         questionsReturns(packet(ephemeral, null));
@@ -142,7 +147,7 @@ class SetMatchPacketVisibilityTest {
 
     @Test
     void ephemeralPacketIsOkForAGuestOwnerInAProctorlessRoom() {
-        PacketVisibility ephemeral = ephemeralOrSkip();
+        PacketVisibility ephemeral = ephemeral();
         Room room = fx.room(Creator.GUEST, GameMode.AUTO_PROCTOR);
         questionsReturns(packet(ephemeral, null));
 
