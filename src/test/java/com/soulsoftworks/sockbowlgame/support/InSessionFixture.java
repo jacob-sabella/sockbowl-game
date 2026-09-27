@@ -48,11 +48,18 @@ public final class InSessionFixture {
     /** Who created the session. */
     public enum Creator { AUTHENTICATED, GUEST }
 
-    public final GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+    public final GameAuthorizationPolicy policy;
     public final PacketClient packetClient = mock(PacketClient.class);
     private final List<MessageProcessor> processors;
 
+    /** Auth on: the in-session authorization rules under test. */
     public InSessionFixture() {
+        this(true);
+    }
+
+    /** {@code authEnabled=false} mirrors {@code sockbowl.auth.enabled=false} (local dev). */
+    public InSessionFixture(boolean authEnabled) {
+        policy = new GameAuthorizationPolicy(authEnabled, null);
         when(packetClient.getPacketById(any())).thenAnswer(inv -> Mono.just(packet()));
         processors = List.of(
                 new ConfigurationMessageProcessor(packetClient, policy),

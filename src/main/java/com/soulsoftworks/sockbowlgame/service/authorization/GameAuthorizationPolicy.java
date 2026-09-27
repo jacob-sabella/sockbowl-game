@@ -5,10 +5,14 @@ import com.soulsoftworks.sockbowlgame.model.security.AuthenticatedUser;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.service.BanService;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
+import com.soulsoftworks.sockbowlquestions.models.nodes.PacketVisibility;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+
+import java.util.Set;
 
 /**
  * Central authorization policy for Sockbowl. This is the single place where
@@ -39,6 +43,17 @@ public class GameAuthorizationPolicy {
     /** Fine-grained permission authority names (Keycloak realm role names). */
     private static final String GAME_HOST = "game:host";
     private static final String USER_BAN = "user:ban";
+    /** May read and manage any packet, including other users' drafts. */
+    public static final String PACKET_MANAGE_ANY = "packet:manage-any";
+
+    /**
+     * Visibilities any player may load into a match (D2, D15): PUBLISHED, and
+     * EPHEMERAL (game-only packets generated for guests and players). Matched
+     * by name so this build doesn't depend on a models jar that knows every
+     * value; anything else (DRAFT, or a value added later) needs the owner or
+     * {@code packet:manage-any}.
+     */
+    private static final Set<String> OPEN_TO_ANY_SETTER = Set.of("PUBLISHED", "EPHEMERAL");
 
     private final boolean authEnabled;
 
@@ -225,5 +240,50 @@ public class GameAuthorizationPolicy {
         return askingPlayerId != null
                 && askingPlayerId.equals(targetPlayerId)
                 && session.getProctor() == null;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Packet checks                                                      */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Whether the sender of a {@code SetMatchPacket} may load this packet into
+     * the match (AUTH-03, D2, D15). This is the only visibility check in the
+     * game server; the game fetches packets with its service token, which can
+     * read every packet in full, so without it anyone could load someone
+     * else's draft and read its answers as proctor.
+     *
+     * <ul>
+     *   <li>Auth disabled: always (matches questions' PacketReadPolicy, so
+     *       play-testing a draft works in auth-off local dev).</li>
+     *   <li>PUBLISHED, EPHEMERAL, or no visibility (a legacy packet, read as
+     *       PUBLISHED): anyone, guests included.</li>
+     *   <li>Otherwise (DRAFT): only the packet's owner (the sender's Keycloak
+     *       subject equals {@code ownerId}) or a holder of
+     *       {@code packet:manage-any}.</li>
+     * </ul>
+     *
+     * @param packet            the packet as fetched from sockbowl-questions
+     * @param senderKeycloakId  {@code SockbowlInMessage.originatingKeycloakId}
+     *                          (null for guests)
+     * @param senderAuthorities {@code SockbowlInMessage.originatingAuthorities}
+     */
+    public boolean canUsePacketForMatch(Packet packet, String senderKeycloakId, Set<String> senderAuthorities) {
+        if (!authEnabled) {
+            return true;
+        }
+        if (packet == null) {
+            return false;
+        }
+        PacketVisibility visibility = packet.getVisibility();
+        if (visibility == null || OPEN_TO_ANY_SETTER.contains(visibility.name())) {
+            return true;
+        }
+        if (senderAuthorities != null && senderAuthorities.contains(PACKET_MANAGE_ANY)) {
+            return true;
+        }
+        return senderKeycloakId != null
+                && !senderKeycloakId.isBlank()
+                && senderKeycloakId.equals(packet.getOwnerId());
     }
 }
