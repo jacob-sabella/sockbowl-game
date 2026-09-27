@@ -8,8 +8,8 @@ import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,41 +17,50 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 
 /**
- * Controller for all game related messages
+ * REST entry points for creating and joining game sessions (plan m2-auth
+ * section 2.6, decision D1).
+ *
+ * <p>Auth is additive. Guests (no bearer) may create and join; a caller that
+ * presents a valid bearer acts as that user: owner rights, {@code game:host},
+ * bans and identity binding all apply. A backend service-account token is never
+ * a player. Unknown join codes are a 404 on both join paths.
  */
 @RestController
-@RequestMapping("api/v1/session/")
+@RequestMapping("/api/v1/session")
 public class GameSessionController {
 
     private final SessionService sessionService;
     private final GameAuthorizationPolicy authorizationPolicy;
-
-    @Value("${sockbowl.auth.enabled:false}")
-    private boolean authEnabled;
+    private final Validator validator;
 
     public GameSessionController(SessionService sessionService,
-                                 GameAuthorizationPolicy authorizationPolicy) {
+                                 GameAuthorizationPolicy authorizationPolicy,
+                                 Validator validator) {
         this.sessionService = sessionService;
         this.authorizationPolicy = authorizationPolicy;
+        this.validator = validator;
     }
 
     /**
      * Create a new game with the provided settings.
      *
-     * <p>When authentication is enabled this requires an authenticated, non-banned
-     * user with the create capability; the created session is owned by that user.
-     * When authentication is disabled, guest creation is preserved.
+     * <p>Guests may host (D1). A signed-in user needs {@code game:host} and must
+     * not be banned, and owns the created session; a service token is refused
+     * (see {@link GameAuthorizationPolicy#canCreateGame}).
      *
      * @param createGameRequest The settings to create the game with
-     * @param jwt               The authenticated principal, or null in guest mode
+     * @param jwt               The validated bearer, or null for a guest
      */
     @PostMapping("/create-new-game-session")
     public GameSessionIdentifiers createNewGame(@RequestBody CreateGameRequest createGameRequest,
                                                 @AuthenticationPrincipal Jwt jwt){
 
-        AuthenticatedUser identity = AuthenticatedUser.fromJwt(jwt);
+        AuthenticatedUser identity = authorizationPolicy.identityOf(jwt);
 
         if (!authorizationPolicy.canCreateGame(identity)) {
             throw new ResponseStatusException(
@@ -59,7 +68,7 @@ public class GameSessionController {
                     "You are not allowed to create a game session.");
         }
 
-        String gameOwnerId = identity.isAuthenticated() ? identity.getKeycloakId() : null;
+        String gameOwnerId = identity.isUser() ? identity.getKeycloakId() : null;
         GameSession gameSession = sessionService.createNewGame(createGameRequest, gameOwnerId);
 
         return GameSessionIdentifiers.builder()
@@ -68,10 +77,27 @@ public class GameSessionController {
     }
 
     /**
-     * Join a game with a join code (guest mode)
+     * Join a game with a join code.
+     *
+     * <p>Without a bearer this is a guest join, and {@code name} is required.
+     * With a valid bearer (auth enabled) it is delegated to the authenticated
+     * join, so a signed-in user can never end up in a game as an anonymous guest
+     * (which would sidestep bans and ownership).
      */
     @PostMapping("/join-game-session-by-code")
-    public JoinGameResponse joinGameSessionWithCode(@Valid @RequestBody JoinGameRequest joinGameRequest){
+    public JoinGameResponse joinGameSessionWithCode(@RequestBody JoinGameRequest joinGameRequest,
+                                                    @AuthenticationPrincipal Jwt jwt){
+        if (authorizationPolicy.isAuthEnabled() && jwt != null) {
+            return joinAuthenticated(joinGameRequest, jwt);
+        }
+
+        Set<ConstraintViolation<JoinGameRequest>> violations = validator.validate(joinGameRequest);
+        if (!violations.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, violations.stream()
+                    .map(ConstraintViolation::getMessage)
+                    .sorted()
+                    .collect(Collectors.joining(", ")));
+        }
         return sessionService.addPlayerToGameSessionWithJoinCode(joinGameRequest);
     }
 
@@ -92,7 +118,7 @@ public class GameSessionController {
             @RequestBody JoinGameRequest joinGameRequest,
             @AuthenticationPrincipal Jwt jwt) {
 
-        if (!authEnabled) {
+        if (!authorizationPolicy.isAuthEnabled()) {
             throw new ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "Authentication is not enabled. Set sockbowl.auth.enabled=true to use this feature."
@@ -106,8 +132,20 @@ public class GameSessionController {
             );
         }
 
+        return ResponseEntity.ok(joinAuthenticated(joinGameRequest, jwt));
+    }
+
+    private JoinGameResponse joinAuthenticated(JoinGameRequest joinGameRequest, Jwt jwt) {
+        AuthenticatedUser identity = authorizationPolicy.identityOf(jwt);
+
+        // A backend service account is not a player.
+        if (authorizationPolicy.isServiceIdentity(identity)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Service accounts cannot join games.");
+        }
+
         // Reject banned users at the join edge
-        authorizationPolicy.ensureNotBanned(AuthenticatedUser.fromJwt(jwt));
+        authorizationPolicy.ensureNotBanned(identity);
 
         // Validate only the join code is present
         if (joinGameRequest.getJoinCode() == null || joinGameRequest.getJoinCode().isBlank()) {
@@ -117,8 +155,7 @@ public class GameSessionController {
             );
         }
 
-        JoinGameResponse response = sessionService.addAuthenticatedUserToGameSession(joinGameRequest, jwt);
-        return ResponseEntity.ok(response);
+        return sessionService.addAuthenticatedUserToGameSession(joinGameRequest, jwt);
     }
 
 }
