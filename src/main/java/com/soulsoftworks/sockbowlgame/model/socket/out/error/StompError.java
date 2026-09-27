@@ -35,6 +35,19 @@ public class StompError {
     /** Null in M2; M4 fills it for throttling. */
     private Integer retryAfterSeconds;
 
+    /** M4 (optional): the same wait in milliseconds, for client-side lockouts (e.g. the buzzer). */
+    private Long retryAfterMs;
+
+    /**
+     * M4 (optional): the limiter policy that dropped the frame ({@code stomp-send},
+     * {@code stomp-send-ip}, {@code stomp-buzz}); for {@code QUOTA_EXCEEDED} the
+     * quota metric (e.g. {@code hosted-sessions}).
+     */
+    private String policy;
+
+    /** M4 (optional): the SEND destination of the dropped frame. */
+    private String droppedDestination;
+
     public static StompError of(String code, String message, Integer retryAfterSeconds) {
         return StompError.builder().code(code).message(message).retryAfterSeconds(retryAfterSeconds).build();
     }
