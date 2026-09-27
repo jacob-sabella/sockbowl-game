@@ -3,8 +3,11 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.client.PacketNotFoundException;
 import com.soulsoftworks.sockbowlgame.client.QuestionsUnavailableException;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsBonus;
 import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
+import com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
@@ -23,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -35,6 +39,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     public static final String PACKET_NOT_FOUND = "PACKET_NOT_FOUND";
     public static final String PACKET_NOT_AVAILABLE = "PACKET_NOT_AVAILABLE";
     public static final String PACKET_SERVICE_UNAVAILABLE = "PACKET_SERVICE_UNAVAILABLE";
+    public static final String PACKET_EMPTY = "PACKET_EMPTY";
 
     private final PacketClient packetClient;
     private final GameAuthorizationPolicy authorizationPolicy;
@@ -191,17 +196,56 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                     "Packet id " + message.getPacketId() + " is not available for play");
         }
 
-        // Sort the tossups by number
-        packet.getTossups().sort(Comparator.comparingInt(ContainsTossup::getOrder));
+        // PB-13/D7: null tossup lists are treated as empty, and an empty packet
+        // can't be played (there's nothing for AdvanceRound to advance through).
+        List<ContainsTossup> incomingTossups = packet.getTossups() == null ? List.of() : packet.getTossups();
+        if (incomingTossups.isEmpty()) {
+            return ProcessError.coded(message, PACKET_EMPTY, "Packet has no tossups");
+        }
+
+        // Sort the tossups by number, into a fresh mutable list: the incoming
+        // list may be immutable (e.g. built with List.of/List.copyOf), so a
+        // shuffled wire order never determines play order regardless of how
+        // the packet was assembled.
+        List<ContainsTossup> tossups = new ArrayList<>(incomingTossups);
+        tossups.sort(Comparator.comparingInt(ContainsTossup::getOrder));
+        packet.setTossups(tossups);
+
+        // Sort bonuses by order, then each bonus's parts by order, dropping any
+        // bonus left with 0 parts (D7: bonuses pair with tossups by index, so a
+        // dropped bonus mid-packet is logged as a data-quality warning). A null
+        // bonus list means "no bonuses", not an error.
+        List<ContainsBonus> bonuses = packet.getBonuses() == null ? List.of() : packet.getBonuses();
+        List<ContainsBonus> sortedBonuses = new ArrayList<>(bonuses);
+        sortedBonuses.sort(Comparator.comparingInt(ContainsBonus::getOrder));
+
+        List<ContainsBonus> playableBonuses = new ArrayList<>(sortedBonuses.size());
+        for (ContainsBonus containsBonus : sortedBonuses) {
+            Bonus bonus = containsBonus.getBonus();
+            List<HasBonusPart> parts = bonus == null || bonus.getBonusParts() == null
+                    ? List.of() : bonus.getBonusParts();
+            if (parts.isEmpty()) {
+                log.warn("SetMatchPacket {} for session {}: dropping bonus {} with no parts",
+                        message.getPacketId(), gameSession.getId(), bonus == null ? null : bonus.getId());
+                continue;
+            }
+            List<HasBonusPart> sortedParts = new ArrayList<>(parts);
+            sortedParts.sort(Comparator.comparingInt(HasBonusPart::getOrder));
+            bonus.setBonusParts(sortedParts);
+            playableBonuses.add(containsBonus);
+        }
+        packet.setBonuses(playableBonuses);
 
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
 
-        // Return a MatchPacketUpdate (with the tossup count for "Tossup N of M" progress)
+        // Return a MatchPacketUpdate (with the tossup/bonus counts for "Tossup N
+        // of M" progress and "no bonuses" UI)
         return MatchPacketUpdate.builder()
                 .packetId(packet.getId())
                 .packetName(packet.getName())
-                .tossupCount(packet.getTossups().size())
+                .tossupCount(tossups.size())
+                .bonusCount(playableBonuses.size())
                 .build();
     }
 
