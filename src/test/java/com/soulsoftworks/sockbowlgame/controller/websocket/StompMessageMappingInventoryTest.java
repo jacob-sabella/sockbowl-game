@@ -11,6 +11,7 @@ import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
 import com.soulsoftworks.sockbowlgame.security.stomp.StompInboundInterceptor;
 import com.soulsoftworks.sockbowlgame.security.stomp.StompPrincipal;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
+import com.soulsoftworks.sockbowlgame.support.StompMappingClassification;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -56,7 +57,12 @@ import static org.mockito.Mockito.verify;
  *       the authenticated principal's (null / empty for guests), and they
  *       survive the Kafka JSON round trip the consumer sees.</li>
  * </ul>
- * WP-G4 extends this with the owner/proctor/any-player classification check.
+ * WP-G4 adds the classification check: every mapping is in exactly one of
+ * {@link StompMappingClassification}'s {@code OWNER_GATED}, {@code PROCTOR_GATED}
+ * and {@code ANY_PLAYER} sets, which the in-session authorization tests
+ * ({@code SessionOwnershipAuthTest}, {@code InSessionRoleMatrixTest}) iterate,
+ * so a new mapping that nobody classified (and so nobody authorization-tested)
+ * fails the build.
  */
 class StompMessageMappingInventoryTest {
 
@@ -148,6 +154,44 @@ class StompMessageMappingInventoryTest {
         }
         assertThat(destinations).containsExactlyInAnyOrderElementsOf(EXPECTED_DESTINATIONS);
         assertThat(destinations).hasSize(19);
+    }
+
+    @Test
+    void everyMappingIsClassifiedExactlyOnce() throws Exception {
+        List<Mapping> mappings = allMappings();
+        Set<String> discovered = new TreeSet<>();
+        for (Mapping mapping : mappings) {
+            String destination = mapping.destination();
+            discovered.add(destination);
+            int classes = (StompMappingClassification.OWNER_GATED.contains(destination) ? 1 : 0)
+                    + (StompMappingClassification.PROCTOR_GATED.contains(destination) ? 1 : 0)
+                    + (StompMappingClassification.ANY_PLAYER.contains(destination) ? 1 : 0);
+            assertThat(classes)
+                    .as("%s (%s.%s) must be in exactly one of OWNER_GATED, PROCTOR_GATED, ANY_PLAYER "
+                                    + "in StompMappingClassification", destination,
+                            mapping.controller().getSimpleName(), mapping.method().getName())
+                    .isEqualTo(1);
+            assertThat(StompMappingClassification.classOf(destination)).as(destination).isNotNull();
+        }
+        // No stale entries: the classification lists exactly the real mappings.
+        assertThat(StompMappingClassification.ALL).containsExactlyInAnyOrderElementsOf(discovered);
+        assertThat(StompMappingClassification.PROCTOR_IN_PROCTORED_MODES)
+                .isSubsetOf(StompMappingClassification.OWNER_GATED);
+    }
+
+    @Test
+    void classificationMessageTypesMatchWhatEachMappingProduces() throws Exception {
+        Map<String, Class<?>> produced = new LinkedHashMap<>();
+        for (Mapping mapping : allMappings()) {
+            if (!STATELESS_DESTINATIONS.contains(mapping.destination())) {
+                produced.put(mapping.destination(),
+                        invoke(mapping, StompPrincipal.guest(REAL_GAME, REAL_PLAYER)).getClass());
+            }
+        }
+        // The in-session tests build each destination's message from
+        // MESSAGE_TYPES, so it must be the type that destination really produces.
+        assertThat(new LinkedHashMap<String, Class<?>>(StompMappingClassification.MESSAGE_TYPES))
+                .containsExactlyInAnyOrderEntriesOf(produced);
     }
 
     @Test
