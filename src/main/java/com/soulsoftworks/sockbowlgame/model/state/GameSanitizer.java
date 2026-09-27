@@ -25,8 +25,12 @@ public class GameSanitizer {
         // Create a deep copy of the game session
         GameSession sanitizedGameSession = DeepCopyUtil.deepCopy(gameSession, GameSession.class);
 
-        // Now modify the sanitizedGameSession as needed
-        sanitizedGameSession.getPlayerList().forEach(player -> player.setPlayerSecret(""));
+        // Strip credentials and identity (AUTH-10) from every player, including the
+        // copies held inside each team, and the owner subject from the session.
+        // ng only needs player.gameOwner (the boolean), which is kept.
+        stripIdentity(sanitizedGameSession.getPlayerList());
+        stripTeamIdentity(sanitizedGameSession.getTeamList());
+        sanitizedGameSession.setGameOwnerId(null);
 
         if (playerMode != PlayerMode.PROCTOR && sanitizedGameSession.getCurrentMatch().getPacket() != null) {
 
@@ -131,19 +135,61 @@ public class GameSanitizer {
 
 
     /**
-     * Removes the playerSecret from all Player instances in the provided player list.
-     * This ensures that sensitive information is not exposed in the player list.
+     * Copies the player list with every player's credentials and identity removed:
+     * {@code playerSecret} (the guest STOMP credential), {@code keycloakId} and
+     * {@code userId} (AUTH-10). The {@code gameOwner} flag is kept for ng.
      *
-     * @param playerList The list of players whose secrets need to be sanitized.
-     * @return A sanitized copy of the player list with playerSecrets removed.
+     * @param playerList The list of players to sanitize (not modified).
+     * @return A sanitized deep copy of the player list.
      */
     public static List<Player> sanitizePlayerList(List<Player> playerList) {
-        // Create a deep copy of the player list
+        if (playerList == null) {
+            return null;
+        }
         List<Player> sanitizedPlayerList = DeepCopyUtil.deepCopy(playerList, new TypeToken<List<Player>>(){}.getType());
-
-        // Remove the playerSecret from each player in the list
-        sanitizedPlayerList.forEach(player -> player.setPlayerSecret(""));
-
+        stripIdentity(sanitizedPlayerList);
         return sanitizedPlayerList;
+    }
+
+    /**
+     * Copies the team list with the same stripping as {@link #sanitizePlayerList}
+     * applied to each team's players. Teams hold their own copies of each
+     * player (they are serialized separately to Redis), so sanitizing only the
+     * session's player list is not enough.
+     *
+     * @param teamList The list of teams to sanitize (not modified).
+     * @return A sanitized deep copy of the team list.
+     */
+    public static List<Team> sanitizeTeamList(List<Team> teamList) {
+        if (teamList == null) {
+            return null;
+        }
+        List<Team> sanitizedTeamList = DeepCopyUtil.deepCopy(teamList, new TypeToken<List<Team>>(){}.getType());
+        stripTeamIdentity(sanitizedTeamList);
+        return sanitizedTeamList;
+    }
+
+    private static void stripTeamIdentity(List<Team> teams) {
+        if (teams == null) {
+            return;
+        }
+        teams.forEach(team -> {
+            if (team != null) {
+                stripIdentity(team.getTeamPlayers());
+            }
+        });
+    }
+
+    private static void stripIdentity(List<Player> players) {
+        if (players == null) {
+            return;
+        }
+        players.forEach(player -> {
+            if (player != null) {
+                player.setPlayerSecret("");
+                player.setKeycloakId(null);
+                player.setUserId(null);
+            }
+        });
     }
 }
