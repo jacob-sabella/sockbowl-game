@@ -25,8 +25,7 @@ public class GameConfigurationController {
     @MessageMapping("/update-player-team")
     public void updatePlayerTeam(GameSessionInjection gameSessionInjection, UpdatePlayerTeam updatePlayerTeam) {
 
-        updatePlayerTeam.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        updatePlayerTeam.setGameSessionId(gameSessionInjection.getGameSessionId());
+        updatePlayerTeam.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(updatePlayerTeam);
     }
@@ -34,8 +33,7 @@ public class GameConfigurationController {
     @MessageMapping("/set-match-packet")
     public void setMatchPacket(GameSessionInjection gameSessionInjection, SetMatchPacket setMatchPacket) {
 
-        setMatchPacket.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        setMatchPacket.setGameSessionId(gameSessionInjection.getGameSessionId());
+        setMatchPacket.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(setMatchPacket);
     }
@@ -44,8 +42,7 @@ public class GameConfigurationController {
     @MessageMapping("/set-proctor")
     public void setProctor(GameSessionInjection gameSessionInjection, SetProctor setProctor) {
 
-        setProctor.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        setProctor.setGameSessionId(gameSessionInjection.getGameSessionId());
+        setProctor.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(setProctor);
     }
@@ -55,9 +52,8 @@ public class GameConfigurationController {
     public void getGameSession(GameSessionInjection gameSessionInjection) {
 
         GetGameState getGameState = GetGameState.builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
                 .build();
+        getGameState.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(getGameState);
     }
@@ -65,8 +61,7 @@ public class GameConfigurationController {
     @MessageMapping("/update-game-settings")
     public void updateGameSettings(GameSessionInjection gameSessionInjection, UpdateGameSettings updateGameSettings) {
 
-        updateGameSettings.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        updateGameSettings.setGameSessionId(gameSessionInjection.getGameSessionId());
+        updateGameSettings.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(updateGameSettings);
     }

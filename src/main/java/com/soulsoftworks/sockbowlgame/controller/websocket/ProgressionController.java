@@ -22,9 +22,8 @@ public class ProgressionController {
 
         StartMatch startMatch = StartMatch
                 .builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
                 .build();
+        startMatch.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(startMatch);
     }
@@ -34,9 +33,8 @@ public class ProgressionController {
 
         EndMatch endMatch = EndMatch
                 .builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
                 .build();
+        endMatch.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(endMatch);
     }

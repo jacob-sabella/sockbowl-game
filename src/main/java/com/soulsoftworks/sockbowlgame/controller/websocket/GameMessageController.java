@@ -18,40 +18,35 @@ public class GameMessageController {
 
     @MessageMapping("/answer-outcome")
     public void answerCorrect(GameSessionInjection gameSessionInjection, AnswerOutcome answerOutcome) {
-        answerOutcome.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        answerOutcome.setGameSessionId(gameSessionInjection.getGameSessionId());
+        answerOutcome.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(answerOutcome);
     }
 
     @MessageMapping("/player-incoming-buzz")
     public void playerIncomingBuzz(GameSessionInjection gameSessionInjection, PlayerIncomingBuzz playerIncomingBuzz) {
-        playerIncomingBuzz.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        playerIncomingBuzz.setGameSessionId(gameSessionInjection.getGameSessionId());
+        playerIncomingBuzz.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(playerIncomingBuzz);
     }
 
     @MessageMapping("/submit-answer")
     public void submitAnswer(GameSessionInjection gameSessionInjection, SubmitAnswer submitAnswer) {
-        submitAnswer.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        submitAnswer.setGameSessionId(gameSessionInjection.getGameSessionId());
+        submitAnswer.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(submitAnswer);
     }
 
     @MessageMapping("/timeout-round")
     public void timeoutRound(GameSessionInjection gameSessionInjection, TimeoutRound timeoutRound) {
-        timeoutRound.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        timeoutRound.setGameSessionId(gameSessionInjection.getGameSessionId());
+        timeoutRound.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(timeoutRound);
     }
 
     @MessageMapping("/finished-reading")
     public void finishedReading(GameSessionInjection gameSessionInjection, FinishedReading finishedReading) {
-        finishedReading.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        finishedReading.setGameSessionId(gameSessionInjection.getGameSessionId());
+        finishedReading.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(finishedReading);
     }
@@ -61,49 +56,43 @@ public class GameMessageController {
 
         AdvanceRound advanceRound = AdvanceRound
                 .builder()
-                .originatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId())
-                .gameSessionId(gameSessionInjection.getGameSessionId())
                 .build();
+        advanceRound.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(advanceRound);
     }
 
     @MessageMapping("/bonus-part-outcome")
     public void bonusPartOutcome(GameSessionInjection gameSessionInjection, BonusPartOutcome bonusPartOutcome) {
-        bonusPartOutcome.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        bonusPartOutcome.setGameSessionId(gameSessionInjection.getGameSessionId());
+        bonusPartOutcome.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(bonusPartOutcome);
     }
 
     @MessageMapping("/finished-reading-bonus-preamble")
     public void finishedReadingBonusPreamble(GameSessionInjection gameSessionInjection, FinishedReadingBonusPreamble finishedReadingBonusPreamble) {
-        finishedReadingBonusPreamble.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        finishedReadingBonusPreamble.setGameSessionId(gameSessionInjection.getGameSessionId());
+        finishedReadingBonusPreamble.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(finishedReadingBonusPreamble);
     }
 
     @MessageMapping("/finished-reading-bonus-part")
     public void finishedReadingBonusPart(GameSessionInjection gameSessionInjection, FinishedReadingBonusPart finishedReadingBonusPart) {
-        finishedReadingBonusPart.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        finishedReadingBonusPart.setGameSessionId(gameSessionInjection.getGameSessionId());
+        finishedReadingBonusPart.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(finishedReadingBonusPart);
     }
 
     @MessageMapping("/timeout-bonus-part")
     public void timeoutBonusPart(GameSessionInjection gameSessionInjection, TimeoutBonusPart timeoutBonusPart) {
-        timeoutBonusPart.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        timeoutBonusPart.setGameSessionId(gameSessionInjection.getGameSessionId());
+        timeoutBonusPart.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(timeoutBonusPart);
     }
 
     @MessageMapping("/start-bonus")
     public void startBonus(GameSessionInjection gameSessionInjection, StartBonus startBonus) {
-        startBonus.setOriginatingPlayerId(gameSessionInjection.getPlayerIdentifiers().getSimpSessionId());
-        startBonus.setGameSessionId(gameSessionInjection.getGameSessionId());
+        startBonus.stampOrigin(gameSessionInjection);
 
         messageService.sendMessage(startBonus);
     }

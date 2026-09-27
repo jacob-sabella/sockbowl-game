@@ -20,6 +20,16 @@ public class WebSocketUtils {
         return transports;
     }
 
+    /**
+     * CONNECT headers for a guest player seat. Since M2 WP-G2 the server
+     * authenticates every STOMP connection at CONNECT, so a client must send
+     * these (or {@code Authorization: Bearer} for a signed-in seat) before any
+     * SUBSCRIBE or SEND.
+     */
+    public static StompHeaders connectHeaders(String gameSessionId, String playerSessionId, String playerSecret) {
+        return StompTestClient.connectHeaders(gameSessionId, playerSessionId, playerSecret, null);
+    }
+
     public static class SimpleStompFrameHandler extends StompSessionHandlerAdapter implements StompFrameHandler {
         CompletableFuture completableFuture;
 
