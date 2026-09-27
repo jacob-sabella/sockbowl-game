@@ -592,11 +592,10 @@ public class GameMessageProcessor extends MessageProcessor {
         gameSession.getCurrentMatch().advanceRound();
 
         if(gameSession.getCurrentMatch().getMatchState() == MatchState.COMPLETED){
-            // Sanitize and return the session
-            GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
-            return GameSessionUpdate.builder()
-                    .gameSession(gameSessionSanitized)
-                    .build();
+            // One sanitized copy per recipient (G2-01): the finished packet can
+            // still hold unplayed content (a bonus behind a dead tossup), so the
+            // proctor view goes to the proctor only.
+            return GameSessionUpdate.sanitizedForEachRecipient(gameSession);
         }
 
         // Single player: broadcast the next round with the question visible, answer hidden.

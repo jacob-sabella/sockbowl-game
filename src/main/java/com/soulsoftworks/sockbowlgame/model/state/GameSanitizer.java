@@ -16,6 +16,19 @@ public class GameSanitizer {
      * it to ensure privacy and integrity based on the player mode. For example, if the
      * player mode is not PROCTOR, it removes sensitive data such as toss-ups, bonuses,
      * and current round questions and answers.
+     * <p>
+     * In every view, the proctor's included:
+     * <ul>
+     *   <li>player credentials and identity and the session owner subject are
+     *       removed (AUTH-10);</li>
+     *   <li>{@code packet.ownerId} (the packet author's Keycloak subject) is
+     *       removed from the current match and every previous match (G2-02);</li>
+     *   <li>every previous match is reduced to its public view
+     *       ({@link #publicMatchView}): no packet questions or answers, only the
+     *       rounds that were played, each as any player may see it (G2-01). The
+     *       current proctor may not be the proctor who loaded that packet, so
+     *       even the proctor view carries no unplayed question.</li>
+     * </ul>
      *
      * @param gameSession The original game session to be sanitized.
      * @param playerMode  The player mode determining the level of sanitization.
@@ -32,10 +45,20 @@ public class GameSanitizer {
         stripTeamIdentity(sanitizedGameSession.getTeamList());
         sanitizedGameSession.setGameOwnerId(null);
 
-        if (playerMode != PlayerMode.PROCTOR && sanitizedGameSession.getCurrentMatch().getPacket() != null) {
+        // Finished matches: public view only, for everyone (G2-01, G2-02).
+        sanitizedGameSession.setPreviousMatches(publicMatches(sanitizedGameSession.getPreviousMatches()));
 
-                sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
-                sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
+        Match currentMatch = sanitizedGameSession.getCurrentMatch();
+        if (currentMatch == null) {
+            return sanitizedGameSession;
+        }
+        // The packet author's subject is identity, not game data (G2-02).
+        stripPacketOwner(currentMatch.getPacket());
+
+        if (playerMode != PlayerMode.PROCTOR && currentMatch.getPacket() != null) {
+
+                currentMatch.getPacket().setTossups(null);
+                currentMatch.getPacket().setBonuses(null);
 
                 Round currentRound = gameSession.getCurrentMatch().getCurrentRound();
                 GameMode gameMode = gameSession.getGameSettings().getGameMode();
@@ -44,16 +67,88 @@ public class GameSanitizer {
                     Round replacement = (gameMode != null && gameMode.isAutoJudgedMultiplayer())
                             ? revealQuestionHideAnswer(sanitizedGameSession.getCurrentRound(), gameMode)
                             : sanitizeRound(sanitizedGameSession.getCurrentRound());
-                    sanitizedGameSession.getCurrentMatch().setCurrentRound(replacement);
+                    currentMatch.setCurrentRound(replacement);
                 } else if (currentRound != null) {
-                    sanitizedGameSession.getCurrentMatch().setCurrentRound(
-                            publicRoundView(sanitizedGameSession.getCurrentRound()));
+                    currentMatch.setCurrentRound(publicRoundView(sanitizedGameSession.getCurrentRound()));
                 }
-                sanitizedGameSession.getCurrentMatch().setPreviousRounds(
-                        publicRounds(sanitizedGameSession.getCurrentMatch().getPreviousRounds()));
+                currentMatch.setPreviousRounds(publicRounds(currentMatch.getPreviousRounds()));
         }
 
         return sanitizedGameSession;
+    }
+
+    /**
+     * The view of a finished match that any player may see (G2-01): a match
+     * ended early (end-match at round 1, say) still holds its whole packet, so
+     * the packet keeps only its metadata (no tossups, no bonuses, no owner
+     * subject), every played round is reduced to {@link #publicRoundView}, a
+     * round still in progress when the match ended keeps its question and
+     * answer only if its tossup had been decided, and a bonus that was never
+     * started is dropped. Returns a deep copy; the
+     * input is not modified. Null-safe.
+     */
+    public static Match publicMatchView(Match match) {
+        if (match == null) {
+            return null;
+        }
+        Match copy = DeepCopyUtil.deepCopy(match, Match.class);
+        if (copy.getPacket() != null) {
+            copy.getPacket().setTossups(null);
+            copy.getPacket().setBonuses(null);
+            stripPacketOwner(copy.getPacket());
+        }
+        copy.setCurrentRound(finishedRoundView(copy.getCurrentRound()));
+        List<Round> previousRounds = copy.getPreviousRounds();
+        if (previousRounds != null) {
+            List<Round> views = new java.util.ArrayList<>(previousRounds.size());
+            for (Round r : previousRounds) {
+                views.add(finishedRoundView(r));
+            }
+            copy.setPreviousRounds(views);
+        }
+        return copy;
+    }
+
+    /**
+     * A round of a finished match: {@link #publicRoundView} when its tossup was
+     * decided, otherwise nothing of its question or answer. A bonus that was
+     * never started is dropped whole (preamble and part questions too), since
+     * the same packet can be played again.
+     */
+    private static Round finishedRoundView(Round round) {
+        if (round == null) {
+            return null;
+        }
+        if (!isTossupDecided(round.getRoundState())) {
+            Round hidden = sanitizeRound(round);
+            hidden.setCurrentBonus(null);
+            hidden.setAssociatedBonus(null);
+            return hidden;
+        }
+        Round view = publicRoundView(round);
+        if (view.getCurrentBonus() == null) {
+            view.setAssociatedBonus(null);
+        }
+        return view;
+    }
+
+    /** {@link #publicMatchView} applied to every match of a list (a new list). Null-safe. */
+    public static List<Match> publicMatches(List<Match> matches) {
+        if (matches == null) {
+            return null;
+        }
+        List<Match> views = new java.util.ArrayList<>(matches.size());
+        for (Match m : matches) {
+            views.add(publicMatchView(m));
+        }
+        return views;
+    }
+
+    private static void stripPacketOwner(com.soulsoftworks.sockbowlquestions.models.nodes.Packet packet) {
+        if (packet != null) {
+            packet.setOwnerId(null);
+            packet.setOwnerDisplayName(null);
+        }
     }
 
     /**
