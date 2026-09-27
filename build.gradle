@@ -17,12 +17,12 @@ group = 'com.soulsoftworks'
 version = resolveVersion(providers)
 
 java {
-    // Java 17 reaches EOL Sept 2026; 21 is the current LTS (EOL Sept 2028).
+    // Java 17 reaches EOL Sept 2026; 25 is the current LTS (EOL Sept 2029).
     // A toolchain (rather than sourceCompatibility) pins the exact JDK used to
     // compile/test/run regardless of which JDK launched Gradle itself; the
     // foojay-resolver plugin (settings.gradle) auto-provisions it if missing.
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -31,9 +31,6 @@ dependencyManagement {
         mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2025.1.3'
     }
     dependencies {
-        // Spring Boot's own implicit BOM manages logback-core at 1.5.34 (its CVE-2021-42550 pin);
-        // override forward to the newer CVE fix — see the `constraints` block in dependencies{} for why.
-        dependency 'ch.qos.logback:logback-core:1.5.38'
         // Spring Boot 4.1.1's BOM still manages lombok at 1.18.46; override so the
         // unversioned compileOnly/annotationProcessor declarations below pick up
         // the same 1.18.48 as the explicitly versioned `implementation` one and
@@ -84,22 +81,18 @@ repositories {
 dependencies {
     // Transitive CVE fixes: these libs aren't declared directly, but pulled in below their
     // patched version by redis-om-spring (opennlp/djl via redisvl) and spring-cloud-starter-openfeign
-    // (bouncycastle). logback-core's own constraint (see the CVE-2021-42550 selection reason) just
-    // hadn't been bumped to the latest patch. Pin all four forward; remove once the parent bumps.
+    // (bouncycastle). Pin forward; remove once the parent bumps.
     constraints {
-        implementation('ch.qos.logback:logback-core:1.5.38') {
-            because 'CVE fix: Object Injection through HardenedObjectInputStream modules (GHSA, fixed 1.5.35+)'
-        }
         implementation('org.apache.opennlp:opennlp-tools:2.5.12') {
             because 'CVEs: XXE in DictionaryEntryPersistor, arbitrary class instantiation via ExtensionLoader, OOM DoS (fixed 2.5.9+)'
         }
-        implementation('ai.djl:api:0.36.0') {
+        implementation('ai.djl:api:0.38.0') {
             because 'CVE fix: path traversal issue (fixed 0.31.1+)'
         }
-        implementation('ai.djl.huggingface:tokenizers:0.36.0') {
+        implementation('ai.djl.huggingface:tokenizers:0.38.0') {
             because 'Kept in lockstep with ai.djl:api to avoid a binary-incompatible mismatch'
         }
-        implementation('org.bouncycastle:bcprov-jdk18on:1.85.2') {
+        implementation('org.bouncycastle:bcprov-jdk18on:1.86') {
             because 'CVE fix: LDAP injection (fixed 1.84+)'
         }
     }
@@ -151,14 +144,13 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     // 2.0 renamed the JUnit 5 integration module from `junit-jupiter` to
     // `testcontainers-junit-jupiter` (same `org.testcontainers.junit.jupiter`
-    // package; no source changes needed). testcontainers-redis-junit-jupiter
-    // hasn't published a 2.x-compatible release, but only pulls in an old
-    // `testcontainers-redis`/`lettucemod` combo for the `RedisContainer` type;
-    // Gradle's version conflict resolution still selects our newer, explicit
-    // `testcontainers` core here for anything on the test classpath.
+    // package; no source changes needed). com.redis:testcontainers-redis 2.x
+    // is the 2.0-compatible successor to the old
+    // com.redis.testcontainers:testcontainers-redis-junit-jupiter artifact;
+    // same `com.redis.testcontainers.RedisContainer` type, no import changes.
     testImplementation 'org.testcontainers:testcontainers:2.0.5'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
-    testImplementation 'com.redis.testcontainers:testcontainers-redis-junit-jupiter:1.4.6'
+    testImplementation 'com.redis:testcontainers-redis:2.2.4'
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     // Matches the okhttp-jvm 5.x brought in transitively (e.g. by feign-okhttp);
