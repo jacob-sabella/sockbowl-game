@@ -99,36 +99,39 @@ public class SessionService {
      * @throws ResponseStatusException 404 when no game has that join code
      */
     public JoinGameResponse addPlayerToGameSessionWithJoinCode(JoinGameRequest joinGameRequest) {
-        Player newPlayer = null;
+        String gameSessionId = requireGameSessionByJoinCode(joinGameRequest.getJoinCode()).getId();
 
-        GameSession gameSession = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
+        // Load, add and save under the session's lock (M2R2-LIVE-01). The
+        // session is re-read inside the lock: the copy found above may already
+        // be stale, and saving it would erase a concurrent writer's change.
+        return GameSessionLocks.withLock(gameSessionId, () -> {
+            GameSession gameSession = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
 
-        PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(gameSession.getGameSettings().getGameMode());
+            PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(gameSession.getGameSettings().getGameMode());
 
-        JoinGameResponse joinGameResponse = new JoinGameResponse();
+            JoinGameResponse joinGameResponse = new JoinGameResponse();
 
-        //TODO: This isnt permanent solution to player ID
-        joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
+            //TODO: This isnt permanent solution to player ID
+            joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
 
-        if (gameSession.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
-            joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
-        } else {
-            newPlayer = gameSession.addPlayer(joinGameRequest);
+            if (gameSession.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
+                joinGameResponse.setJoinStatus(JoinStatus.SESSION_FULL);
+                return joinGameResponse;
+            }
+
+            Player newPlayer = gameSession.addPlayer(joinGameRequest);
             seatSinglePlayerJoiner(gameSession, newPlayer);
             if (gameSession.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {
                 seatFreeForAllJoiner(gameSession, newPlayer);
             }
             saveGameSession(gameSession);
-            joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
-        }
 
-        if(joinGameResponse.getJoinStatus() == JoinStatus.SUCCESS && newPlayer != null){
+            joinGameResponse.setJoinStatus(JoinStatus.SUCCESS);
             joinGameResponse.setGameSessionId(gameSession.getId());
             joinGameResponse.setPlayerSessionId(joinGameRequest.getPlayerSessionId());
             joinGameResponse.setPlayerSecret(newPlayer.getPlayerSecret());
-        }
-
-        return joinGameResponse;
+            return joinGameResponse;
+        });
     }
 
     /**
@@ -161,6 +164,12 @@ public class SessionService {
         team.addPlayerToTeam(player);
     }
 
+    /**
+     * Save the whole session document. Callers that loaded the session to
+     * mutate it must hold {@link GameSessionLocks#withLock} for its id from
+     * the load through this save, or they can erase a concurrent writer's
+     * change (M2R2-LIVE-01).
+     */
     public void saveGameSession(GameSession gameSession) {
         gameSessionRepository.save(gameSession);
     }
@@ -262,31 +271,41 @@ public class SessionService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Join game session
-        PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(
-                gameSession.getGameSettings().getGameMode()
-        );
-
+        // Join game session: load, add and save under the session's lock
+        // (M2R2-LIVE-01), then record history outside it.
+        String gameSessionId = gameSession.getId();
         JoinGameResponse response = new JoinGameResponse();
-        joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
+        Player player = GameSessionLocks.withLock(gameSessionId, () -> {
+            GameSession current = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
+            PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(
+                    current.getGameSettings().getGameMode()
+            );
 
-        if (gameSession.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
+            joinGameRequest.setPlayerSessionId(UUID.randomUUID().toString());
+
+            if (current.getActivePlayerCount() >= playerSettings.getMaxPlayers()) {
+                return null;
+            }
+
+            // Create player with user link
+            // addPlayer binds the durable Keycloak identity and decides ownership in
+            // one place: the creator of an authenticated session owns it, nobody else.
+            Player joined = current.addPlayer(joinGameRequest, keycloakId);
+            joined.setUserId(user.getId().toString());
+            joined.setName(user.getName());  // Use Keycloak name
+            seatSinglePlayerJoiner(current, joined);
+            if (current.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {
+                seatFreeForAllJoiner(current, joined);
+            }
+
+            saveGameSession(current);
+            return joined;
+        });
+
+        if (player == null) {
             response.setJoinStatus(JoinStatus.SESSION_FULL);
             return response;
         }
-
-        // Create player with user link
-        // addPlayer binds the durable Keycloak identity and decides ownership in
-        // one place: the creator of an authenticated session owns it, nobody else.
-        Player player = gameSession.addPlayer(joinGameRequest, keycloakId);
-        player.setUserId(user.getId().toString());
-        player.setName(user.getName());  // Use Keycloak name
-        seatSinglePlayerJoiner(gameSession, player);
-        if (gameSession.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {
-            seatFreeForAllJoiner(gameSession, player);
-        }
-
-        saveGameSession(gameSession);
 
         // Record in persistent history
         UserGameHistory history = UserGameHistory.builder()

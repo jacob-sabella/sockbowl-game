@@ -56,11 +56,25 @@ public class GameTimerService {
 
         for (GameSession session : activeSessions) {
             try {
-                processSessionTimers(session);
+                GameSessionLocks.withLock(session.getId(), () -> processLockedSessionTimers(session.getId()));
             } catch (Exception e) {
                 log.error("Error processing timers for session {}: {}", session.getId(), e.getMessage(), e);
             }
         }
+    }
+
+    /**
+     * Tick one session while holding its lock (M2R2-LIVE-01). The copy from
+     * {@link SessionService#getAllActiveSessions()} was loaded before the lock
+     * and may be stale (a join or a processed message saved since), so the
+     * session is re-read here; saving the stale copy would erase that change.
+     */
+    private void processLockedSessionTimers(String gameSessionId) {
+        GameSession current = sessionService.getGameSessionById(gameSessionId);
+        if (current == null) {
+            return; // expired since the scan
+        }
+        processSessionTimers(current);
     }
 
     /**
