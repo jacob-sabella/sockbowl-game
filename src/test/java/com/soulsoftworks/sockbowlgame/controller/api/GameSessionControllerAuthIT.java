@@ -11,6 +11,7 @@ import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.model.state.ProctorType;
+import com.soulsoftworks.sockbowlgame.repository.IpBanRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.service.BanService;
@@ -119,6 +120,9 @@ class GameSessionControllerAuthIT {
     private UserRepository userRepository;
     @MockitoBean
     private UserGameHistoryRepository userGameHistoryRepository;
+    // M4 IP bans (JPA is off in this context, so the repository is mocked too).
+    @MockitoBean
+    private IpBanRepository ipBanRepository;
 
     @BeforeEach
     void stubs() {

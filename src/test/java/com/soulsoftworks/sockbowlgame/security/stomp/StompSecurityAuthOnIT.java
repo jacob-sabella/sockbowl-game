@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.model.entity.UserGameHistory;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.repository.IpBanRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.service.BanService;
@@ -68,6 +69,9 @@ class StompSecurityAuthOnIT extends StompSecurityITSupport {
     UserRepository userRepository;
     @MockitoBean
     UserGameHistoryRepository userGameHistoryRepository;
+    // M4 IP bans (JPA is off in this context, so the repository is mocked too).
+    @MockitoBean
+    IpBanRepository ipBanRepository;
 
     private GameSession game;
     private JoinGameResponse alice;

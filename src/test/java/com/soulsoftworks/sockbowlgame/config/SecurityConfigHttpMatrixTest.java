@@ -2,11 +2,13 @@ package com.soulsoftworks.sockbowlgame.config;
 
 import com.google.gson.Gson;
 import com.soulsoftworks.sockbowlgame.controller.api.AdminBanController;
+import com.soulsoftworks.sockbowlgame.controller.api.AdminIpBanController;
 import com.soulsoftworks.sockbowlgame.controller.api.AuthController;
 import com.soulsoftworks.sockbowlgame.controller.api.GameSessionController;
 import com.soulsoftworks.sockbowlgame.controller.api.UserController;
 import com.soulsoftworks.sockbowlgame.controller.exception.GlobalExceptionHandler;
 import com.soulsoftworks.sockbowlgame.model.entity.BanRecord;
+import com.soulsoftworks.sockbowlgame.model.entity.IpBan;
 import com.soulsoftworks.sockbowlgame.model.entity.User;
 import com.soulsoftworks.sockbowlgame.model.entity.UserStats;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
@@ -20,6 +22,7 @@ import com.soulsoftworks.sockbowlgame.service.SessionService;
 import com.soulsoftworks.sockbowlgame.service.UserService;
 import com.soulsoftworks.sockbowlgame.service.UserUsedQuestionService;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import com.soulsoftworks.sockbowlgame.service.ban.IpBanService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -76,6 +79,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(properties = {"sockbowl.auth.enabled=true", "sockbowl.test.url-probes=true"})
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, GameAuthorizationPolicy.class,
         GameSessionController.class, AuthController.class, UserController.class, AdminBanController.class,
+        AdminIpBanController.class,
         SecurityMatrixProbeController.class})
 @ContextConfiguration(classes = SecurityConfigHttpMatrixTest.TestApp.class)
 class SecurityConfigHttpMatrixTest {
@@ -97,6 +101,8 @@ class SecurityConfigHttpMatrixTest {
     private SessionService sessionService;
     @MockitoBean
     private BanService banService;
+    @MockitoBean
+    private IpBanService ipBanService;
     @MockitoBean
     private UserService userService;
     @MockitoBean
@@ -124,6 +130,11 @@ class SecurityConfigHttpMatrixTest {
         when(banService.createBan(anyString(), any(), any(), any())).thenReturn(
                 BanRecord.builder().id(UUID.randomUUID()).bannedKeycloakId("x").reason("r").build());
         when(banService.removeBan(any())).thenReturn(true);
+        when(ipBanService.listActive()).thenReturn(List.of());
+        when(ipBanService.create(anyString(), any(), any(), any(), any())).thenReturn(
+                IpBan.builder().id(UUID.randomUUID()).cidr("203.0.113.7/32").reason("r")
+                        .createdAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).build());
+        when(ipBanService.remove(any())).thenReturn(true);
 
         when(jwtDecoder.decode(eq("not-a-valid-token"))).thenThrow(new BadJwtException("bad token"));
     }
@@ -168,6 +179,7 @@ class SecurityConfigHttpMatrixTest {
                     .build());
     private static final String JOIN_BODY = "{\"joinCode\":\"ABCDEF\",\"name\":\"Guest\"}";
     private static final String BAN_BODY = "{\"bannedKeycloakId\":\"victim\",\"reason\":\"spam\"}";
+    private static final String IP_BAN_BODY = "{\"cidr\":\"203.0.113.7/32\",\"reason\":\"spam\",\"ttlSeconds\":3600}";
 
     /**
      * One row per endpoint: method, path, body, then the expected status for
@@ -175,6 +187,7 @@ class SecurityConfigHttpMatrixTest {
      */
     static Stream<Arguments> matrix() {
         String banPath = "/api/v1/admin/bans/" + UUID.randomUUID();
+        String ipBanPath = "/api/v1/admin/bans/ip/" + UUID.randomUUID();
         return Stream.of(
             // Guest endpoints (D1): anyone may host/join; a service token may not.
             row("POST", "/api/v1/session/create-new-game-session", CREATE_BODY, 200, 200, 200, 200, 403),
@@ -195,6 +208,10 @@ class SecurityConfigHttpMatrixTest {
             row("GET", "/api/v1/admin/bans", null, 401, 403, 200, 200, 403),
             row("POST", "/api/v1/admin/bans", BAN_BODY, 401, 403, 201, 201, 403),
             row("DELETE", banPath, null, 401, 403, 204, 204, 403),
+            // IP bans (M4, D8): user:ban as well.
+            row("GET", "/api/v1/admin/bans/ip", null, 401, 403, 200, 200, 403),
+            row("POST", "/api/v1/admin/bans/ip", IP_BAN_BODY, 401, 403, 201, 201, 403),
+            row("DELETE", ipBanPath, null, 401, 403, 204, 204, 403),
             // Other admin pages: admin:access only.
             row("GET", "/api/v1/admin/console", null, 401, 403, 403, 200, 403),
             // Removed routes and unmapped paths: denied, never served.
