@@ -76,11 +76,11 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         Match newMatch = new Match();
         gameSession.setCurrentMatch(newMatch);
 
-        // Return a sanitized game session update with Proctor privileges since there is nothing to hide anymore
-        GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR);
-        return GameSessionUpdate.builder()
-                .gameSession(gameSessionSanitized)
-                .build();
+        // One sanitized copy per recipient (G2-01). The finished match still holds
+        // its whole packet, unplayed questions included, so the proctor view must
+        // not be broadcast; previousMatches is reduced to its public view in every
+        // copy by the sanitizer.
+        return GameSessionUpdate.sanitizedForEachRecipient(gameSession);
     }
 
 

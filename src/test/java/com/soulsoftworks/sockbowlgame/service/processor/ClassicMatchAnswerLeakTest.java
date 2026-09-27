@@ -1,6 +1,9 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
+import com.soulsoftworks.sockbowlgame.client.PacketClient;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
+import com.soulsoftworks.sockbowlgame.model.socket.in.progression.EndMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
@@ -8,6 +11,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.game.BonusUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.util.PacketBuilderHelper;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import com.soulsoftworks.sockbowlquestions.models.nodes.BonusPart;
@@ -29,6 +33,7 @@ import java.util.function.Supplier;
 
 import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createTeams;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 /**
  * G-02: in QUIZ_BOWL_CLASSIC only the proctor may read an answer before it has
@@ -39,10 +44,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * <ul>
  *   <li>a tossup answer only once that tossup has been judged;</li>
  *   <li>a bonus part answer only once that part has been judged (or timed out);</li>
- *   <li>the answers of a bonus that was never played (dead tossup) never.</li>
+ *   <li>the answers of a bonus that was never played (dead tossup) never,
+ *       including in the match-completed and end-match updates and in
+ *       previousMatches afterwards (G2-01);</li>
+ *   <li>the packet author's Keycloak subject never, to anyone, the proctor
+ *       included (G2-02).</li>
  * </ul>
- * The final match-completed broadcast (the whole finished packet) is accepted
- * and not checked.
+ * get-game goes through the real ConfigurationMessageProcessor.
  */
 class ClassicMatchAnswerLeakTest {
 
@@ -53,10 +61,16 @@ class ClassicMatchAnswerLeakTest {
     private static final List<String> B2 = List.of("Dolphin", "Eagle", "Falcon"); // never played
     private static final List<String> B3 = List.of("Gorilla", "Heron", "Ibis");
 
+    private static final String PACKET_OWNER_SUB = "kc-packet-author-sub";
+    private static final String Q1 = "This French emperor lost at Waterloo.";
+    private static final String Q2 = "This English playwright wrote Hamlet.";
+    private static final String Q3 = "This composer wrote nine symphonies.";
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private GameMessageProcessor gameProcessor;
     private ProgressionMessageProcessor progressionProcessor;
+    private ConfigurationMessageProcessor configProcessor;
     private GameSession session;
     private Player proctor;
     private Player p1;
@@ -71,6 +85,8 @@ class ClassicMatchAnswerLeakTest {
     void setup() {
         gameProcessor = new GameMessageProcessor();
         progressionProcessor = new ProgressionMessageProcessor();
+        configProcessor = new ConfigurationMessageProcessor(mock(PacketClient.class),
+                new GameAuthorizationPolicy(false, null));
 
         proctor = Player.builder().playerId("proctor").name("proctor")
                 .playerMode(PlayerMode.PROCTOR).isGameOwner(true).build();
@@ -95,6 +111,8 @@ class ClassicMatchAnswerLeakTest {
                         .build())
                 .build();
         session.getCurrentMatch().setPacket(packet());
+        // A stored session from before G2-02 may still carry the author's subject.
+        session.getCurrentMatch().getPacket().setOwnerId(PACKET_OWNER_SUB);
 
         allAnswers.addAll(List.of(T1, T2, T3));
         allAnswers.addAll(B1);
@@ -105,11 +123,11 @@ class ClassicMatchAnswerLeakTest {
     private static Packet packet() {
         List<ContainsTossup> tossups = List.of(
                 PacketBuilderHelper.createTossup(1, 0, Tossup.builder()
-                        .question("This French emperor lost at Waterloo.").answer("<b><u>" + T1 + "</u></b>").build()),
+                        .question(Q1).answer("<b><u>" + T1 + "</u></b>").build()),
                 PacketBuilderHelper.createTossup(2, 1, Tossup.builder()
-                        .question("This English playwright wrote Hamlet.").answer("<b><u>" + T2 + "</u></b>").build()),
+                        .question(Q2).answer("<b><u>" + T2 + "</u></b>").build()),
                 PacketBuilderHelper.createTossup(3, 2, Tossup.builder()
-                        .question("This composer wrote nine symphonies.").answer("<b><u>" + T3 + "</u></b>").build()));
+                        .question(Q3).answer("<b><u>" + T3 + "</u></b>").build()));
         List<ContainsBonus> bonuses = List.of(
                 PacketBuilderHelper.createBonus(1, 0, bonus(B1)),
                 PacketBuilderHelper.createBonus(2, 1, bonus(B2)),
@@ -137,19 +155,36 @@ class ClassicMatchAnswerLeakTest {
         List<SockbowlOutMessage> flat = out instanceof SockbowlMultiOutMessage multi
                 ? multi.getSockbowlOutMessages() : List.of(out);
         for (SockbowlOutMessage m : flat) {
+            String where = label + " -> " + m.getClass().getSimpleName()
+                    + " to " + (m.getRecipients().isEmpty() ? "everyone" : m.getRecipients());
+            assertNoOwnerSub(where, m);
             boolean proctorOnly = !m.getRecipients().isEmpty()
                     && m.getRecipients().stream().allMatch(proctor.getPlayerId()::equals);
             if (!proctorOnly) {
-                assertNoSecretAnswers(label + " -> " + m.getClass().getSimpleName()
-                        + " to " + (m.getRecipients().isEmpty() ? "everyone" : m.getRecipients()), m);
+                assertNoSecretAnswers(where, m);
             }
         }
-        // get-game as each non-proctor at this point.
-        for (PlayerMode mode : List.of(PlayerMode.BUZZER, PlayerMode.SPECTATOR)) {
-            assertNoSecretAnswers(label + " -> get-game as " + mode,
-                    GameSanitizer.sanitizeGameSession(session, mode));
+        // get-game as each non-proctor at this point, through the real processor.
+        for (String playerId : List.of("p1", "p2", "watcher")) {
+            SockbowlOutMessage view = getGame(playerId);
+            assertNoOwnerSub(label + " -> get-game as " + playerId, view);
+            assertNoSecretAnswers(label + " -> get-game as " + playerId, view);
         }
+        assertNoOwnerSub(label + " -> get-game as proctor", getGame(proctor.getPlayerId()));
         return out;
+    }
+
+    private SockbowlOutMessage getGame(String playerId) {
+        SockbowlOutMessage out = configProcessor.processMessage(GetGameState.builder()
+                .gameSession(session).originatingPlayerId(playerId).build());
+        assertInstanceOf(GameSessionUpdate.class, out);
+        assertEquals(List.of(playerId), out.getRecipients());
+        return out;
+    }
+
+    private void assertNoOwnerSub(String where, Object payload) {
+        String json = JSON.writeValueAsString(payload);
+        assertFalse(json.contains(PACKET_OWNER_SUB), where + " carries the packet owner's subject: " + json);
     }
 
     private void assertNoSecretAnswers(String where, Object payload) {
@@ -262,10 +297,86 @@ class ClassicMatchAnswerLeakTest {
         }
         assertTrue(checkedMessages > 50, "checked " + checkedMessages);
 
-        // Last advance ends the match: the finished packet goes to everyone (accepted).
-        SockbowlOutMessage end = advance();
-        assertInstanceOf(GameSessionUpdate.class, end);
+        // Last advance completes the match. The proctor gets the proctor view,
+        // everyone else the player view: the never-played bonus stays secret (G2-01).
+        SockbowlOutMessage completed = step("match completed", this::advance);
         assertEquals(MatchState.COMPLETED, session.getCurrentMatch().getMatchState());
+        assertSessionUpdateSplit(completed);
+
+        // end-match files the finished match under previousMatches; neither the
+        // end-match updates nor any later get-game carry the unplayed bonus.
+        SockbowlOutMessage ended = step("end match", this::endMatch);
+        assertSessionUpdateSplit(ended);
+        assertEquals(1, session.getPreviousMatches().size());
+        assertEquals(MatchState.CONFIG, session.getCurrentMatch().getMatchState());
+        for (String secret : B2) {
+            assertFalse(publicAnswers.contains(secret));
+        }
+    }
+
+    @Test
+    @DisplayName("end-match at round 1: no unplayed question, answer or owner subject in the updates or a later get-game")
+    void endMatchAtRoundOneLeaksNothing() {
+        step("start", () -> progressionProcessor.startMatch(StartMatch.builder()
+                .gameSession(session).originatingPlayerId(proctor.getPlayerId()).build()));
+
+        // The proctor ends the match while tossup 1 is still being read.
+        SockbowlOutMessage ended = step("end match at round 1", this::endMatch);
+        assertSessionUpdateSplit(ended);
+        assertEquals(1, session.getPreviousMatches().size());
+        // The stored finished match still holds the whole packet...
+        assertNotNull(session.getPreviousMatches().get(0).getPacket().getTossups());
+
+        // ...but no copy of the update, the proctor's included, carries any of it:
+        // nothing of the finished match was ever judged, and the new match has no packet.
+        List<SockbowlOutMessage> updates = ((SockbowlMultiOutMessage) ended).getSockbowlOutMessages();
+        for (SockbowlOutMessage update : updates) {
+            assertNothingOfThePacket("end-match to " + update.getRecipients(), update);
+        }
+        for (String playerId : List.of("proctor", "p1", "p2", "watcher")) {
+            assertNothingOfThePacket("later get-game as " + playerId, getGame(playerId));
+        }
+        // previousMatches keeps the packet's name for history, nothing more.
+        GameSession view = ((GameSessionUpdate) getGame("p1")).getGameSession();
+        assertEquals("Leak Packet", view.getPreviousMatches().get(0).getPacket().getName());
+        assertNull(view.getPreviousMatches().get(0).getPacket().getTossups());
+        assertNull(view.getPreviousMatches().get(0).getPacket().getBonuses());
+        assertNull(view.getPreviousMatches().get(0).getPacket().getOwnerId());
+
+        // Reloading the same packet for the next match gives the players nothing in advance.
+        session.getCurrentMatch().setPacket(packet());
+        for (String playerId : List.of("p1", "p2", "watcher")) {
+            assertNothingOfThePacket("get-game after reload as " + playerId, getGame(playerId));
+        }
+    }
+
+    /** No answer, no tossup question, no bonus text and no owner subject. */
+    private void assertNothingOfThePacket(String where, Object payload) {
+        String json = JSON.writeValueAsString(payload);
+        for (String secret : allAnswers) {
+            assertFalse(json.contains(secret), where + " carries answer '" + secret + "': " + json);
+        }
+        for (String question : List.of(Q1, Q2, Q3, "A three-part bonus.")) {
+            assertFalse(json.contains(question), where + " carries question '" + question + "': " + json);
+        }
+        assertFalse(json.contains(PACKET_OWNER_SUB), where + " carries the packet owner's subject: " + json);
+    }
+
+    private SockbowlOutMessage endMatch() {
+        return progressionProcessor.endMatch(EndMatch.builder()
+                .gameSession(session).originatingPlayerId(proctor.getPlayerId()).build());
+    }
+
+    /** A GameSessionUpdate to the proctor alone, and a separate one addressed to everyone else. */
+    private void assertSessionUpdateSplit(SockbowlOutMessage out) {
+        assertInstanceOf(SockbowlMultiOutMessage.class, out);
+        List<SockbowlOutMessage> messages = ((SockbowlMultiOutMessage) out).getSockbowlOutMessages();
+        assertTrue(messages.stream().allMatch(GameSessionUpdate.class::isInstance), messages.toString());
+        assertTrue(messages.stream().noneMatch(m -> m.getRecipients().isEmpty()),
+                "a GameSessionUpdate is broadcast unaddressed: " + messages);
+        assertEquals(2, messages.size(), messages.toString());
+        assertTrue(messages.stream().anyMatch(m -> m.getRecipients().equals(List.of(proctor.getPlayerId()))));
+        assertTrue(messages.stream().anyMatch(m -> m.getRecipients().equals(List.of("p1", "p2", "watcher"))));
     }
 
     /** The proctor gets the full round; everyone else a separate, addressed copy. */

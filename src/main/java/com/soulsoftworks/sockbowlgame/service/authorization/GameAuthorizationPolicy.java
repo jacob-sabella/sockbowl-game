@@ -251,11 +251,20 @@ public class GameAuthorizationPolicy {
      *   <li>QUIZ_BOWL_CLASSIC, CONFIG: the owner may assign anyone, and any
      *       player may claim the role for themselves while no proctor is set
      *       (first-come proctor claim).</li>
-     *   <li>QUIZ_BOWL_CLASSIC, after CONFIG: only the owner, to replace a
-     *       proctor who left mid-match. Self-claims are refused once the match
-     *       has started, so a player cannot become proctor to read the
-     *       remaining answers. The new proctor is taken off their team.</li>
+     *   <li>QUIZ_BOWL_CLASSIC, after CONFIG: only the owner. Self-claims are
+     *       refused once the match has started, so a player cannot become
+     *       proctor to read the remaining answers. The new proctor is taken off
+     *       their team.</li>
      * </ul>
+     * <p>Owner reassignment after CONFIG is allowed whether or not the seated
+     * proctor is still present (G2-04, recorded decision). The server does not
+     * track connection state ({@link com.soulsoftworks.sockbowlgame.model.state.Player#getPlayerStatus()}
+     * is never updated), so "the proctor left" cannot be told apart from "the
+     * proctor is here", and requiring it would leave a match with a vanished
+     * proctor stuck. The owner hosts the game and is trusted to run it; an owner
+     * who takes the seat mid-match cannot use it to buzz with the answers: the
+     * seat takes them off their team, team changes are CONFIG-only, and in
+     * CONFIG any change of the seat clears the loaded packet (G2-03).
      */
     public boolean canManageProctor(GameSession session, String askingPlayerId, String targetPlayerId) {
         if (session == null || askingPlayerId == null) {

@@ -100,6 +100,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.builder().error("Player already on team").recipient(updatePlayerTeamMessage.getOriginatingPlayerId()).build();
         }
 
+        // A proctor who moves to a team (or is moved) gives up the seat (G2-03).
+        boolean vacatesProctorSeat = targetPlayer.getPlayerMode() == PlayerMode.PROCTOR;
+
         // If the player is currently in a team, remove the player from the current team
         if (currentTeam != null && !currentTeam.getTeamId().equals(Team.SPECTATOR_TEAM)) {
             currentTeam.getTeamPlayers().remove(targetPlayer);
@@ -116,8 +119,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             targetPlayer.setPlayerMode(PlayerMode.BUZZER);
         }
 
-        // Return a PlayerRosterUpdate
-        return PlayerRosterUpdate.fromGameSession(gameSession);
+        // Return a PlayerRosterUpdate, plus the packet reset if leaving the seat cleared it
+        return withPacketReset(PlayerRosterUpdate.fromGameSession(gameSession),
+                vacatesProctorSeat && clearPacketOnProctorChange(gameSession));
     }
 
     /**
@@ -191,6 +195,12 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                     "Packet id " + message.getPacketId() + " is not available for play");
         }
 
+        // The author's Keycloak subject was only needed for the visibility check
+        // above; it is identity, so it is never stored in or sent with the
+        // session (G2-02, AUTH-10).
+        packet.setOwnerId(null);
+        packet.setOwnerDisplayName(null);
+
         // Sort the tossups by number
         packet.getTossups().sort(Comparator.comparingInt(ContainsTossup::getOrder));
 
@@ -225,7 +235,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * A success message is returned.
      * <p>
      * Proctorless modes reject every SetProctor. Once the match has started only the owner may
-     * reassign the proctor (to replace one who left); a self-claim then is a wrong-state error.
+     * reassign the proctor (typically to replace one who left; see
+     * {@link GameAuthorizationPolicy#canManageProctor}); a self-claim then is a wrong-state error.
+     * <p>
+     * In CONFIG, a SetProctor that seats a different player (or fills an empty seat) clears the
+     * loaded packet and broadcasts a {@link MatchPacketUpdate} with no packet (G2-03).
      *
      * @param setProctor The incoming message that contains the necessary information
      *                   to set a player as proctor.
@@ -263,9 +277,20 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.builder().recipient(message.getOriginatingPlayerId()).error("Player id " + message.getTargetPlayer() + " does not exist").build();
         }
 
+        // The seat changes hands (or is filled while empty) in CONFIG: the packet
+        // the previous proctor loaded, or one left over from a proctorless mode,
+        // must not reach the new proctor, who would read every answer and could
+        // then return to a team (G2-03). The new proctor loads it again. After
+        // CONFIG the owner is replacing a proctor mid-match, and the match needs
+        // its packet, so it stays.
+        Player previousProctor = gameSession.getProctor();
+        boolean seatChangesHands = previousProctor == null
+                || !previousProctor.getPlayerId().equals(targetPlayer.getPlayerId());
+        boolean packetCleared = seatChangesHands && clearPacketOnProctorChange(gameSession);
+
         // If there is currently a proctor set, unset the proctor
-        if (gameSession.getProctor() != null) {
-            gameSession.getProctor().setPlayerMode(PlayerMode.SPECTATOR);
+        if (previousProctor != null) {
+            previousProctor.setPlayerMode(PlayerMode.SPECTATOR);
         }
 
         // Set the target player as proctor for the current match in the game session
@@ -277,8 +302,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             team.removePlayerFromTeam(targetPlayer.getPlayerId());
         }
 
-        // Return a PlayerRosterUpdate
-        return PlayerRosterUpdate.fromGameSession(gameSession);
+        // Return a PlayerRosterUpdate, plus the packet reset if the seat change cleared it
+        return withPacketReset(PlayerRosterUpdate.fromGameSession(gameSession), packetCleared);
     }
 
 
@@ -335,8 +360,18 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
         }
 
+        boolean wasProctorless = gameSession.getGameSettings().isProctorless();
+
         // Update settings
         gameSession.setGameSettings(updateGameSettings.getGameSettings());
+
+        // Switching between a proctored and a proctorless mode changes who the
+        // loaded packet is for (a proctor, or the owner of a game nobody
+        // proctors), so it is cleared and loaded again (G2-03).
+        boolean isProctorless = gameSession.getGameSettings() != null && gameSession.getGameSettings().isProctorless();
+        if (wasProctorless != isProctorless) {
+            clearPacketOnProctorChange(gameSession);
+        }
 
         // Switching to a proctorless mode ends the proctor role: a proctor left
         // seated would keep receiving the proctor view (every answer) in a game
@@ -351,42 +386,40 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Return a sanitized game session update. The raw session carries every
         // player's secret and identity (AUTH-10) and, once a packet is set, its
         // answers, so it must never be broadcast as-is.
-        return sanitizedSessionUpdateForAll(gameSession);
+        return GameSessionUpdate.sanitizedForEachRecipient(gameSession);
     }
 
     /**
-     * A {@link GameSessionUpdate} for every player in the session, each copy
-     * sanitized for its recipient: the proctor (if any) gets the proctor view,
-     * everyone else the player view. Sent as targeted messages rather than one
-     * broadcast so the proctor's view never reaches other players.
+     * Clears the loaded packet when the proctor seat changes in CONFIG (G2-03).
+     * The packet was loaded by, and checked against, the proctor who held the
+     * seat (or the owner in a proctorless mode); nobody else may read it
+     * through the proctor view, so the next proctor has to load it again.
+     * A no-op outside CONFIG and when no packet is loaded.
+     *
+     * @return true if a loaded packet was cleared
      */
-    private SockbowlOutMessage sanitizedSessionUpdateForAll(GameSession gameSession) {
-        Player proctor = gameSession.getProctor();
-        if (proctor == null) {
-            // No proctor: everyone gets the same player view, so a broadcast is fine.
-            return GameSessionUpdate.builder()
-                    .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.SPECTATOR))
-                    .build();
+    private static boolean clearPacketOnProctorChange(GameSession gameSession) {
+        Match match = gameSession.getCurrentMatch();
+        if (match == null || match.getMatchState() != MatchState.CONFIG) {
+            return false;
         }
+        Packet packet = match.getPacket();
+        boolean loaded = packet != null && packet.getId() != null && !packet.getId().isBlank();
+        match.setPacket(new Packet());
+        return loaded;
+    }
 
-        SockbowlMultiOutMessage.SockbowlMultiOutMessageBuilder<?, ?> multi = SockbowlMultiOutMessage.builder()
-                .sockbowlOutMessage(GameSessionUpdate.builder()
-                        .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR))
-                        .recipient(proctor.getPlayerId())
-                        .build());
-
-        List<String> others = gameSession.getPlayerList().stream()
-                .map(Player::getPlayerId)
-                .filter(id -> !id.equals(proctor.getPlayerId()))
-                .toList();
-        // An empty recipient list means "broadcast", which would send the player
-        // view over the proctor's, so only add it when someone else is present.
-        if (!others.isEmpty()) {
-            multi.sockbowlOutMessage(GameSessionUpdate.builder()
-                    .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.SPECTATOR))
-                    .recipients(others)
-                    .build());
+    /**
+     * {@code update}, followed by a broadcast {@link MatchPacketUpdate} with no
+     * packet when {@code packetCleared}, so every client drops the selection.
+     */
+    private static SockbowlOutMessage withPacketReset(SockbowlOutMessage update, boolean packetCleared) {
+        if (!packetCleared) {
+            return update;
         }
-        return multi.build();
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(update)
+                .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).build())
+                .build();
     }
 }
