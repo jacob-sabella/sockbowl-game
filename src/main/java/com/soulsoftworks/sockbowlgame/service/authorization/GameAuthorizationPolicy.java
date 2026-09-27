@@ -3,6 +3,7 @@ package com.soulsoftworks.sockbowlgame.service.authorization;
 import com.soulsoftworks.sockbowlgame.controller.exception.UserBannedException;
 import com.soulsoftworks.sockbowlgame.model.security.AuthenticatedUser;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.MatchState;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.service.BanService;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
@@ -169,6 +170,18 @@ public class GameAuthorizationPolicy {
     }
 
     /**
+     * True when the Keycloak subject has an active ban. For callers that hold
+     * only the subject (a STOMP principal). False for a null/blank subject or
+     * when bans are not enabled.
+     */
+    public boolean isSubjectBanned(String keycloakId) {
+        return banService != null
+                && keycloakId != null
+                && !keycloakId.isBlank()
+                && banService.isBanned(keycloakId);
+    }
+
+    /**
      * Guard that throws {@link UserBannedException} when a banned identity tries
      * to act. No-op for guests, un-banned users, or when bans are not enabled.
      */
@@ -230,16 +243,39 @@ public class GameAuthorizationPolicy {
     }
 
     /**
-     * The session owner may assign any proctor. A player may also claim the
-     * proctor role for themselves while no proctor is set yet.
+     * Who may seat a proctor (G-01). The proctor sees every answer, so the role
+     * only exists where a human proctor does:
+     * <ul>
+     *   <li>Proctorless modes (SINGLE_PLAYER, AUTO_PROCTOR, FREE_FOR_ALL):
+     *       nobody, the owner included. There is no proctor role to hand out.</li>
+     *   <li>QUIZ_BOWL_CLASSIC, CONFIG: the owner may assign anyone, and any
+     *       player may claim the role for themselves while no proctor is set
+     *       (first-come proctor claim).</li>
+     *   <li>QUIZ_BOWL_CLASSIC, after CONFIG: only the owner, to replace a
+     *       proctor who left mid-match. Self-claims are refused once the match
+     *       has started, so a player cannot become proctor to read the
+     *       remaining answers. The new proctor is taken off their team.</li>
+     * </ul>
      */
     public boolean canManageProctor(GameSession session, String askingPlayerId, String targetPlayerId) {
+        if (session == null || askingPlayerId == null) {
+            return false;
+        }
+        if (session.getGameSettings() != null && session.getGameSettings().isProctorless()) {
+            return false;
+        }
         if (isSessionOwner(session, askingPlayerId)) {
             return true;
         }
-        return askingPlayerId != null
-                && askingPlayerId.equals(targetPlayerId)
+        return askingPlayerId.equals(targetPlayerId)
+                && isInConfig(session)
                 && session.getProctor() == null;
+    }
+
+    /** True while no match has started (no match yet counts as CONFIG). */
+    private static boolean isInConfig(GameSession session) {
+        return session.getCurrentMatch() == null
+                || session.getCurrentMatch().getMatchState() == MatchState.CONFIG;
     }
 
     /* ------------------------------------------------------------------ */

@@ -14,7 +14,14 @@ import com.soulsoftworks.sockbowlgame.service.UserService;
 import com.soulsoftworks.sockbowlgame.service.UserUsedQuestionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.soulsoftworks.sockbowlgame.controller.api.AdminBanController;
+import com.soulsoftworks.sockbowlgame.model.entity.BanRecord;
+import com.soulsoftworks.sockbowlgame.model.request.CreateBanRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -32,12 +39,14 @@ import java.util.concurrent.BlockingQueue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
  * STOMP security end to end with {@code sockbowl.auth.enabled=true} (plan
  * m2-auth WP-G2; AUTH-02, AUTH-04, AUTH-16): signed-in players connect with
- * their own JWT, bans are enforced at CONNECT and on SEND, and handler-time
+ * their own JWT, bans are enforced at CONNECT, SUBSCRIBE and SEND, a new ban closes the
+ * banned user's live sockets (G-04), and handler-time
  * errors are non-fatal {@code StompError}s on {@code /user/queue/errors}. The
  * {@link JwtDecoder} is mocked (the real decoder is covered by
  * {@code StompConnectAuthenticatorTest}); JPA collaborators are mocked as in
@@ -68,6 +77,8 @@ class StompSecurityAuthOnIT extends StompSecurityITSupport {
     UserRepository userRepository;
     @MockitoBean
     UserGameHistoryRepository userGameHistoryRepository;
+    @Autowired
+    AdminBanController adminBans;
 
     private GameSession game;
     private JoinGameResponse alice;
@@ -214,5 +225,38 @@ class StompSecurityAuthOnIT extends StompSecurityITSupport {
 
         JsonObject error = json(requestUntilReply(c, "/app/game/config/get-game", "{}", errors));
         assertThat(error.get("code").getAsString()).isEqualTo("BANNED");
+    }
+
+    @Test
+    void banCreatedMidGameClosesTheBannedUsersLiveSockets() throws Exception {
+        // G-04: a subscription keeps delivering events with no frame from the
+        // client, so creating the ban must end mallory's connection itself.
+        StompTestClient.Connection m = connect(game.getId(), mallory.getPlayerSessionId(), null, "tok-mallory");
+        m.awaitConnected();
+        m.subscribe("/queue/event/" + game.getId());
+        m.subscribe(playerQueue(mallory));
+        StompTestClient.Connection a = connect(game.getId(), alice.getPlayerSessionId(), null, "tok-alice");
+        a.awaitConnected();
+        a.subscribe("/queue/event/" + game.getId());
+        awaitSubscribed("/queue/event/" + game.getId(), 2);
+        awaitSubscribed(playerQueue(mallory), 1);
+
+        when(banService.createBan(eq("kc-mallory"), any(), any(), any())).thenReturn(BanRecord.builder()
+                .id(UUID.randomUUID()).bannedKeycloakId("kc-mallory").reason("cheating")
+                .bannedBy("kc-admin").createdAt(Instant.now()).build());
+        when(banService.isBanned("kc-mallory")).thenReturn(true);
+
+        Jwt admin = jwt("tok-admin", "kc-admin", "sockbowl-game", Instant.now().plusSeconds(300), "user:ban");
+        SecurityContextHolder.getContext().setAuthentication(
+                new JwtAuthenticationToken(admin, List.of(new SimpleGrantedAuthority("user:ban"))));
+        try {
+            adminBans.createBan(CreateBanRequest.builder().bannedKeycloakId("kc-mallory").reason("cheating").build(),
+                    admin);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertFatal(m, StompErrorCode.BANNED);
+        assertThat(a.isConnected()).as("other players stay connected").isTrue();
     }
 }

@@ -434,12 +434,13 @@ public class GameMessageProcessor extends MessageProcessor {
     /** Broadcast an AnswerUpdate to all players — full round when completed (answer revealed), else answer hidden. */
     private SockbowlOutMessage createProctorlessAnswerUpdate(GameSession gameSession, boolean correct) {
         Round round = gameSession.getCurrentRound();
+        // COMPLETED: the full round, minus the answers of a bonus that was never played.
         Round view = round.getRoundState() == RoundState.COMPLETED
-                ? round
+                ? GameSanitizer.publicRoundView(round)
                 : GameSanitizer.revealQuestionHideAnswer(round, gameSession.getGameSettings().getGameMode());
         AnswerUpdate update = AnswerUpdate.builder()
                 .currentRound(view)
-                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                 .correct(correct)
                 .build();
         return SockbowlMultiOutMessage.builder().sockbowlOutMessage(update).build();
@@ -447,8 +448,8 @@ public class GameMessageProcessor extends MessageProcessor {
 
     private SockbowlOutMessage createSinglePlayerAnswerUpdate(GameSession gameSession, boolean isCorrect) {
         AnswerUpdate answerUpdate = AnswerUpdate.builder()
-                .currentRound(gameSession.getCurrentRound())
-                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .currentRound(GameSanitizer.publicRoundView(gameSession.getCurrentRound()))
+                .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                 .correct(isCorrect)
                 .build(); // no recipient → broadcast to the session
 
@@ -602,7 +603,7 @@ public class GameMessageProcessor extends MessageProcessor {
         if (proctorless) {
             RoundUpdate roundUpdate = RoundUpdate.builder()
                     .round(GameSanitizer.revealQuestionHideAnswer(gameSession.getCurrentRound(), gameSession.getGameSettings().getGameMode()))
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                    .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                     .build();
             return SockbowlMultiOutMessage.builder()
                     .sockbowlOutMessage(roundUpdate)
@@ -671,10 +672,11 @@ public class GameMessageProcessor extends MessageProcessor {
         RoundUpdate fullContextUpdate;
 
         if (gameSession.getCurrentRound().getRoundState() == RoundState.COMPLETED) {
-            // If round is completed, create full context update without specific recipients
+            // If round is completed, send everyone the public view: the tossup and any
+            // bonus that was played, but never the answers of a bonus that was not (G-02).
             fullContextUpdate = RoundUpdate.builder()
-                    .round(gameSession.getCurrentRound())
-                    .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                    .round(GameSanitizer.publicRoundView(gameSession.getCurrentRound()))
+                    .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                     .build(); // No recipient is set, so it will be sent to all players
 
             return SockbowlMultiOutMessage.builder()
@@ -691,7 +693,7 @@ public class GameMessageProcessor extends MessageProcessor {
 
         RoundUpdate limitedContextUpdate = RoundUpdate.builder()
                 .round(sanitizeRound(gameSession.getCurrentRound()))
-                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                 .recipients(gameSession.getPlayerList().stream()
                         .map(Player::getPlayerId)
                         .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
@@ -714,31 +716,47 @@ public class GameMessageProcessor extends MessageProcessor {
      * @return SockbowlOutMessage containing the appropriate messages based on the round state.
      */
     private SockbowlOutMessage createAnswerUpdateMessages(GameSession gameSession, boolean isCorrect) {
+        String proctorId = gameSession.getProctor().getPlayerId();
+
+        // Check if the round is completed
+        if (gameSession.getCurrentRound().getRoundState() == RoundState.COMPLETED) {
+            // If round is completed, broadcast one public view: the tossup answer is
+            // out, but a bonus that was never played keeps its answers (G-02).
+            return SockbowlMultiOutMessage.builder()
+                    .sockbowlOutMessage(AnswerUpdate.builder()
+                            .currentRound(GameSanitizer.publicRoundView(gameSession.getCurrentRound()))
+                            .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
+                            .correct(isCorrect)
+                            .playerId(proctorId)
+                            .build())
+                    .build();
+        }
+
+        // The full round (tossup answer, bonus answers) goes to the proctor only.
+        // playerId is a payload field, not an address: without a recipient this
+        // message would be broadcast to every player (G-02).
         AnswerUpdate fullContextMessage = AnswerUpdate.builder()
                 .currentRound(gameSession.getCurrentRound())
                 .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
                 .correct(isCorrect)
-                .playerId(gameSession.getProctor().getPlayerId())
+                .playerId(proctorId)
+                .recipient(proctorId)
                 .build();
-
-        // Check if the round is completed
-        if (gameSession.getCurrentRound().getRoundState() == RoundState.COMPLETED) {
-            // If round is completed, return only the full context update
-            return SockbowlMultiOutMessage.builder()
-                    .sockbowlOutMessage(fullContextMessage)
-                    .build();
-        }
 
         // Create limited context message for other players
         Round roundForLimitedContext = sanitizeRound(gameSession.getCurrentRound());
         List<String> nonProctorPlayerIds = gameSession.getPlayerList().stream()
                 .map(Player::getPlayerId)
-                .filter(playerId -> !playerId.equals(gameSession.getProctor().getPlayerId()))
+                .filter(playerId -> !playerId.equals(proctorId))
                 .toList();
+        if (nonProctorPlayerIds.isEmpty()) {
+            // An empty recipient list means "broadcast"; nobody else is here.
+            return SockbowlMultiOutMessage.builder().sockbowlOutMessage(fullContextMessage).build();
+        }
 
         AnswerUpdate limitedContextMessage = AnswerUpdate.builder()
                 .currentRound(roundForLimitedContext)
-                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                 .correct(isCorrect)
                 .recipients(nonProctorPlayerIds)
                 .build();
@@ -922,24 +940,48 @@ public class GameMessageProcessor extends MessageProcessor {
     }
 
     /**
-     * Creates bonus update messages - full context for everyone since bonus answers are public
+     * Creates bonus update messages (G-02). The proctor gets the full round; every other
+     * player gets {@link GameSanitizer#publicRoundView}: answers only for the bonus parts
+     * already judged, never for the parts still to be read.
      *
      * @param gameSession The game session
      * @param partIndex Which part was just judged
      * @param correct Whether it was correct
-     * @return BonusUpdate message
+     * @return BonusUpdate message(s)
      */
     private SockbowlOutMessage createBonusUpdateMessages(GameSession gameSession, int partIndex, boolean correct) {
-        BonusUpdate bonusUpdate = BonusUpdate.builder()
-                .currentRound(gameSession.getCurrentRound())
-                .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+        Player proctor = gameSession.getProctor();
+        BonusUpdate publicUpdate = BonusUpdate.builder()
+                .currentRound(GameSanitizer.publicRoundView(gameSession.getCurrentRound()))
+                .previousRounds(GameSanitizer.publicRounds(gameSession.getCurrentMatch().getPreviousRounds()))
                 .partIndex(partIndex)
                 .correct(correct)
                 .build();
 
-        return SockbowlMultiOutMessage.builder()
-                .sockbowlOutMessage(bonusUpdate)
-                .build();
+        if (proctor == null) {
+            // No proctor to keep secrets for: everyone gets the public view.
+            return SockbowlMultiOutMessage.builder().sockbowlOutMessage(publicUpdate).build();
+        }
+
+        SockbowlMultiOutMessage.SockbowlMultiOutMessageBuilder<?, ?> multi = SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(BonusUpdate.builder()
+                        .currentRound(gameSession.getCurrentRound())
+                        .previousRounds(gameSession.getCurrentMatch().getPreviousRounds())
+                        .partIndex(partIndex)
+                        .correct(correct)
+                        .recipient(proctor.getPlayerId())
+                        .build());
+
+        List<String> others = gameSession.getPlayerList().stream()
+                .map(Player::getPlayerId)
+                .filter(id -> !id.equals(proctor.getPlayerId()))
+                .toList();
+        // An empty recipient list means "broadcast", so only address the others when there are some.
+        if (!others.isEmpty()) {
+            publicUpdate.setRecipients(others);
+            multi.sockbowlOutMessage(publicUpdate);
+        }
+        return multi.build();
     }
 
 

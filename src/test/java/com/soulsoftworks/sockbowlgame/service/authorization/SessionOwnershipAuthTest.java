@@ -381,4 +381,157 @@ class SessionOwnershipAuthTest {
             assertTrue(p.getPlayerSecret() == null || p.getPlayerSecret().isBlank(), "secret " + p.getPlayerId());
         }
     }
+
+    /* ------------------------------------------------------------------ */
+    /* Proctor claims (G-01)                                              */
+    /* ------------------------------------------------------------------ */
+
+    /** Every answer in the fixture packet (tossups and bonus parts). */
+    private static final List<String> FIXTURE_ANSWERS = List.of("Napoleon", "Shakespeare", "alpha", "beta", "gamma");
+
+    /** Put the room's match IN_GAME the way its mode allows (proctored: seat the teammate first). */
+    private static void startMatch(InSessionFixture fx, Room room) {
+        InSessionFixture.selectPacket(room.session());
+        String starter = room.owner();
+        if (!room.session().getGameSettings().isProctorless()) {
+            // The teammate is alone on team 2: move a non-owner over before seating
+            // the teammate as proctor so both teams keep a player.
+            String mover = room.nonOwners().get(room.nonOwners().size() - 1);
+            room.session().getTeamByPlayerId(mover).removePlayerFromTeam(mover);
+            room.session().getTeamByPlayerId(room.teammate()).addPlayerToTeam(room.player(mover));
+            InSessionFixture.makeProctor(room.session(), room.teammate());
+            starter = room.teammate();
+        }
+        SockbowlOutMessage out = fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), starter, null));
+        assertFalse(out instanceof ProcessError, "fixture: could not start the match: " + out);
+        assertEquals(MatchState.IN_GAME, room.session().getCurrentMatch().getMatchState());
+    }
+
+    private static SockbowlOutMessage claimProctor(InSessionFixture fx, Room room, String sender, String target) {
+        return fx.dispatch(InSessionFixture.message(SET_PROCTOR, room.session(), sender,
+                m -> ((SetProctor) m).setTargetPlayer(target)));
+    }
+
+    /** get-game as {@code playerId}, serialized as it goes on the wire. */
+    private static String getGameJson(InSessionFixture fx, Room room, String playerId) {
+        List<GameSessionUpdate> updates = sessionUpdates(
+                fx.dispatch(InSessionFixture.message(GET_GAME, room.session(), playerId, null)));
+        assertEquals(1, updates.size());
+        return new com.google.gson.Gson().toJson(updates.get(0).getGameSession());
+    }
+
+    private static void assertNoAnswers(String json) {
+        for (String answer : FIXTURE_ANSWERS) {
+            assertFalse(json.contains(answer), "answer '" + answer + "' leaked: " + json);
+        }
+    }
+
+    @TestFactory
+    @DisplayName("SetProctor(self) from a non-owner is refused in proctorless modes and once a match has started")
+    Stream<DynamicTest> proctorSelfClaimRefusedOutsideClassicConfig() {
+        List<DynamicTest> tests = new ArrayList<>();
+        List<GameMode> modes = List.of(GameMode.AUTO_PROCTOR, GameMode.FREE_FOR_ALL, GameMode.SINGLE_PLAYER,
+                GameMode.QUIZ_BOWL_CLASSIC);
+        for (Creator creator : Creator.values()) {
+            for (GameMode mode : modes) {
+                for (MatchState state : List.of(MatchState.CONFIG, MatchState.IN_GAME)) {
+                    if (mode == GameMode.QUIZ_BOWL_CLASSIC && state == MatchState.CONFIG) {
+                        continue; // first-come claim, allowed (see below)
+                    }
+                    tests.add(DynamicTest.dynamicTest(mode + " " + state + " [" + creator + "]", () -> {
+                        InSessionFixture fx = new InSessionFixture();
+                        Room room = fx.room(creator, mode);
+                        InSessionFixture.selectPacket(room.session());
+                        if (state == MatchState.IN_GAME) {
+                            startMatch(fx, room);
+                            if (mode == GameMode.QUIZ_BOWL_CLASSIC) {
+                                // The proctor has left: the seat is empty mid-match.
+                                room.player(room.teammate()).setPlayerMode(PlayerMode.SPECTATOR);
+                                assertNull(room.session().getProctor());
+                            }
+                        }
+                        String claimant = room.nonOwners().get(0);
+
+                        SockbowlOutMessage out = claimProctor(fx, room, claimant, claimant);
+
+                        assertInstanceOf(ProcessError.class, out, "self-claim accepted: " + out);
+                        assertNotEquals(PlayerMode.PROCTOR, room.player(claimant).getPlayerMode());
+                        assertNoAnswers(getGameJson(fx, room, claimant));
+                    }));
+                }
+            }
+        }
+        return tests.stream();
+    }
+
+    @Test
+    @DisplayName("Proctorless modes have no proctor role: the owner cannot seat one either")
+    void ownerCannotSeatAProctorInProctorlessModes() {
+        for (GameMode mode : List.of(GameMode.AUTO_PROCTOR, GameMode.FREE_FOR_ALL, GameMode.SINGLE_PLAYER)) {
+            InSessionFixture fx = new InSessionFixture();
+            Room room = fx.room(Creator.AUTHENTICATED, mode);
+            InSessionFixture.selectPacket(room.session());
+            assertTrue(InSessionFixture.isAccessDenied(claimProctor(fx, room, room.owner(), room.teammate())), mode.name());
+            assertTrue(InSessionFixture.isAccessDenied(claimProctor(fx, room, room.owner(), room.owner())), mode.name());
+            assertNull(room.session().getProctor(), mode.name());
+        }
+    }
+
+    @Test
+    @DisplayName("QUIZ_BOWL_CLASSIC in CONFIG keeps the first-come proctor claim")
+    void classicConfigFirstComeClaimStillWorks() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        InSessionFixture.selectPacket(room.session());
+        String claimant = room.nonOwners().get(0);
+
+        SockbowlOutMessage out = claimProctor(fx, room, claimant, claimant);
+
+        assertFalse(out instanceof ProcessError, "first-come claim refused: " + out);
+        assertEquals(PlayerMode.PROCTOR, room.player(claimant).getPlayerMode());
+        // A second claimant is refused while the seat is taken.
+        String second = room.nonOwners().get(1);
+        assertTrue(InSessionFixture.isAccessDenied(claimProctor(fx, room, second, second)));
+    }
+
+    @Test
+    @DisplayName("QUIZ_BOWL_CLASSIC mid-match: the owner may still replace the proctor")
+    void classicOwnerMayReplaceTheProctorMidMatch() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        startMatch(fx, room);
+        String replacement = room.nonOwners().get(0);
+
+        SockbowlOutMessage out = claimProctor(fx, room, room.owner(), replacement);
+
+        assertFalse(out instanceof ProcessError, "owner reassignment refused: " + out);
+        assertEquals(PlayerMode.PROCTOR, room.player(replacement).getPlayerMode());
+        assertEquals(PlayerMode.SPECTATOR, room.player(room.teammate()).getPlayerMode());
+        assertNull(room.session().getTeamByPlayerId(replacement), "new proctor must leave their team");
+    }
+
+    @Test
+    @DisplayName("Switching a proctored room to a proctorless mode unseats the proctor")
+    void switchingToProctorlessModeUnseatsTheProctor() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        InSessionFixture.selectPacket(room.session());
+        String claimant = room.nonOwners().get(0);
+        assertFalse(claimProctor(fx, room, claimant, claimant) instanceof ProcessError);
+
+        SockbowlOutMessage out = fx.dispatch(InSessionFixture.message(UPDATE_GAME_SETTINGS, room.session(), claimant,
+                m -> ((UpdateGameSettings) m).setGameSettings(GameSettings.builder()
+                        .gameMode(GameMode.AUTO_PROCTOR).bonusesEnabled(true)
+                        .timerSettings(new TimerSettings()).build())));
+        assertFalse(out instanceof ProcessError, "settings update refused: " + out);
+
+        assertNull(room.session().getProctor());
+        assertEquals(PlayerMode.SPECTATOR, room.player(claimant).getPlayerMode());
+        assertNoAnswers(getGameJson(fx, room, claimant));
+
+        // And once the owner starts the match, the former proctor still reads no answers.
+        SockbowlOutMessage started = fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), room.owner(), null));
+        assertFalse(started instanceof ProcessError, "start refused: " + started);
+        assertNoAnswers(getGameJson(fx, room, claimant));
+    }
 }

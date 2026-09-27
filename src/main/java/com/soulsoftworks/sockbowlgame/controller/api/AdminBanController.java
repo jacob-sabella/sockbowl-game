@@ -4,8 +4,10 @@ import com.soulsoftworks.sockbowlgame.model.entity.BanRecord;
 import com.soulsoftworks.sockbowlgame.model.request.CreateBanRequest;
 import com.soulsoftworks.sockbowlgame.model.response.BanResponse;
 import com.soulsoftworks.sockbowlgame.service.BanService;
+import com.soulsoftworks.sockbowlgame.service.UserBannedEvent;
 import jakarta.validation.Valid;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,9 +34,11 @@ import java.util.UUID;
 public class AdminBanController {
 
     private final BanService banService;
+    private final ApplicationEventPublisher events;
 
-    public AdminBanController(BanService banService) {
+    public AdminBanController(BanService banService, ApplicationEventPublisher events) {
         this.banService = banService;
+        this.events = events;
     }
 
     /**
@@ -59,6 +63,8 @@ public class AdminBanController {
                 request.getReason(),
                 bannedBy,
                 request.getExpiresAt());
+        // Close the banned user's live game connections (G-04).
+        events.publishEvent(new UserBannedEvent(request.getBannedKeycloakId(), request.getExpiresAt()));
         return ResponseEntity.status(HttpStatus.CREATED).body(BanResponse.fromEntity(ban));
     }
 
