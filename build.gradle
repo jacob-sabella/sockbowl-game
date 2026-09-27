@@ -116,6 +116,15 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     implementation 'com.redis.om:redis-om-spring:2.0.10'
     implementation 'com.google.code.gson:gson:2.14.0'
+    // M4 limiter core: Redis-backed token buckets (bucket4j over a dedicated
+    // Lettuce connection; Redis OM keeps its own Jedis factory) and in-memory
+    // per-connection buckets / small local caches (Caffeine). lettuce-core and
+    // caffeine versions are managed by the Spring Boot BOM so they stay in step
+    // with spring-data-redis.
+    implementation 'com.bucket4j:bucket4j_jdk17-core:8.20.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.20.0'
+    implementation 'io.lettuce:lettuce-core'
+    implementation 'com.github.ben-manes.caffeine:caffeine'
     implementation 'org.projectlombok:lombok:1.18.48'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
     // Health endpoint only (see application.properties) for compose healthchecks.
