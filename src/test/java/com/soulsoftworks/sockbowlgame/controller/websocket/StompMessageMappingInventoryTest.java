@@ -1,6 +1,8 @@
 package com.soulsoftworks.sockbowlgame.controller.websocket;
 
 import com.soulsoftworks.sockbowlgame.config.WebSocketConfig;
+import com.soulsoftworks.sockbowlgame.config.WebSocketLimitsProperties;
+import com.soulsoftworks.sockbowlgame.websocket.ClientIpHandshakeInterceptor;
 import com.soulsoftworks.sockbowlgame.controller.resolver.GameSessionInjectionResolver;
 import com.soulsoftworks.sockbowlgame.model.request.GameSessionInjection;
 import com.soulsoftworks.sockbowlgame.model.request.PlayerIdentifiers;
@@ -133,7 +135,8 @@ class StompMessageMappingInventoryTest {
     @Test
     void brokerPrefixesAreQueueAppAndUser() {
         WebSocketConfig config = new WebSocketConfig(mock(GameSessionInjectionResolver.class),
-                mock(StompInboundInterceptor.class));
+                mock(StompInboundInterceptor.class), mock(ClientIpHandshakeInterceptor.class),
+                new WebSocketLimitsProperties());
         MessageBrokerRegistry registry = mock(MessageBrokerRegistry.class);
         config.configureMessageBroker(registry);
 
