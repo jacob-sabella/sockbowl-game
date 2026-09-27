@@ -66,6 +66,26 @@ class SockbowlStompErrorHandlerTest {
     }
 
     @Test
+    void rateLimitedCarriesRetryAfterAndPolicy() {
+        Message<byte[]> error = handler.handleClientMessageProcessingError(message(frame(StompCommand.SEND, "/app/x")),
+                new StompRejectedException(StompErrorCode.RATE_LIMITED, "flood", 10, "stomp-flood"));
+        assertThat(headers(error).getMessage()).isEqualTo("RATE_LIMITED");
+        assertThat(headers(error).getFirstNativeHeader("x-sockbowl-error")).isEqualTo("RATE_LIMITED");
+        JsonObject body = body(error);
+        assertThat(body.get("code").getAsString()).isEqualTo("RATE_LIMITED");
+        assertThat(body.get("retryAfterSeconds").getAsInt()).isEqualTo(10);
+        assertThat(body.get("policy").getAsString()).isEqualTo("stomp-flood");
+    }
+
+    @Test
+    void policyIsOmittedWhenThereIsNone() {
+        Message<byte[]> error = handler.handleClientMessageProcessingError(message(frame(StompCommand.CONNECT, null)),
+                new StompRejectedException(StompErrorCode.IP_BANNED, "banned", 60));
+        assertThat(body(error).has("policy")).isFalse();
+        assertThat(body(error).get("code").getAsString()).isEqualTo("IP_BANNED");
+    }
+
+    @Test
     void unknownExceptionIsInternalWithoutLeakingDetails() {
         RuntimeException secret = new IllegalStateException("db password=hunter2 at com.example.Foo");
         Message<byte[]> error = handler.handleClientMessageProcessingError(

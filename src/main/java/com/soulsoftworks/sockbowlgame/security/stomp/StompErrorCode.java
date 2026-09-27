@@ -30,5 +30,16 @@ public enum StompErrorCode {
     /** SEND outside {@code /app/**}, or SUBSCRIBE outside the caller's own queues. */
     FORBIDDEN_DESTINATION,
     /** Anything unexpected; never carries a stack trace on the wire. */
-    INTERNAL
+    INTERNAL,
+    /**
+     * M4: too many frames. As an ERROR frame (CONNECT over {@code ws-connect}, or a
+     * SEND flood that emptied {@code stomp-flood}) the socket is closed; as a
+     * {@code StompError} on {@code /user/queue/errors} the frame was dropped and
+     * the socket stays open. Carries {@code retryAfterSeconds} and {@code policy}.
+     */
+    RATE_LIMITED,
+    /** M4: a quota (e.g. {@code hosted-sessions}) is used up. */
+    QUOTA_EXCEEDED,
+    /** M4: the client address is inside an active IP/CIDR ban (CONNECT is refused). */
+    IP_BANNED
 }

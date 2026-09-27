@@ -28,6 +28,9 @@ import java.util.Map;
  *
  * {"code":"&lt;CODE&gt;","message":"&lt;detail&gt;","retryAfterSeconds":null}
  * </pre>
+ * M4 appends an optional {@code "policy"} field (e.g. {@code "stomp-flood"},
+ * {@code "ws-connect"}) for limiter rejections; it is omitted when there is none,
+ * so every M2 body is unchanged.
  * The {@link StompRejectedException} is found anywhere in the cause chain (the
  * channel wraps interceptor exceptions). Anything else becomes {@code INTERNAL}
  * with a generic message: no exception text or stack trace reaches the wire. The
@@ -47,10 +50,12 @@ public class SockbowlStompErrorHandler extends StompSubProtocolErrorHandler {
         StompErrorCode code;
         String detail;
         Integer retryAfterSeconds;
+        String policy = null;
         if (rejected != null) {
             code = rejected.getCode();
             detail = rejected.getDetail() != null ? rejected.getDetail() : code.name();
             retryAfterSeconds = rejected.getRetryAfterSeconds();
+            policy = rejected.getPolicy();
         } else {
             log.error("Unexpected error processing a client STOMP frame", ex);
             code = StompErrorCode.INTERNAL;
@@ -69,14 +74,21 @@ public class SockbowlStompErrorHandler extends StompSubProtocolErrorHandler {
         if (clientAccessor != null && clientAccessor.getReceipt() != null) {
             accessor.setReceiptId(clientAccessor.getReceipt());
         }
-        return handleInternal(accessor, body(code, detail, retryAfterSeconds), ex, clientAccessor);
+        return handleInternal(accessor, body(code, detail, retryAfterSeconds, policy), ex, clientAccessor);
     }
 
     static byte[] body(StompErrorCode code, String detail, Integer retryAfterSeconds) {
+        return body(code, detail, retryAfterSeconds, null);
+    }
+
+    static byte[] body(StompErrorCode code, String detail, Integer retryAfterSeconds, String policy) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", code.name());
         body.put("message", detail);
         body.put("retryAfterSeconds", retryAfterSeconds);
+        if (policy != null) {
+            body.put("policy", policy);
+        }
         return GSON.toJson(body).getBytes(StandardCharsets.UTF_8);
     }
 

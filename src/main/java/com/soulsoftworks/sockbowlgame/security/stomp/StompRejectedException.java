@@ -19,16 +19,24 @@ public class StompRejectedException extends MessagingException {
     private final String detail;
     /** Null in M2; M4 fills it for {@code RATE_LIMITED}. */
     private final Integer retryAfterSeconds;
+    /** M4: the limiter policy that rejected the frame (e.g. {@code stomp-flood}); null otherwise. */
+    private final String policy;
 
     public StompRejectedException(StompErrorCode code, String detail) {
         this(code, detail, null);
     }
 
     public StompRejectedException(StompErrorCode code, String detail, Integer retryAfterSeconds) {
+        this(code, detail, retryAfterSeconds, null);
+    }
+
+    /** M4: a limiter rejection that names its {@code policy} (optional ERROR-body field). */
+    public StompRejectedException(StompErrorCode code, String detail, Integer retryAfterSeconds, String policy) {
         super(code.name() + (detail == null ? "" : ": " + detail));
         this.code = code;
         this.detail = detail;
         this.retryAfterSeconds = retryAfterSeconds;
+        this.policy = policy;
     }
 
     public StompErrorCode getCode() {
@@ -41,5 +49,9 @@ public class StompRejectedException extends MessagingException {
 
     public Integer getRetryAfterSeconds() {
         return retryAfterSeconds;
+    }
+
+    public String getPolicy() {
+        return policy;
     }
 }

@@ -67,7 +67,8 @@ public class GameSessionInjectionResolver implements HandlerMethodArgumentResolv
         }
 
         AuthenticatedUser identity = identityOf(principal);
-        // Bans can be issued mid-game: re-check on every message (M4-RL-06 caches this).
+        // Bans can be issued mid-game: re-checked on every message, answered from
+        // BanService's BanStatusCache (M4 RL-06: no Postgres query per message).
         authorizationPolicy.ensureNotBanned(identity);
 
         return new GameSessionInjection(
