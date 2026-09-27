@@ -12,6 +12,7 @@ import com.soulsoftworks.sockbowlgame.model.state.ProctorType;
 import com.soulsoftworks.sockbowlgame.ratelimit.RateLimitRedis;
 import com.soulsoftworks.sockbowlgame.ratelimit.UsageKeys;
 import com.soulsoftworks.sockbowlgame.repository.GameSessionRepository;
+import com.soulsoftworks.sockbowlgame.repository.IpBanRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.service.BanService;
@@ -128,6 +129,10 @@ class HostedSessionQuotaIT {
     private UserRepository userRepository;
     @MockitoBean
     private UserGameHistoryRepository userGameHistoryRepository;
+    // M4 IP bans (WP-G4, merged after this class was written): JPA is off in
+    // this context, so the repository behind IpBanService is mocked too.
+    @MockitoBean
+    private IpBanRepository ipBanRepository;
 
     @BeforeEach
     void stubs() {

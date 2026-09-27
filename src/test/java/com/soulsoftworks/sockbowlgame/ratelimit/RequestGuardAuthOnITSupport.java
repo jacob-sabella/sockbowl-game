@@ -9,6 +9,7 @@ import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.state.GameMode;
 import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
 import com.soulsoftworks.sockbowlgame.model.state.ProctorType;
+import com.soulsoftworks.sockbowlgame.repository.IpBanRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.service.BanService;
@@ -137,6 +138,11 @@ abstract class RequestGuardAuthOnITSupport {
     UserRepository userRepository;
     @MockitoBean
     UserGameHistoryRepository userGameHistoryRepository;
+    // M4 IP bans (WP-G4, merged after this class was written): JPA is off in
+    // this context, so the repository behind IpBanService is mocked too, the
+    // same way GameSessionControllerAuthIT and StompSecurityAuthOnIT do it.
+    @MockitoBean
+    IpBanRepository ipBanRepository;
 
     @BeforeEach
     void stubCollaborators() {
