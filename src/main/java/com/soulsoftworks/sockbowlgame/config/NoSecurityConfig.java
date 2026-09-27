@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.config;
 
+import com.soulsoftworks.sockbowlgame.ratelimit.RequestGuardFilter;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,12 +10,15 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 /**
  * Security configuration when authentication is disabled.
  *
  * This configuration is only active when sockbowl.auth.enabled=false.
- * It disables all security and permits all requests.
+ * It disables all security and permits all requests. The M4
+ * {@link RequestGuardFilter} still runs (every caller is a guest keyed by IP),
+ * so REST rate limits apply with auth off too.
  */
 @Configuration
 @EnableWebSecurity
@@ -24,7 +29,9 @@ import org.springframework.security.web.SecurityFilterChain;
 public class NoSecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   ObjectProvider<RequestGuardFilter> requestGuardFilter)
+            throws Exception {
         http
             // Disable CSRF protection
             .csrf(AbstractHttpConfigurer::disable)
@@ -36,6 +43,8 @@ public class NoSecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .anyRequest().permitAll()
             );
+
+        requestGuardFilter.ifAvailable(guard -> http.addFilterBefore(guard, AuthorizationFilter.class));
 
         return http.build();
     }
