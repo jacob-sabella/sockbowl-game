@@ -13,6 +13,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.List;
 
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizePlayerList;
+import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeTeamList;
 
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
@@ -30,7 +31,7 @@ public class PlayerRosterUpdate extends SockbowlOutMessage {
     public static PlayerRosterUpdate fromGameSession(GameSession gameSession) {
         return PlayerRosterUpdate.builder()
                 .playerList(sanitizePlayerList(gameSession.getPlayerList()))
-                .teamList(gameSession.getTeamList())
+                .teamList(sanitizeTeamList(gameSession.getTeamList()))
                 .build();
     }
 }

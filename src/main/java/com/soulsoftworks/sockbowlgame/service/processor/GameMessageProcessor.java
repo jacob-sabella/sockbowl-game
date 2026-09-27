@@ -14,6 +14,8 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUp
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.judge.AnswerJudgeService;
 import com.soulsoftworks.sockbowlgame.judge.model.JudgeResult;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,6 +32,23 @@ public class GameMessageProcessor extends MessageProcessor {
      */
     /** Automated proctor for single-player mode. Stateless; safe to share. */
     private final AnswerJudgeService answerJudgeService = new AnswerJudgeService();
+
+    private final GameAuthorizationPolicy authorizationPolicy;
+
+    /**
+     * Owner checks go through the policy (AUTH-11). The no-argument constructor
+     * uses a default policy: {@code isSessionOwner} does not depend on the auth
+     * mode, so unit tests that construct the processor directly see the same
+     * ownership rules as the Spring bean.
+     */
+    public GameMessageProcessor() {
+        this(new GameAuthorizationPolicy(false, null));
+    }
+
+    @Autowired
+    public GameMessageProcessor(GameAuthorizationPolicy authorizationPolicy) {
+        this.authorizationPolicy = authorizationPolicy;
+    }
 
     @Override
     protected void initializeProcessorMapping() {
@@ -446,8 +465,7 @@ public class GameMessageProcessor extends MessageProcessor {
         // Authorize: proctorless (auto-proctor) games have no real proctor, so only the
         // game owner may force the buzz window closed; otherwise only the proctor may.
         if (proctorless) {
-            Player originator = gameSession.getPlayerById(timeoutMessage.getOriginatingPlayerId());
-            if (originator == null || !originator.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, timeoutMessage.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(timeoutMessage);
             }
         } else if (gameSession.getPlayerModeById(timeoutMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
@@ -554,8 +572,7 @@ public class GameMessageProcessor extends MessageProcessor {
         // Authorize: single player has no proctor, so the game owner advances; otherwise
         // only the proctor may.
         if (proctorless) {
-            Player advancer = gameSession.getPlayerById(sockbowlInMessage.getOriginatingPlayerId());
-            if (advancer == null || !advancer.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, sockbowlInMessage.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(sockbowlInMessage);
             }
         } else if (gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
@@ -610,13 +627,12 @@ public class GameMessageProcessor extends MessageProcessor {
         Round round = gameSession.getCurrentRound();
         String originatingPlayerId = message.getOriginatingPlayerId();
 
-        Player originator = gameSession.getPlayerById(originatingPlayerId);
         Team eligibleTeam = gameSession.getTeamList().stream()
                 .filter(t -> t.getTeamId().equals(round.getBonusEligibleTeamId()))
                 .findFirst()
                 .orElse(null);
         boolean isEligiblePlayer = eligibleTeam != null && eligibleTeam.isPlayerOnTeam(originatingPlayerId);
-        boolean isOwner = originator != null && originator.isGameOwner();
+        boolean isOwner = authorizationPolicy.isSessionOwner(gameSession, originatingPlayerId);
 
         if (!isEligiblePlayer && !isOwner) {
             return ProcessError.accessDeniedMessage(message);

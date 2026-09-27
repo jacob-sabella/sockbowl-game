@@ -12,12 +12,31 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameStartedMe
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import com.soulsoftworks.sockbowlgame.util.DeepCopyUtil;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import static com.soulsoftworks.sockbowlgame.model.state.GameSanitizer.sanitizeRound;
 
 @Service
 public class ProgressionMessageProcessor extends MessageProcessor {
+
+    private final GameAuthorizationPolicy authorizationPolicy;
+
+    /**
+     * Owner checks go through the policy (AUTH-11). The no-argument constructor
+     * uses a default policy: {@code isSessionOwner} does not depend on the auth
+     * mode, so unit tests that construct the processor directly see the same
+     * ownership rules as the Spring bean.
+     */
+    public ProgressionMessageProcessor() {
+        this(new GameAuthorizationPolicy(false, null));
+    }
+
+    @Autowired
+    public ProgressionMessageProcessor(GameAuthorizationPolicy authorizationPolicy) {
+        this.authorizationPolicy = authorizationPolicy;
+    }
 
     @Override
     protected void initializeProcessorMapping() {
@@ -32,8 +51,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         // Authorize: proctorless modes have no proctor, so the game owner ends the match;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
-            Player ender = gameSession.getPlayerById(endMatchMessage.getOriginatingPlayerId());
-            if (ender == null || !ender.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, endMatchMessage.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(endMatchMessage);
             }
         } else if (gameSession.getProctor() == null ||
@@ -75,8 +93,7 @@ public class ProgressionMessageProcessor extends MessageProcessor {
         // Authorize the starter: single player has no proctor, so the game owner starts;
         // otherwise the proctor must be the one starting.
         if (proctorless) {
-            Player starter = gameSession.getPlayerById(startMatchMessage.getOriginatingPlayerId());
-            if (starter == null || !starter.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, startMatchMessage.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(startMatchMessage);
             }
         } else if (gameSession.getProctor() == null ||

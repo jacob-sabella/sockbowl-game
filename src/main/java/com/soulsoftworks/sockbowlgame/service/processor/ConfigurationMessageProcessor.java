@@ -9,6 +9,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdateGameSettings;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
@@ -19,6 +20,7 @@ import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPol
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
+import java.util.List;
 
 @Service
 public class ConfigurationMessageProcessor extends MessageProcessor {
@@ -137,8 +139,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Authorize: proctorless modes have no proctor, so the game owner sets the packet;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
-            Player setter = gameSession.getPlayerById(message.getOriginatingPlayerId());
-            if (setter == null || !setter.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, message.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(message);
             }
         } else if (gameSession.getProctor() == null ||
@@ -273,8 +274,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Authorize: proctorless modes have no proctor, so the game owner updates settings;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
-            Player editor = gameSession.getPlayerById(updateGameSettingsMsg.getOriginatingPlayerId());
-            if (editor == null || !editor.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, updateGameSettingsMsg.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
             }
         } else if (gameSession.getPlayerModeById(updateGameSettingsMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
@@ -284,9 +284,45 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Update settings
         gameSession.setGameSettings(updateGameSettings.getGameSettings());
 
-        // Return full game session update
-        return GameSessionUpdate.builder()
-                .gameSession(gameSession)
-                .build();
+        // Return a sanitized game session update. The raw session carries every
+        // player's secret and identity (AUTH-10) and, once a packet is set, its
+        // answers, so it must never be broadcast as-is.
+        return sanitizedSessionUpdateForAll(gameSession);
+    }
+
+    /**
+     * A {@link GameSessionUpdate} for every player in the session, each copy
+     * sanitized for its recipient: the proctor (if any) gets the proctor view,
+     * everyone else the player view. Sent as targeted messages rather than one
+     * broadcast so the proctor's view never reaches other players.
+     */
+    private SockbowlOutMessage sanitizedSessionUpdateForAll(GameSession gameSession) {
+        Player proctor = gameSession.getProctor();
+        if (proctor == null) {
+            // No proctor: everyone gets the same player view, so a broadcast is fine.
+            return GameSessionUpdate.builder()
+                    .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.SPECTATOR))
+                    .build();
+        }
+
+        SockbowlMultiOutMessage.SockbowlMultiOutMessageBuilder<?, ?> multi = SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(GameSessionUpdate.builder()
+                        .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.PROCTOR))
+                        .recipient(proctor.getPlayerId())
+                        .build());
+
+        List<String> others = gameSession.getPlayerList().stream()
+                .map(Player::getPlayerId)
+                .filter(id -> !id.equals(proctor.getPlayerId()))
+                .toList();
+        // An empty recipient list means "broadcast", which would send the player
+        // view over the proctor's, so only add it when someone else is present.
+        if (!others.isEmpty()) {
+            multi.sockbowlOutMessage(GameSessionUpdate.builder()
+                    .gameSession(GameSanitizer.sanitizeGameSession(gameSession, PlayerMode.SPECTATOR))
+                    .recipients(others)
+                    .build());
+        }
+        return multi.build();
     }
 }

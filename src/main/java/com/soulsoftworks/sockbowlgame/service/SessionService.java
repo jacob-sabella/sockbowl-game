@@ -276,10 +276,10 @@ public class SessionService {
         }
 
         // Create player with user link
-        Player player = gameSession.addPlayer(joinGameRequest);
+        // addPlayer binds the durable Keycloak identity and decides ownership in
+        // one place: the creator of an authenticated session owns it, nobody else.
+        Player player = gameSession.addPlayer(joinGameRequest, keycloakId);
         player.setUserId(user.getId().toString());
-        player.setKeycloakId(keycloakId);  // Tie player to durable Keycloak identity
-        player.setGuest(false);
         player.setName(user.getName());  // Use Keycloak name
         seatSinglePlayerJoiner(gameSession, player);
         if (gameSession.getGameSettings().getGameMode() == GameMode.FREE_FOR_ALL) {

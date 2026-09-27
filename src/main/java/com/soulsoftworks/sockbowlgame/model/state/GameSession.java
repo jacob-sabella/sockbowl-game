@@ -49,25 +49,56 @@ public class GameSession {
     @Builder.Default
     private List<Match> previousMatches = new ArrayList<>();
 
+    /**
+     * Add a guest player. Equivalent to {@code addPlayer(joinGameRequest, null)}.
+     */
     public Player addPlayer(JoinGameRequest joinGameRequest) {
+        return addPlayer(joinGameRequest, null);
+    }
+
+    /**
+     * Add a player to the session and decide, once, whether they own it. This is
+     * the single place the {@link Player#isGameOwner()} flag is set (AUTH-11):
+     * <ul>
+     *   <li>Session created by an authenticated user ({@link #gameOwnerId} set):
+     *       the player owns it only if they joined with that same Keycloak
+     *       subject. A guest or a different signed-in user never becomes owner,
+     *       even if they happen to join first.</li>
+     *   <li>Guest-created session ({@code gameOwnerId == null}): the first
+     *       player to join owns it (the pre-auth behaviour).</li>
+     * </ul>
+     * The flag is what ng reads (it is broadcast); authorization decisions go
+     * through {@code GameAuthorizationPolicy.isSessionOwner}, which reads this
+     * flag and re-checks the Keycloak subject.
+     *
+     * @param joinGameRequest the join request (player id and display name)
+     * @param keycloakId      the joining user's Keycloak subject, or null for a guest
+     * @return the new player
+     */
+    public Player addPlayer(JoinGameRequest joinGameRequest, String keycloakId) {
         Player player = Player.builder()
                 .playerId(joinGameRequest.getPlayerSessionId())
                 .name(joinGameRequest.getName())
                 .playerMode(PlayerMode.SPECTATOR)
                 .playerSecret(UUID.randomUUID()
                         .toString())
+                .keycloakId(keycloakId)
+                .isGuest(keycloakId == null)
                 .build();
 
-        // First player to join is the game owner
-        if (playerList.isEmpty()) {
-            player.setGameOwner(true);
-        }
+        player.setGameOwner(isOwnerOnJoin(keycloakId));
 
         playerList.add(player);
 
         return player;
     }
 
+    private boolean isOwnerOnJoin(String keycloakId) {
+        if (gameOwnerId != null && !gameOwnerId.isBlank()) {
+            return keycloakId != null && keycloakId.equals(gameOwnerId);
+        }
+        return playerList.isEmpty();
+    }
 
     /**
      * Get the current round of the current match

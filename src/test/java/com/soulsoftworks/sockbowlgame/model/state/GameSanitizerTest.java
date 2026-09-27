@@ -3,6 +3,7 @@ package com.soulsoftworks.sockbowlgame.model.state;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GameSanitizerTest {
@@ -169,6 +170,114 @@ class GameSanitizerTest {
         assertEquals("", result.getAnswer());
         result.getAssociatedBonus().getBonusParts().forEach(p ->
                 assertEquals("", p.getBonusPart().getAnswer()));
+    }
+
+    /* ---------------- identity stripping (AUTH-10) ---------------- */
+
+    /** A session with an authenticated owner, a second signed-in user and a guest, all seated on teams. */
+    private GameSession sessionWithIdentities(GameMode mode) {
+        GameSession session = GameSession.builder()
+                .id("ID-SESSION")
+                .joinCode("IDNT")
+                .gameOwnerId("kc-host")
+                .gameSettings(GameSettings.builder().gameMode(mode).build())
+                .build();
+        Player host = identified("host", "kc-host", "user-host", PlayerMode.PROCTOR);
+        host.setGameOwner(true);
+        Player member = identified("member", "kc-member", "user-member", PlayerMode.BUZZER);
+        Player guest = Player.builder().playerId("guest").playerSecret("guest-secret")
+                .playerMode(PlayerMode.SPECTATOR).build();
+        session.getPlayerList().addAll(java.util.List.of(host, member, guest));
+        Team team = new Team();
+        team.addPlayerToTeam(host);
+        team.addPlayerToTeam(member);
+        team.addPlayerToTeam(guest);
+        session.getTeamList().add(team);
+        session.getCurrentMatch().getPacket().setTossups(java.util.List.of());
+        session.getCurrentMatch().getPacket().setBonuses(java.util.List.of());
+        return session;
+    }
+
+    private Player identified(String id, String keycloakId, String userId, PlayerMode mode) {
+        return Player.builder().playerId(id).playerSecret(id + "-secret")
+                .keycloakId(keycloakId).userId(userId).isGuest(false).playerMode(mode).build();
+    }
+
+    private void assertStripped(java.util.List<Player> players) {
+        assertFalse(players.isEmpty());
+        for (Player p : players) {
+            assertTrue(isBlank(p.getKeycloakId()), "keycloakId leaked for " + p.getPlayerId());
+            assertTrue(isBlank(p.getUserId()), "userId leaked for " + p.getPlayerId());
+            assertTrue(isBlank(p.getPlayerSecret()), "playerSecret leaked for " + p.getPlayerId());
+        }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(PlayerMode.class)
+    void sanitizeGameSessionStripsIdentityForEveryPlayerMode(PlayerMode viewerMode) {
+        for (GameMode mode : GameMode.values()) {
+            GameSession session = sessionWithIdentities(mode);
+
+            GameSession sanitized = GameSanitizer.sanitizeGameSession(session, viewerMode);
+
+            assertStripped(sanitized.getPlayerList());
+            assertStripped(sanitized.getTeamList().get(0).getTeamPlayers());
+            assertTrue(isBlank(sanitized.getGameOwnerId()), "gameOwnerId leaked in " + mode);
+            // ng still needs to know who owns the session.
+            assertTrue(sanitized.getPlayerById("host").isGameOwner());
+            assertFalse(sanitized.getPlayerById("member").isGameOwner());
+        }
+    }
+
+    @Test
+    void sanitizeGameSessionDoesNotModifyTheOriginal() {
+        GameSession session = sessionWithIdentities(GameMode.QUIZ_BOWL_CLASSIC);
+
+        GameSanitizer.sanitizeGameSession(session, PlayerMode.BUZZER);
+
+        assertEquals("kc-host", session.getGameOwnerId());
+        assertEquals("kc-host", session.getPlayerById("host").getKeycloakId());
+        assertEquals("user-host", session.getPlayerById("host").getUserId());
+        assertEquals("host-secret", session.getPlayerById("host").getPlayerSecret());
+        assertEquals("kc-member", session.getTeamList().get(0).getTeamPlayers().get(1).getKeycloakId());
+    }
+
+    @Test
+    void sanitizePlayerListStripsIdentityAndSecret() {
+        GameSession session = sessionWithIdentities(GameMode.QUIZ_BOWL_CLASSIC);
+
+        java.util.List<Player> sanitized = GameSanitizer.sanitizePlayerList(session.getPlayerList());
+
+        assertStripped(sanitized);
+        assertTrue(sanitized.get(0).isGameOwner());
+        assertEquals("kc-host", session.getPlayerList().get(0).getKeycloakId(), "original untouched");
+    }
+
+    @Test
+    void sanitizeTeamListStripsIdentityAndSecretOfTeamPlayers() {
+        GameSession session = sessionWithIdentities(GameMode.QUIZ_BOWL_CLASSIC);
+
+        java.util.List<Team> sanitized = GameSanitizer.sanitizeTeamList(session.getTeamList());
+
+        assertStripped(sanitized.get(0).getTeamPlayers());
+        assertEquals(session.getTeamList().get(0).getTeamId(), sanitized.get(0).getTeamId());
+        assertEquals("guest-secret", session.getTeamList().get(0).getTeamPlayers().get(2).getPlayerSecret(),
+                "original untouched");
+    }
+
+    @Test
+    void playerRosterUpdateCarriesNoIdentityInPlayersOrTeams() {
+        GameSession session = sessionWithIdentities(GameMode.QUIZ_BOWL_CLASSIC);
+
+        com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate update =
+                com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate.fromGameSession(session);
+
+        assertStripped(update.getPlayerList());
+        assertStripped(update.getTeamList().get(0).getTeamPlayers());
     }
 
     private com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart part(int order, String answer) {
