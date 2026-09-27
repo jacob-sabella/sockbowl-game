@@ -23,13 +23,22 @@ import java.util.UUID;
 public interface BanRepository extends JpaRepository<BanRecord, UUID> {
 
     /**
-     * Find the active ban (permanent or not-yet-expired) for a given Keycloak
-     * subject, if one exists.
+     * Find an active ban (permanent or not-yet-expired) for a given Keycloak
+     * subject, if one exists. A subject can hold several active bans (an admin
+     * may ban twice), so this picks the first of {@link #findActiveBans}
+     * rather than failing on a non-unique result.
+     */
+    default Optional<BanRecord> findActiveBan(String keycloakId, Instant now) {
+        return findActiveBans(keycloakId, now).stream().findFirst();
+    }
+
+    /**
+     * Every active ban for a Keycloak subject, newest first.
      */
     @Query("SELECT b FROM BanRecord b WHERE b.bannedKeycloakId = :keycloakId "
-            + "AND (b.expiresAt IS NULL OR b.expiresAt > :now)")
-    Optional<BanRecord> findActiveBan(@Param("keycloakId") String keycloakId,
-                                      @Param("now") Instant now);
+            + "AND (b.expiresAt IS NULL OR b.expiresAt > :now) ORDER BY b.createdAt DESC")
+    List<BanRecord> findActiveBans(@Param("keycloakId") String keycloakId,
+                                   @Param("now") Instant now);
 
     /**
      * All currently-active bans, newest first.

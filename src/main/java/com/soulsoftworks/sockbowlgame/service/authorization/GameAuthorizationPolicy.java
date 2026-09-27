@@ -160,6 +160,9 @@ public class GameAuthorizationPolicy {
 
     /**
      * True when the identity is an authenticated user with an active ban.
+     * {@link BanService#isBanned} answers from its {@code BanStatusCache}
+     * (Redis mirror, 30s local cache, Postgres fallback), so the per-message
+     * STOMP check costs no Postgres query (M4 RL-06).
      */
     public boolean isBanned(AuthenticatedUser identity) {
         return banService != null
