@@ -175,6 +175,8 @@ class FreeForAllTossupTest {
         timerSession.getCurrentMatch().setCurrentRound(timerRound);
 
         when(sessionService.getAllActiveSessions()).thenReturn(List.of(timerSession));
+        // The tick re-reads each session under its lock (M2R2-LIVE-01).
+        when(sessionService.getGameSessionById(timerSession.getId())).thenReturn(timerSession);
 
         gameTimerService.processTimers();
 

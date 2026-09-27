@@ -3,9 +3,11 @@ package com.soulsoftworks.sockbowlgame.config;
 import com.soulsoftworks.sockbowlgame.controller.resolver.GameSessionInjectionResolver;
 import com.soulsoftworks.sockbowlgame.security.stomp.SockbowlStompErrorHandler;
 import com.soulsoftworks.sockbowlgame.security.stomp.StompInboundInterceptor;
+import jakarta.annotation.PreDestroy;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -54,6 +56,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         config.enableSimpleBroker(BROKER_PREFIX);
         config.setApplicationDestinationPrefixes(APP_PREFIX);
         config.setUserDestinationPrefix(USER_PREFIX);
+        // Deliver messages to each client in the order they were published:
+        // outbound frames otherwise go through a thread pool, so a client can
+        // get a newer game-state update before an older one.
+        config.setPreservePublishOrder(true);
     }
 
     @Override
@@ -66,6 +72,34 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(@NotNull ChannelRegistration registration) {
         registration.interceptors(stompInboundInterceptor);
+        // Handle each client's frames in the order it sent them (see
+        // SessionOrderedExecutor): two back-to-back SENDs, such as set-proctor
+        // then set-match-packet, otherwise can reach Kafka swapped.
+        registration.executor(new SessionOrderedExecutor(inboundPool, INBOUND_LANES));
+    }
+
+    /** Session lanes for the inbound channel. */
+    private static final int INBOUND_LANES = 256;
+
+    /**
+     * The pool behind the inbound channel, sized like Spring's default one.
+     * Deliberately not a bean: an Executor bean would make Spring Boot back
+     * off its own application task executor.
+     */
+    private final ThreadPoolTaskExecutor inboundPool = newInboundPool();
+
+    private static ThreadPoolTaskExecutor newInboundPool() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors() * 2);
+        executor.setAllowCoreThreadTimeOut(true);
+        executor.setThreadNamePrefix("clientInboundChannel-");
+        executor.initialize();
+        return executor;
+    }
+
+    @PreDestroy
+    void shutdownInboundPool() {
+        inboundPool.shutdown();
     }
 
     @Override
