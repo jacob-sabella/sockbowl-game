@@ -35,6 +35,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -285,5 +286,82 @@ class SecurityConfigHttpMatrixTest {
         mvc.perform(request(HttpMethod.POST, "/api/v1/session/join-game-session-by-code")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"joinCode\":\"ABCDEF\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* FIX-G2 (defect G-05): exercise the real converter, not a stubbed authority */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Every row in {@link #matrix()} authenticates with
+     * {@code jwt().authorities(...)}: the {@code RequestPostProcessor} hands
+     * Spring Security a pre-built authority list directly, so those rows
+     * never invoke {@link SecurityConfig#keycloakJwtAuthenticationConverter()}.
+     * A bug there (wrong claim name, wrong role prefix, roles dropped) would
+     * pass every row above and still deny or admit the wrong caller in
+     * production, where the converter is the only thing deriving authorities.
+     *
+     * <p>These rows instead stub only {@link #jwtDecoder} to decode a bearer
+     * value into a {@link Jwt} carrying a {@code realm_access.roles} claim,
+     * then send a plain {@code Authorization: Bearer} header with no
+     * {@code jwt()} post-processor at all, exactly like
+     * {@link #invalidBearerOnGuestEndpointIs401()} already does for the
+     * failure path. The real {@code securityFilterChain} decodes it via the
+     * mock and runs the *real* {@code keycloakJwtAuthenticationConverter}
+     * bean to derive authorities, so a converter bug shows up here even
+     * though every {@code matrix()} row would still pass.
+     */
+    static Stream<Arguments> realConverterMatrix() {
+        return Stream.of(
+                // PLAYER: authenticated, but lacks user:ban -> converter must
+                // NOT grant it just because "player" appears in realm_access.
+                Arguments.of("player", "kc-player-rc", "sockbowl-game",
+                        new String[]{"player", "packet:read", "game:host"},
+                        "GET", "/api/v1/admin/bans", 403),
+                // MODERATOR: converter must grant the raw "user:ban" realm
+                // role name (not just a ROLE_-prefixed authority) for
+                // hasAuthority("user:ban") to pass.
+                Arguments.of("moderator", "kc-mod-rc", "sockbowl-game",
+                        new String[]{"moderator", "player", "packet:read", "game:host", "user:ban"},
+                        "GET", "/api/v1/admin/bans", 200),
+                // ADMIN: converter must grant "admin:access" from realm_access.
+                Arguments.of("admin", "kc-admin-rc", "sockbowl-game",
+                        new String[]{"admin", "admin:access", "user:ban", "player", "packet:read", "game:host"},
+                        "GET", "/api/v1/admin/console", 200),
+                // SERVICE: a client-credentials token (azp = the backend
+                // client id) must still be denied a user-only endpoint even
+                // though the converter grants it "packet:read"; this is
+                // AuthenticatedUser.isServiceToken reading the same azp claim
+                // the mocked Jwt carries here, through the real chain.
+                Arguments.of("service", "service-account-rc", SERVICE_CLIENT,
+                        new String[]{"packet:read"},
+                        "GET", "/api/v1/user/profile", 403)
+        );
+    }
+
+    @ParameterizedTest(name = "[real converter] {0}: {4} {5}")
+    @MethodSource("realConverterMatrix")
+    void matrixRowThroughRealJwtDecoderAndConverter(String roleLabel, String sub, String azp, String[] realmRoles,
+                                                     String method, String path, int expected) throws Exception {
+        String token = "rc-token-" + sub;
+        Jwt jwt = Jwt.withTokenValue(token)
+                .header("alg", "none")
+                .subject(sub)
+                .claim("azp", azp)
+                .claim("preferred_username", sub)
+                .claim("realm_access", Map.of("roles", List.of(realmRoles)))
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        when(jwtDecoder.decode(token)).thenReturn(jwt);
+
+        MvcResult result = mvc.perform(request(HttpMethod.valueOf(method), path)
+                        .header("Authorization", "Bearer " + token))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus())
+                .as("%s %s as %s (realm_access=%s, azp=%s) through the real converter",
+                        method, path, roleLabel, List.of(realmRoles), azp)
+                .isEqualTo(expected);
     }
 }
