@@ -15,7 +15,7 @@ import org.apache.commons.text.similarity.LevenshteinDistance;
 public final class FuzzyMatcher {
 
     private final JaroWinklerSimilarity jaroWinkler = new JaroWinklerSimilarity();
-    private final LevenshteinDistance levenshtein = new LevenshteinDistance();
+    private final LevenshteinDistance levenshtein = LevenshteinDistance.getDefaultInstance();
     private final DoubleMetaphone metaphone = new DoubleMetaphone();
 
     /** Similarity of two normalized strings, 0.0–1.0. */

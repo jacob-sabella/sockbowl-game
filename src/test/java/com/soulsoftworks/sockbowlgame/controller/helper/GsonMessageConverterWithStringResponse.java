@@ -1,6 +1,6 @@
 package com.soulsoftworks.sockbowlgame.controller.helper;
 
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.converter.GsonMessageConverter;
 import org.springframework.messaging.converter.MessageConversionException;
