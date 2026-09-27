@@ -2,6 +2,8 @@ package com.soulsoftworks.sockbowlgame.repository;
 
 import com.soulsoftworks.sockbowlgame.model.entity.User;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -33,4 +35,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * @return Optional containing the user if found
      */
     Optional<User> findByEmail(String email);
+
+    /**
+     * Free-text search across the three identifying columns, for the admin
+     * usage page's {@code q} filter (plan m4-limits section 2.8, WP-G6). Used
+     * only when {@code q} is non-blank; a blank filter pages over
+     * {@link #findAll(Pageable)} instead.
+     */
+    Page<User> findByKeycloakIdContainingIgnoreCaseOrEmailContainingIgnoreCaseOrNameContainingIgnoreCase(
+            String keycloakId, String email, String name, Pageable pageable);
 }
