@@ -1,6 +1,9 @@
 import cz.habarta.typescript.generator.ClassMapping
 import cz.habarta.typescript.generator.EnumMapping
+import cz.habarta.typescript.generator.JsonLibrary
 import cz.habarta.typescript.generator.TypeScriptFileType
+import cz.habarta.typescript.generator.TypeScriptOutputKind
+import org.gradle.api.provider.ProviderFactory
 import org.springframework.boot.gradle.tasks.bundling.BootBuildImage
 
 plugins {
@@ -11,10 +14,16 @@ plugins {
 }
 
 group = 'com.soulsoftworks'
-version = resolveVersion()
+version = resolveVersion(providers)
 
 java {
-    sourceCompatibility = '17'
+    // Java 17 reaches EOL Sept 2026; 21 is the current LTS (EOL Sept 2028).
+    // A toolchain (rather than sourceCompatibility) pins the exact JDK used to
+    // compile/test/run regardless of which JDK launched Gradle itself; the
+    // foojay-resolver plugin (settings.gradle) auto-provisions it if missing.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 dependencyManagement {
@@ -140,7 +149,7 @@ tasks.named('test') {
 // instead of being hand-maintained.
 
 generateTypeScript {
-    jsonLibrary = 'jackson2'
+    jsonLibrary = JsonLibrary.jackson2
     classPatterns = ['com.soulsoftworks.sockbowlgame.model.**',]
     excludeClasses = [
             'com.soulsoftworks.sockbowlgame.model.state.GameSessionSanitizer',
@@ -153,7 +162,7 @@ generateTypeScript {
             'com.soulsoftworks.sockbowlgame.model.**Builder**',
             'com.soulsoftworks.sockbowlgame.generated.packet.**'
     ]
-    outputKind = 'module'
+    outputKind = TypeScriptOutputKind.module
     outputFile = "build/typescript-generation/sockbowl-interfaces.ts"
     outputFileType = TypeScriptFileType.implementationFile
     mapEnum = EnumMapping.asEnum
@@ -177,10 +186,14 @@ bootBuildImage {
 tasks.register('printVersion') {
     group = 'help'
     description = 'Prints the current project version'
-    doLast { println project.version }
+    // Capture the version at configuration time into a local: reading it back
+    // via the implicit `project` at execution time is deprecated (fails under
+    // the configuration cache and in Gradle 10).
+    def resolvedVersion = project.version
+    doLast { println resolvedVersion }
 }
 
-static String resolveVersion() {
+static String resolveVersion(ProviderFactory providers) {
     // GitHub Actions refs look like:
     //  - refs/heads/feature/foo        (branch)
     //  - refs/tags/v1.2.3              (tag)
@@ -205,7 +218,7 @@ static String resolveVersion() {
     } else if (headRef) {
         branchName = headRef
     } else {
-        branchName = execAndRead("git rev-parse --abbrev-ref HEAD")
+        branchName = execAndRead(providers, "git", "rev-parse", "--abbrev-ref", "HEAD")
     }
     if (!branchName) branchName = "detached"
 
@@ -229,11 +242,17 @@ static String sanitizeBranch(String name) {
     return (name ?: "dev").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "-")
 }
 
-static String execAndRead(String cmd) {
+static String execAndRead(ProviderFactory providers, String... cmd) {
     try {
-        def p = cmd.execute()
-        p.waitFor()
-        return p.exitValue() == 0 ? p.text.trim() : null
+        // providers.exec (rather than a raw process spawn) is the
+        // configuration-cache-friendly, non-deprecated way to run a process at
+        // configuration time; see the Gradle 9 upgrade guide's note on
+        // "Starting an external process at configuration time".
+        def output = providers.exec {
+            commandLine(cmd)
+            ignoreExitValue = true
+        }
+        return output.result.get().exitValue == 0 ? output.standardOutput.asText.get().trim() : null
     } catch (Exception ignored) {
         return null
     }

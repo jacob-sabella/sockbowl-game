@@ -15,4 +15,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Auto-provisions the JDK 21 toolchain (java { toolchain { ... } } in
+    // build.gradle) when it isn't already installed locally, so the build
+    // works regardless of which JDK launched Gradle itself.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'sockbowl-game'
