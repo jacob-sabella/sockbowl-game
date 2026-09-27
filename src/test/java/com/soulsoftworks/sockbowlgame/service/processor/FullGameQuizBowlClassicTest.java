@@ -1,9 +1,13 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.client.PacketClient;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.util.PacketBuilderHelper;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import com.soulsoftworks.sockbowlquestions.models.nodes.BonusPart;
@@ -16,12 +20,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createTeams;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Full-game (multi-round, packet-to-match-completion) coverage for QUIZ_BOWL_CLASSIC —
@@ -303,6 +310,90 @@ class FullGameQuizBowlClassicTest {
             judge(false);
             assertEquals(RoundState.COMPLETED, round().getRoundState());
             assertNull(round().getCurrentBonus());
+        }
+    }
+
+    /**
+     * PB-13/D7: the packet the game plays is whatever {@link ConfigurationMessageProcessor#setPacketForMatch}
+     * stored after sorting, so these route SetMatchPacket through the real processor (a mocked
+     * {@link PacketClient}) instead of assigning the match packet directly, unlike the fixtures above.
+     */
+    @Nested
+    @DisplayName("Bonus ordering (PB-13/D7)")
+    class BonusOrdering {
+
+        private ContainsBonus bonusFor(long linkId, int order, String label) {
+            Bonus bonus = Bonus.builder()
+                    .id("bonus-" + label)
+                    .preamble("Bonus for " + label)
+                    .bonusParts(List.of(
+                            part(0, label + "-alpha"), part(1, label + "-beta"), part(2, label + "-gamma")))
+                    .build();
+            return PacketBuilderHelper.createBonus(linkId, order, bonus);
+        }
+
+        /** A packet whose bonuses arrive in the wrong wire order (T2's bonus before T1's), by order. */
+        private Packet shuffledBonusPacket() {
+            List<ContainsTossup> tossups = List.of(
+                    PacketBuilderHelper.createTossup(1, 0,
+                            Tossup.builder().id("t1").question("Tossup one").answer("Answer one").build()),
+                    PacketBuilderHelper.createTossup(2, 1,
+                            Tossup.builder().id("t2").question("Tossup two").answer("Answer two").build()));
+            // Wire order: T2's bonus first, T1's bonus second — but `order` still says T1 (0) before T2 (1).
+            List<ContainsBonus> bonuses = new ArrayList<>(List.of(
+                    bonusFor(2, 1, "T2"),
+                    bonusFor(1, 0, "T1")));
+            return PacketBuilderHelper.createPacket("SHUFFLED", "Shuffled Packet",
+                    PacketBuilderHelper.createDifficulty("D1", "Regionals"), tossups, bonuses);
+        }
+
+        private SockbowlOutMessage setShuffledPacket() {
+            PacketClient packetClient = mock(PacketClient.class);
+            when(packetClient.getPacketById("SHUFFLED")).thenReturn(Mono.just(shuffledBonusPacket()));
+            ConfigurationMessageProcessor configProcessor =
+                    new ConfigurationMessageProcessor(packetClient, new GameAuthorizationPolicy(false, null));
+            return configProcessor.setPacketForMatch(SetMatchPacket.builder()
+                    .gameSession(session).originatingPlayerId(proctor.getPlayerId()).packetId("SHUFFLED").build());
+        }
+
+        @Test
+        @DisplayName("A shuffled wire order is corrected: round i's bonus is ordered bonus i, not wire-order bonus i")
+        void bonusIMatchesOrderedBonusI() {
+            session.getGameSettings().setBonusesEnabled(true);
+
+            SockbowlOutMessage setResult = setShuffledPacket();
+            assertInstanceOf(MatchPacketUpdate.class, setResult);
+            assertEquals(2, ((MatchPacketUpdate) setResult).getBonusCount());
+
+            startMatch();
+
+            // Round 1 (tossup "t1") must pair with the bonus whose `order` is 0 (T1's),
+            // even though T2's bonus arrived first on the wire.
+            finishedReading();
+            buzz(p1);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            assertEquals("Bonus for T1", round().getAssociatedBonus().getPreamble());
+
+            runBonus(true, true, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+
+            advance(proctor);
+            assertEquals(2, round().getRoundNumber());
+
+            // Round 2 (tossup "t2") pairs with T2's bonus.
+            finishedReading();
+            buzz(p2);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            assertEquals("Bonus for T2", round().getAssociatedBonus().getPreamble());
+
+            runBonus(true, true, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+
+            SockbowlOutMessage result = advance(proctor);
+            assertNotNull(result);
+            assertEquals(MatchState.COMPLETED, session.getCurrentMatch().getMatchState());
         }
     }
 }
