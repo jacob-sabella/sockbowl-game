@@ -223,6 +223,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * If everything is valid, the proctor is set for the current match and any other player set
      * as proctor is unset. If the proctor is also part of a team, they are removed from the team.
      * A success message is returned.
+     * <p>
+     * Proctorless modes reject every SetProctor. Once the match has started only the owner may
+     * reassign the proctor (to replace one who left); a self-claim then is a wrong-state error.
      *
      * @param setProctor The incoming message that contains the necessary information
      *                   to set a player as proctor.
@@ -235,10 +238,20 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Retrieve the game session from the incoming message
         GameSession gameSession = message.getGameSession();
 
-        // Check if the player making the request is allowed to manage the proctor
-        // (session owner, or claiming the role for themselves while none is set)
+        // Proctorless modes have no proctor role: a proctor there would get the
+        // proctor view (every answer) in a game nobody proctors (G-01).
+        if (gameSession.getGameSettings().isProctorless()) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+
+        // Check if the player making the request is allowed to manage the proctor:
+        // the session owner, or (in CONFIG only) a player claiming the role for
+        // themselves while none is set. See GameAuthorizationPolicy#canManageProctor.
         if (!authorizationPolicy.canManageProctor(gameSession, message.getOriginatingPlayerId(), message.getTargetPlayer())) {
-            // If not, return access denied error message
+            // A self-claim after the match has started is a state error; anything else is access denied.
+            if (gameSession.getCurrentMatch().getMatchState() != MatchState.CONFIG) {
+                return ProcessError.wrongStateMessage(message);
+            }
             return ProcessError.accessDeniedMessage(message);
         }
 
@@ -324,6 +337,16 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // Update settings
         gameSession.setGameSettings(updateGameSettings.getGameSettings());
+
+        // Switching to a proctorless mode ends the proctor role: a proctor left
+        // seated would keep receiving the proctor view (every answer) in a game
+        // nobody proctors (G-01). They become a spectator and may pick a team.
+        if (gameSession.getGameSettings() != null && gameSession.getGameSettings().isProctorless()) {
+            Player leftoverProctor = gameSession.getProctor();
+            if (leftoverProctor != null) {
+                leftoverProctor.setPlayerMode(PlayerMode.SPECTATOR);
+            }
+        }
 
         // Return a sanitized game session update. The raw session carries every
         // player's secret and identity (AUTH-10) and, once a packet is set, its

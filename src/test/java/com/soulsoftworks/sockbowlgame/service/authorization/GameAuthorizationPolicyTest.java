@@ -2,7 +2,11 @@ package com.soulsoftworks.sockbowlgame.service.authorization;
 
 import com.soulsoftworks.sockbowlgame.controller.exception.UserBannedException;
 import com.soulsoftworks.sockbowlgame.model.security.AuthenticatedUser;
+import com.soulsoftworks.sockbowlgame.model.state.GameMode;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
+import com.soulsoftworks.sockbowlgame.model.state.Match;
+import com.soulsoftworks.sockbowlgame.model.state.MatchState;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.service.BanService;
 import org.junit.jupiter.api.Test;
@@ -290,4 +294,44 @@ class GameAuthorizationPolicyTest {
         assertTrue(policy.canManageProctor(session, "p2", "p2"));
         assertFalse(policy.canManageProctor(session, "p2", "owner"));
     }
+
+    /* -------------------- canManageProctor (G-01) -------------------- */
+
+    private static GameSession proctorSession(GameMode mode, MatchState state) {
+        GameSession session = mock(GameSession.class);
+        when(session.isPlayerGameOwner("owner")).thenReturn(true);
+        when(session.isPlayerGameOwner("p2")).thenReturn(false);
+        when(session.getProctor()).thenReturn(null);
+        when(session.getGameSettings()).thenReturn(GameSettings.builder().gameMode(mode).build());
+        Match match = new Match();
+        match.setMatchState(state);
+        when(session.getCurrentMatch()).thenReturn(match);
+        return session;
+    }
+
+    @Test
+    void proctorlessModesHaveNoProctorToManage() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        for (GameMode mode : List.of(GameMode.SINGLE_PLAYER, GameMode.AUTO_PROCTOR, GameMode.FREE_FOR_ALL)) {
+            for (MatchState state : List.of(MatchState.CONFIG, MatchState.IN_GAME)) {
+                GameSession session = proctorSession(mode, state);
+                assertFalse(policy.canManageProctor(session, "p2", "p2"), mode + " " + state);
+                assertFalse(policy.canManageProctor(session, "owner", "p2"), mode + " " + state);
+                assertFalse(policy.canManageProctor(session, "owner", "owner"), mode + " " + state);
+            }
+        }
+    }
+
+    @Test
+    void classicSelfClaimOnlyInConfigButOwnerMayReassignMidMatch() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        GameSession config = proctorSession(GameMode.QUIZ_BOWL_CLASSIC, MatchState.CONFIG);
+        assertTrue(policy.canManageProctor(config, "p2", "p2"));
+        assertTrue(policy.canManageProctor(config, "owner", "p2"));
+
+        GameSession live = proctorSession(GameMode.QUIZ_BOWL_CLASSIC, MatchState.IN_GAME);
+        assertFalse(policy.canManageProctor(live, "p2", "p2"));
+        assertTrue(policy.canManageProctor(live, "owner", "p2"));
+    }
 }
+
