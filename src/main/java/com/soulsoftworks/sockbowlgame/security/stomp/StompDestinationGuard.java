@@ -31,7 +31,10 @@ import java.time.Instant;
  *       expired is refused ({@code TOKEN_EXPIRED}).</li>
  *   <li><b>SUBSCRIBE</b> only to {@code /queue/event/{own game}},
  *       {@code /queue/event/{own game}/{own player}}, {@code /user/queue/errors}
- *       and {@code /queue/heartbeat} ({@code FORBIDDEN_DESTINATION}).</li>
+ *       and {@code /queue/heartbeat} ({@code FORBIDDEN_DESTINATION}); a
+ *       signed-in player's token must be current (or refreshed by an
+ *       {@code Authorization} header on the SUBSCRIBE) and their account not
+ *       banned ({@code TOKEN_EXPIRED}, {@code BANNED}).</li>
  * </ul>
  */
 @Component
@@ -94,6 +97,15 @@ public class StompDestinationGuard implements StompInboundGuard {
         requireMatch(accessor.getFirstNativeHeader(StompConnectAuthenticator.PLAYER_SESSION_ID),
                 principal.getPlayerSessionId());
 
+        requireCurrentToken(accessor, principal);
+    }
+
+    /**
+     * For a signed-in player (auth on): an {@code Authorization} header is a
+     * token refresh; otherwise the principal's token must not have expired
+     * ({@code TOKEN_EXPIRED}). Guests and auth-off connections carry no token.
+     */
+    private void requireCurrentToken(StompHeaderAccessor accessor, StompPrincipal principal) {
         if (principal.isGuest() || !authorizationPolicy.isAuthEnabled()) {
             // Guests never carry a token; a JWT on a guest connection is ignored.
             return;
@@ -136,6 +148,15 @@ public class StompDestinationGuard implements StompInboundGuard {
         if (!allowed) {
             throw new StompRejectedException(StompErrorCode.FORBIDDEN_DESTINATION,
                     "SUBSCRIBE is only allowed to your own game and player queues");
+        }
+        // A subscription keeps delivering events without any further frame from
+        // the client, so it is where an expired token or a ban must stop (G-04).
+        // Bans issued after the subscription is made close the socket instead
+        // (StompBanEnforcer).
+        requireCurrentToken(accessor, principal);
+        if (!principal.isGuest() && authorizationPolicy.isSubjectBanned(principal.getKeycloakId())) {
+            throw new StompRejectedException(StompErrorCode.BANNED,
+                    "Your account is banned and cannot participate in games.");
         }
     }
 

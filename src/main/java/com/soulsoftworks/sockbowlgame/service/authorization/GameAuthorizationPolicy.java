@@ -170,6 +170,18 @@ public class GameAuthorizationPolicy {
     }
 
     /**
+     * True when the Keycloak subject has an active ban. For callers that hold
+     * only the subject (a STOMP principal). False for a null/blank subject or
+     * when bans are not enabled.
+     */
+    public boolean isSubjectBanned(String keycloakId) {
+        return banService != null
+                && keycloakId != null
+                && !keycloakId.isBlank()
+                && banService.isBanned(keycloakId);
+    }
+
+    /**
      * Guard that throws {@link UserBannedException} when a banned identity tries
      * to act. No-op for guests, un-banned users, or when bans are not enabled.
      */
