@@ -32,6 +32,15 @@ public class MessageService {
 
     private static final Logger log = LoggerFactory.getLogger(MessageService.class);
 
+    /**
+     * The Spring {@code @KafkaListener} container id (distinct from the Kafka
+     * consumer {@code groupId}, though they happen to share this value) for
+     * the game-topic listener below. {@code config.health.KafkaListenerReadinessHealthIndicator}
+     * looks the container up by this id via {@code KafkaListenerEndpointRegistry}
+     * to report readiness (M2-LIVE-01).
+     */
+    public static final String LISTENER_ID = "game-consumers";
+
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final KafkaTemplate<String, SockbowlInMessage> kafkaTemplate;
     private final SessionService sessionService;
@@ -91,7 +100,7 @@ public class MessageService {
      *
      * @param record The Kafka consumer record containing the game message.
      */
-    @KafkaListener(topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers")
+    @KafkaListener(id = LISTENER_ID, topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers")
     public void processGameMessage(ConsumerRecord<String, SockbowlInMessage> record) {
         if (record != null) {
             // Retrieve the game session from the incoming message
