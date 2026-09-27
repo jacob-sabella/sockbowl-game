@@ -151,6 +151,10 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers:2.0.5'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
     testImplementation 'com.redis:testcontainers-redis:2.2.4'
+    // Real Keycloak for the auth-on ITs (M2 WP-G4's QuestionsTokenProviderIT
+    // mints service tokens from the shared test realm). 4.3.x targets
+    // Testcontainers 2.0.x, matching the version pinned above.
+    testImplementation 'com.github.dasniko:testcontainers-keycloak:4.3.1'
     testImplementation 'org.awaitility:awaitility:4.3.0'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     // Matches the okhttp-jvm 5.x brought in transitively (e.g. by feign-okhttp);

@@ -11,8 +11,10 @@ import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import java.security.SecureRandom;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
@@ -94,11 +96,12 @@ public class SessionService {
      * relevant details
      *
      * @param joinGameRequest Join game request from client
+     * @throws ResponseStatusException 404 when no game has that join code
      */
     public JoinGameResponse addPlayerToGameSessionWithJoinCode(JoinGameRequest joinGameRequest) {
         Player newPlayer = null;
 
-        GameSession gameSession = getGameSessionByJoinCode(joinGameRequest.getJoinCode());
+        GameSession gameSession = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
 
         PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(gameSession.getGameSettings().getGameMode());
 
@@ -172,6 +175,22 @@ public class SessionService {
         return gameSession.orElse(null);
     }
 
+    /**
+     * The session with this join code, or a 404 {@link ResponseStatusException}
+     * when the code is blank or unknown (AUTH-17: previously a null session
+     * NPE'd into a 500). Both join paths use this before touching any other
+     * state.
+     */
+    public GameSession requireGameSessionByJoinCode(String joinCode) {
+        GameSession gameSession = (joinCode == null || joinCode.isBlank())
+                ? null
+                : getGameSessionByJoinCode(joinCode);
+        if (gameSession == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found");
+        }
+        return gameSession;
+    }
+
     public boolean isGameSessionExistsByJoinCode(String joinCode) {
         Optional<GameSession> gameSession = gameSessionRepository.findGameSessionByJoinCode(joinCode);
         return gameSession.isPresent();
@@ -202,11 +221,16 @@ public class SessionService {
      * @param jwt JWT token from Keycloak authentication
      * @return JoinGameResponse with user information
      * @throws IllegalStateException if auth is disabled
+     * @throws ResponseStatusException 404 when no game has that join code
      */
     public JoinGameResponse addAuthenticatedUserToGameSession(JoinGameRequest joinGameRequest, Jwt jwt) {
         if (userRepository == null || userGameHistoryRepository == null) {
             throw new IllegalStateException("Authentication is not enabled. Set sockbowl.auth.enabled=true to use this feature.");
         }
+
+        // Resolve the game first so an unknown code is a clean 404 and never
+        // creates or touches the User row.
+        GameSession gameSession = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
 
         // Extract user info from JWT
         String keycloakId = jwt.getSubject();
@@ -239,7 +263,6 @@ public class SessionService {
         userRepository.save(user);
 
         // Join game session
-        GameSession gameSession = getGameSessionByJoinCode(joinGameRequest.getJoinCode());
         PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(
                 gameSession.getGameSettings().getGameMode()
         );

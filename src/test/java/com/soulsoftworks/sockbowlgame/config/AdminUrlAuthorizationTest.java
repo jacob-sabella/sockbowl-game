@@ -6,7 +6,6 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -37,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * a full Redis repository/message-listener infrastructure into this
  * MockMvc-only slice.
  */
-@WebMvcTest(controllers = AdminUrlProbeController.class, properties = "sockbowl.auth.enabled=true")
+@WebMvcTest(controllers = AdminUrlProbeController.class, properties = {"sockbowl.auth.enabled=true", "sockbowl.test.url-probes=true"})
 @Import({SecurityConfig.class, AdminUrlProbeController.class})
 @ContextConfiguration(classes = AdminUrlAuthorizationTest.TestApp.class)
 class AdminUrlAuthorizationTest {
@@ -49,14 +48,8 @@ class AdminUrlAuthorizationTest {
     @Autowired
     private MockMvc mvc;
 
-    // SecurityConfig configures oauth2Login(), which requires a
-    // ClientRegistrationRepository bean to be present in the context even
-    // though these tests only exercise the resource-server (JWT) path.
-    @MockitoBean
-    private ClientRegistrationRepository clientRegistrationRepository;
-
-    // Overrides SecurityConfig's real jwtDecoder() bean, which eagerly reaches
-    // out to an issuer-uri that isn't configured in this slice test.
+    // Supplies the JwtDecoder the resource server needs; JwtDecoderConfig (the
+    // real, audience-bound decoder) is not part of this slice.
     @MockitoBean
     private JwtDecoder jwtDecoder;
 

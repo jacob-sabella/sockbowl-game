@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.service.BanService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,17 +42,59 @@ public class GameAuthorizationPolicy {
 
     private final boolean authEnabled;
 
+    /** {@code sockbowl.auth.service-client-id}: the backend service account's client id. */
+    private final String serviceClientId;
+
     /**
      * Optional - only present when {@code sockbowl.auth.enabled=true}. When
      * absent the policy treats every user as un-banned.
      */
     private final BanService banService;
 
+    @Autowired
     public GameAuthorizationPolicy(
             @Value("${sockbowl.auth.enabled:false}") boolean authEnabled,
-            @Autowired(required = false) BanService banService) {
+            @Autowired(required = false) BanService banService,
+            @Value("${sockbowl.auth.service-client-id:" + AuthenticatedUser.DEFAULT_SERVICE_CLIENT_ID + "}")
+            String serviceClientId) {
         this.authEnabled = authEnabled;
         this.banService = banService;
+        this.serviceClientId = serviceClientId;
+    }
+
+    /** Convenience for tests: the default service client id. */
+    public GameAuthorizationPolicy(boolean authEnabled, BanService banService) {
+        this(authEnabled, banService, AuthenticatedUser.DEFAULT_SERVICE_CLIENT_ID);
+    }
+
+    public boolean isAuthEnabled() {
+        return authEnabled;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Identity resolution                                                */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Resolve the identity behind a validated token, using the configured
+     * service client id to recognise backend service accounts. A null token is
+     * the guest identity.
+     */
+    public AuthenticatedUser identityOf(Jwt jwt) {
+        return AuthenticatedUser.fromJwt(jwt, serviceClientId);
+    }
+
+    /**
+     * True when the identity is a backend service account rather than a user.
+     * Service identities may not host, join or use user endpoints.
+     */
+    public boolean isServiceIdentity(AuthenticatedUser identity) {
+        return identity != null && identity.isService();
+    }
+
+    /** True when the token was issued to the backend service client. */
+    public boolean isServiceToken(Jwt jwt) {
+        return AuthenticatedUser.isServiceToken(jwt, serviceClientId);
     }
 
     /* ------------------------------------------------------------------ */
@@ -59,22 +102,30 @@ public class GameAuthorizationPolicy {
     /* ------------------------------------------------------------------ */
 
     /**
-     * Whether an identity may create a new game session.
+     * Whether an identity may create a new game session (decision D1, AUTH-19).
      *
-     * <p>Auth is <b>additive</b>: enabling it never takes hosting away from guests —
-     * it only unlocks per-account features (question de-duplication, stats, history)
-     * for signed-in users. So anyone may host; only a ban blocks it.
+     * <ul>
+     *   <li>Auth disabled: anyone.</li>
+     *   <li>Guest (no token): allowed. Auth is additive, so enabling it never
+     *       takes hosting away from guests; M4 adds per-IP limits.</li>
+     *   <li>Service identity: never (it is not a user).</li>
+     *   <li>Signed-in user: must hold {@code game:host} and not be banned.
+     *       Every tier includes {@code game:host} via the {@code player}
+     *       composite, so in practice only a revoked permission or a ban
+     *       blocks it.</li>
+     * </ul>
      */
     public boolean canCreateGame(AuthenticatedUser identity) {
         if (!authEnabled) {
             return true;
         }
-        // Guests may still host when auth is enabled.
-        if (identity == null || !identity.isAuthenticated()) {
+        if (identity == null || identity.isGuest()) {
             return true;
         }
-        // Signed-in users host too — a ban is the only thing that blocks it.
-        return !isBanned(identity);
+        if (identity.isService() || !identity.isAuthenticated()) {
+            return false;
+        }
+        return identity.hasAuthority(GAME_HOST) && !isBanned(identity);
     }
 
     /**

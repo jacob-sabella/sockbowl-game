@@ -5,6 +5,7 @@ import com.soulsoftworks.sockbowlgame.model.entity.UserGameHistory;
 import com.soulsoftworks.sockbowlgame.model.entity.UserStats;
 import com.soulsoftworks.sockbowlgame.service.UserService;
 import com.soulsoftworks.sockbowlgame.service.UserUsedQuestionService;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +29,10 @@ import java.util.Set;
  * Controller for user-related endpoints.
  * Provides access to user statistics and game history.
  *
- * Only active when sockbowl.auth.enabled=true.
+ * Only active when sockbowl.auth.enabled=true. Every endpoint requires a
+ * signed-in <b>user</b>: the URL rule in {@code SecurityConfig} already refuses
+ * anonymous callers (401) and backend service-account tokens (403), and
+ * {@link #requireJwt(Jwt)} re-checks both here as defense in depth.
  */
 @RestController
 @RequestMapping("/api/v1/user")
@@ -37,17 +41,32 @@ public class UserController {
 
     private final UserService userService;
     private final UserUsedQuestionService usedQuestionService;
+    private final GameAuthorizationPolicy authorizationPolicy;
 
-    public UserController(UserService userService, UserUsedQuestionService usedQuestionService) {
+    public UserController(UserService userService, UserUsedQuestionService usedQuestionService,
+                          GameAuthorizationPolicy authorizationPolicy) {
         this.userService = userService;
         this.usedQuestionService = usedQuestionService;
+        this.authorizationPolicy = authorizationPolicy;
+    }
+
+    /**
+     * The caller's token, which must belong to a user: 401 without one, 403 for
+     * a backend service-account token.
+     */
+    private Jwt requireJwt(Jwt jwt) {
+        if (jwt == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        if (authorizationPolicy.isServiceToken(jwt)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Service accounts have no user profile");
+        }
+        return jwt;
     }
 
     /** Resolve (or lazily create) the authenticated user from the JWT. */
     private User requireUser(Jwt jwt) {
-        if (jwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
+        requireJwt(jwt);
         return userService.findOrCreateUser(
                 jwt.getSubject(), jwt.getClaimAsString("email"), jwt.getClaimAsString("name"));
     }
@@ -74,9 +93,7 @@ public class UserController {
      */
     @GetMapping("/profile")
     public ResponseEntity<Map<String, Object>> getUserProfile(@AuthenticationPrincipal Jwt jwt) {
-        if (jwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
+        requireJwt(jwt);
 
         String keycloakId = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
@@ -104,9 +121,7 @@ public class UserController {
      */
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getUserStats(@AuthenticationPrincipal Jwt jwt) {
-        if (jwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
+        requireJwt(jwt);
 
         String keycloakId = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
@@ -154,9 +169,7 @@ public class UserController {
             @AuthenticationPrincipal Jwt jwt,
             Pageable pageable) {
 
-        if (jwt == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-        }
+        requireJwt(jwt);
 
         String keycloakId = jwt.getSubject();
         String email = jwt.getClaimAsString("email");

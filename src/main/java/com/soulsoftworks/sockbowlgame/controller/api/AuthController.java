@@ -8,16 +8,20 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.view.RedirectView;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Authentication controller for OAuth2/OIDC login via Keycloak.
- * Provides endpoints for login, user information, and authentication status.
+ * Authentication information endpoints.
  *
- * Only active when sockbowl.auth.enabled=true.
+ * <p>There is deliberately no server-side login flow here: ng runs the OIDC
+ * authorization-code + PKCE flow against Keycloak itself and calls this API with
+ * a bearer token. The former {@code /login} and {@code /success} endpoints (the
+ * latter echoed the raw access token back in a response body) are gone
+ * (AUTH-08).
+ *
+ * <p>Only active when {@code sockbowl.auth.enabled=true}.
  */
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -25,41 +29,8 @@ import java.util.Map;
 public class AuthController {
 
     /**
-     * Redirects to Keycloak login page.
-     * This triggers the OAuth2 authorization code flow.
-     *
-     * @return RedirectView to OAuth2 authorization endpoint
-     */
-    @GetMapping("/login")
-    public RedirectView login() {
-        return new RedirectView("/oauth2/authorization/keycloak");
-    }
-
-    /**
-     * OAuth2 login success callback.
-     * Returns user information from the JWT token.
-     *
-     * @param jwt JWT token from Keycloak (injected by Spring Security)
-     * @return User information including access token
-     */
-    @GetMapping("/success")
-    public ResponseEntity<Map<String, Object>> success(@AuthenticationPrincipal Jwt jwt) {
-        if (jwt == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("userId", jwt.getSubject());
-        response.put("email", jwt.getClaimAsString("email"));
-        response.put("name", jwt.getClaimAsString("name"));
-        response.put("accessToken", jwt.getTokenValue());
-        response.put("expiresAt", jwt.getExpiresAt());
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Get current authenticated user information.
+     * Get current authenticated user information. Requires a user (not a
+     * service-account) bearer token; see {@code SecurityConfig}.
      *
      * @param jwt JWT token from Keycloak
      * @return User information
@@ -80,7 +51,7 @@ public class AuthController {
     }
 
     /**
-     * Health check endpoint to verify authentication is enabled.
+     * Public: lets clients discover that authentication is enabled.
      *
      * @return Status indicating authentication is enabled
      */
