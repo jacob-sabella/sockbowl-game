@@ -81,6 +81,13 @@ public class SecurityConfig {
 
             // Configure authorization rules
             .authorizeHttpRequests(auth -> auth
+                // Health check for compose/orchestrator healthchecks (no
+                // details beyond UP/DOWN; management.endpoint.health
+                // .show-details stays 'never'). Explicit even though the
+                // current backward-compatible anyRequest().permitAll()
+                // catch-all already covers it, so it stays open if that
+                // catch-all is tightened later.
+                .requestMatchers("/actuator/health").permitAll()
                 // Public endpoints (guest mode - backward compatible)
                 .requestMatchers("/api/v1/session/create-new-game-session").permitAll()
                 .requestMatchers("/api/v1/session/join-game-session-by-code").permitAll()

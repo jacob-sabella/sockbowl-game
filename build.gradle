@@ -125,6 +125,8 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.14.0'
     implementation 'org.projectlombok:lombok:1.18.48'
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
+    // Health endpoint only (see application.properties) for compose healthchecks.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'com.github.victools:jsonschema-generator:5.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
