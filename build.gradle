@@ -56,14 +56,27 @@ configurations.all {
     }
 }
 
+// sockbowlquestions-models normally resolves from GitHub Packages, which
+// 401s without read:packages credentials. For local dev without a token,
+// publish it with `./gradlew publishToMavenLocal` in sockbowl-questions and
+// build here with -PsockbowlUseMavenLocal=true (or SOCKBOWL_USE_MAVEN_LOCAL=
+// true): that swaps GitHub Packages out for mavenLocal() so no request (and
+// so no 401) is ever made against it. Neither is set in CI, so CI's
+// resolution is unchanged.
+boolean useMavenLocal = (findProperty('sockbowlUseMavenLocal') ?: System.getenv('SOCKBOWL_USE_MAVEN_LOCAL'))?.toString()?.toBoolean() ?: false
+
 repositories {
     mavenCentral()
-    maven {
-        name = 'GitHubPackages'
-        url = uri("https://maven.pkg.github.com/${System.getenv('GITHUB_REPOSITORY_OWNER') ?: 'jacob-sabella'}/sockbowl-questions")
-        credentials {
-            username = (System.getenv('GITHUB_ACTOR') ?: (findProperty('gpr.user') ?: '')) as String
-            password = (System.getenv('GITHUB_TOKEN') ?: (findProperty('gpr.key') ?: '')) as String
+    if (useMavenLocal) {
+        mavenLocal()
+    } else {
+        maven {
+            name = 'GitHubPackages'
+            url = uri("https://maven.pkg.github.com/${System.getenv('GITHUB_REPOSITORY_OWNER') ?: 'jacob-sabella'}/sockbowl-questions")
+            credentials {
+                username = (System.getenv('GITHUB_ACTOR') ?: (findProperty('gpr.user') ?: '')) as String
+                password = (System.getenv('GITHUB_TOKEN') ?: (findProperty('gpr.key') ?: '')) as String
+            }
         }
     }
 }
