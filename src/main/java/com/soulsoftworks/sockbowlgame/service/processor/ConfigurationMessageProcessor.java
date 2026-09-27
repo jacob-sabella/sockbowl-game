@@ -1,6 +1,8 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
+import com.soulsoftworks.sockbowlgame.client.PacketNotFoundException;
+import com.soulsoftworks.sockbowlgame.client.QuestionsUnavailableException;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
 import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
@@ -17,6 +19,8 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -24,6 +28,13 @@ import java.util.List;
 
 @Service
 public class ConfigurationMessageProcessor extends MessageProcessor {
+
+    private static final Logger log = LoggerFactory.getLogger(ConfigurationMessageProcessor.class);
+
+    /** SetMatchPacket error codes ({@link ProcessError#getCode()}). */
+    public static final String PACKET_NOT_FOUND = "PACKET_NOT_FOUND";
+    public static final String PACKET_NOT_AVAILABLE = "PACKET_NOT_AVAILABLE";
+    public static final String PACKET_SERVICE_UNAVAILABLE = "PACKET_SERVICE_UNAVAILABLE";
 
     private final PacketClient packetClient;
     private final GameAuthorizationPolicy authorizationPolicy;
@@ -147,12 +158,37 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
             return ProcessError.accessDeniedMessage(message);
         }
 
-        // Retrieve the packet using the packet ID from the message
-        Packet packet = packetClient.getPacketById(message.getPacketId()).block();
+        // Retrieve the packet using the packet ID from the message. This runs on
+        // the Kafka listener thread, so every failure becomes an error for the
+        // sender; nothing may escape (a thrown exception would be redelivered).
+        Packet packet;
+        try {
+            packet = packetClient.getPacketById(message.getPacketId()).block();
+        } catch (PacketNotFoundException e) {
+            packet = null;
+        } catch (QuestionsUnavailableException e) {
+            log.warn("SetMatchPacket {} for session {}: sockbowl-questions unavailable ({})",
+                    message.getPacketId(), gameSession.getId(), e.getMessage());
+            return packetServiceUnavailable(message);
+        } catch (RuntimeException e) {
+            log.warn("SetMatchPacket {} for session {}: packet fetch failed", message.getPacketId(),
+                    gameSession.getId(), e);
+            return packetServiceUnavailable(message);
+        }
 
         // If the packet is not found, return an error message
         if (packet == null) {
-            return ProcessError.builder().recipient(message.getOriginatingPlayerId()).error("Packet id " + message.getPacketId() + " does not exist").build();
+            return ProcessError.coded(message, PACKET_NOT_FOUND,
+                    "Packet id " + message.getPacketId() + " does not exist");
+        }
+
+        // Visibility (D2, D15): a draft may only be loaded by its owner or a
+        // packet:manage-any holder. The sender's identity comes from the STOMP
+        // principal (stampOrigin), never from the client's message body.
+        if (!authorizationPolicy.canUsePacketForMatch(packet, message.getOriginatingKeycloakId(),
+                message.getOriginatingAuthorities())) {
+            return ProcessError.coded(message, PACKET_NOT_AVAILABLE,
+                    "Packet id " + message.getPacketId() + " is not available for play");
         }
 
         // Sort the tossups by number
@@ -167,6 +203,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                 .packetName(packet.getName())
                 .tossupCount(packet.getTossups().size())
                 .build();
+    }
+
+    private static ProcessError packetServiceUnavailable(SetMatchPacket message) {
+        return ProcessError.coded(message, PACKET_SERVICE_UNAVAILABLE,
+                "The packet service is unavailable right now. Try again in a moment.");
     }
 
     /**
