@@ -78,7 +78,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.security.oauth2.client.registration.questions-svc.client-id=sockbowl-game-backend",
         "spring.security.oauth2.client.registration.questions-svc.client-secret=test-secret",
         "spring.security.oauth2.client.registration.questions-svc.authorization-grant-type=client_credentials",
-        "sockbowl.questions.url=http://127.0.0.1:1/"
+        "sockbowl.questions.url=http://127.0.0.1:1/",
+        // src/main/resources/application.properties (where WP-G1 put every
+        // sockbowl.quota.tiers.* default) is never on the test classpath - a
+        // same-named src/test/resources/application.properties fully shadows it,
+        // by design (see that file's own M4 comment) - so left unset here the
+        // hosted-session quota would bind to 0 (deny) for every tier and reject
+        // this class's very first create. This class isn't testing the WP-G5
+        // quota (that's HostedSessionQuotaIT), so quotas are simply off here.
+        "sockbowl.quota.enabled=false"
 })
 @AutoConfigureMockMvc
 class GameSessionControllerAuthIT {
