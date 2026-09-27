@@ -6,8 +6,13 @@ import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
 import com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest;
 import com.soulsoftworks.sockbowlgame.model.response.GameSessionIdentifiers;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
+import com.soulsoftworks.sockbowlgame.ratelimit.ClientIpResolver;
+import com.soulsoftworks.sockbowlgame.ratelimit.LimitSubject;
+import com.soulsoftworks.sockbowlgame.ratelimit.LimitSubjectResolver;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import com.soulsoftworks.sockbowlgame.usage.HostedSessionQuota;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.http.HttpStatus;
@@ -37,13 +42,22 @@ public class GameSessionController {
     private final SessionService sessionService;
     private final GameAuthorizationPolicy authorizationPolicy;
     private final Validator validator;
+    private final HostedSessionQuota hostedSessionQuota;
+    private final LimitSubjectResolver limitSubjectResolver;
+    private final ClientIpResolver clientIpResolver;
 
     public GameSessionController(SessionService sessionService,
                                  GameAuthorizationPolicy authorizationPolicy,
-                                 Validator validator) {
+                                 Validator validator,
+                                 HostedSessionQuota hostedSessionQuota,
+                                 LimitSubjectResolver limitSubjectResolver,
+                                 ClientIpResolver clientIpResolver) {
         this.sessionService = sessionService;
         this.authorizationPolicy = authorizationPolicy;
         this.validator = validator;
+        this.hostedSessionQuota = hostedSessionQuota;
+        this.limitSubjectResolver = limitSubjectResolver;
+        this.clientIpResolver = clientIpResolver;
     }
 
     /**
@@ -55,10 +69,13 @@ public class GameSessionController {
      *
      * @param createGameRequest The settings to create the game with
      * @param jwt               The validated bearer, or null for a guest
+     * @param request           Used only to resolve the client IP for the
+     *                          hosted-sessions quota (guests are counted by IP)
      */
     @PostMapping("/create-new-game-session")
     public GameSessionIdentifiers createNewGame(@RequestBody CreateGameRequest createGameRequest,
-                                                @AuthenticationPrincipal Jwt jwt){
+                                                @AuthenticationPrincipal Jwt jwt,
+                                                HttpServletRequest request){
 
         AuthenticatedUser identity = authorizationPolicy.identityOf(jwt);
 
@@ -68,8 +85,17 @@ public class GameSessionController {
                     "You are not allowed to create a game session.");
         }
 
+        // Concurrent hosted-session quota (D10, plan m4-limits section 2.3):
+        // checked before creating so a caller at their limit never leaks a
+        // GameSession document, charged after so a check that passes can't be
+        // raced into an over-count by two requests from the same caller.
+        LimitSubject limitSubject = limitSubjectResolver.forUser(identity, clientIpResolver.resolve(request));
+        hostedSessionQuota.reserve(limitSubject);
+
         String gameOwnerId = identity.isUser() ? identity.getKeycloakId() : null;
         GameSession gameSession = sessionService.createNewGame(createGameRequest, gameOwnerId);
+
+        hostedSessionQuota.recordCreated(limitSubject, gameSession.getId());
 
         return GameSessionIdentifiers.builder()
                 .fromGameSession(gameSession)

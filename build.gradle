@@ -160,7 +160,8 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers:2.0.5'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
     testImplementation 'com.redis:testcontainers-redis:2.2.4'
-    // Real Postgres for the M4 ban/IP-ban ITs (the JPA side of D8 mirrors).
+    // Real Postgres for the M4 ban/IP-ban ITs (the JPA side of D8 mirrors) and
+    // the M4 quota-override IT (the JPA side of D10's mirror).
     testImplementation 'org.testcontainers:testcontainers-postgresql:2.0.5'
     // Real Keycloak for the auth-on ITs (M2 WP-G4's QuestionsTokenProviderIT
     // mints service tokens from the shared test realm). 4.3.x targets

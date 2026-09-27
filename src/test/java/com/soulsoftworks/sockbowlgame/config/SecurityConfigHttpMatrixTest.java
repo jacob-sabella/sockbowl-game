@@ -21,8 +21,11 @@ import com.soulsoftworks.sockbowlgame.service.BanService;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
 import com.soulsoftworks.sockbowlgame.service.UserService;
 import com.soulsoftworks.sockbowlgame.service.UserUsedQuestionService;
+import com.soulsoftworks.sockbowlgame.ratelimit.ClientIpResolver;
+import com.soulsoftworks.sockbowlgame.ratelimit.LimitSubjectResolver;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.service.ban.IpBanService;
+import com.soulsoftworks.sockbowlgame.usage.HostedSessionQuota;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -107,6 +110,12 @@ class SecurityConfigHttpMatrixTest {
     private UserService userService;
     @MockitoBean
     private UserUsedQuestionService usedQuestionService;
+    @MockitoBean
+    private HostedSessionQuota hostedSessionQuota;
+    @MockitoBean
+    private LimitSubjectResolver limitSubjectResolver;
+    @MockitoBean
+    private ClientIpResolver clientIpResolver;
 
     @BeforeEach
     void stubServices() {

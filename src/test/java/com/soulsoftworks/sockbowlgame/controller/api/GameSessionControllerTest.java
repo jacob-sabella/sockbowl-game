@@ -28,7 +28,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+        // src/main/resources/application.properties (where WP-G1 put every
+        // sockbowl.quota.tiers.* default) never reaches the test classpath - a
+        // same-named src/test/resources/application.properties shadows it - so
+        // left unset every tier's hosted-session limit binds to 0 (deny) and
+        // rejects this test's very first create. This test isn't testing the
+        // WP-G5 quota (that's HostedSessionQuotaIT), so quotas are off here.
+        "sockbowl.quota.enabled=false"
+})
 @AutoConfigureMockMvc
 public class GameSessionControllerTest {
 

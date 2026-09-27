@@ -9,8 +9,10 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameMode;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
+import com.soulsoftworks.sockbowlgame.quota.QuotaProperties;
 import com.soulsoftworks.sockbowlgame.service.MessageService;
 import com.soulsoftworks.sockbowlgame.service.SessionService;
+import com.soulsoftworks.sockbowlgame.usage.HostedSessionQuota;
 import com.soulsoftworks.sockbowlgame.support.InSessionFixture;
 import com.soulsoftworks.sockbowlgame.support.InSessionFixture.Creator;
 import com.soulsoftworks.sockbowlgame.support.InSessionFixture.Room;
@@ -281,7 +283,8 @@ class SetMatchPacketVisibilityTest {
         MessageService service = new MessageService(stomp, mock(KafkaTemplate.class), sessions,
                 new ConfigurationMessageProcessor(fx.packetClient, fx.policy),
                 new ProgressionMessageProcessor(fx.policy),
-                new GameMessageProcessor(fx.policy));
+                new GameMessageProcessor(fx.policy),
+                mock(HostedSessionQuota.class), new QuotaProperties(), java.time.Clock.systemUTC());
 
         SockbowlInMessage message = setPacket(room, proctor, null, Set.of());
         message.setGameSession(null); // as it arrives from Kafka

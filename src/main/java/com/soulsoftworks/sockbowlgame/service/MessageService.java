@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageQueues;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.constants.MessageTypes;
@@ -8,9 +10,11 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.MatchState;
+import com.soulsoftworks.sockbowlgame.quota.QuotaProperties;
 import com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.GameMessageProcessor;
 import com.soulsoftworks.sockbowlgame.service.processor.ProgressionMessageProcessor;
+import com.soulsoftworks.sockbowlgame.usage.HostedSessionQuota;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +24,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.util.List;
 
 /**
@@ -38,6 +43,17 @@ public class MessageService {
     private final ConfigurationMessageProcessor configurationMessageProcessor;
     private final ProgressionMessageProcessor progressionMessageProcessor;
     private final GameMessageProcessor gameMessageProcessor;
+    private final HostedSessionQuota hostedSessionQuota;
+
+    /**
+     * Local throttle for the hosted-session activity touch (plan m4-limits
+     * section 2.3): at most one {@link HostedSessionQuota#touchActivity} call
+     * per session per {@code sockbowl.quota.session-touch-interval} (default
+     * 1m), so a busy match doesn't cost a Redis round trip per message. Ticks
+     * off the same replaceable {@link Clock} as the rest of the limiter, so
+     * tests advance it instead of sleeping.
+     */
+    private final Cache<String, Boolean> activityTouchThrottle;
 
     /**
      * Constructor for the MessageService.
@@ -48,16 +64,26 @@ public class MessageService {
      * @param configurationMessageProcessor Used for processing configuration type messages.
      * @param progressionMessageProcessor   Used for processing progression type messages.
      * @param gameMessageProcessor          Used for processing game type messages
+     * @param hostedSessionQuota            Used to keep an in-play session's hosted-session quota slot fresh
+     * @param quotaProperties               Supplies the activity-touch throttle interval
+     * @param clock                         Replaceable clock (M4 limiter/quota clock) driving the throttle
      */
     public MessageService(SimpMessagingTemplate simpMessagingTemplate,
                           KafkaTemplate<String, SockbowlInMessage> kafkaTemplate,
-                          SessionService sessionService, ConfigurationMessageProcessor configurationMessageProcessor, ProgressionMessageProcessor progressionMessageProcessor, GameMessageProcessor gameMessageProcessor) {
+                          SessionService sessionService, ConfigurationMessageProcessor configurationMessageProcessor,
+                          ProgressionMessageProcessor progressionMessageProcessor, GameMessageProcessor gameMessageProcessor,
+                          HostedSessionQuota hostedSessionQuota, QuotaProperties quotaProperties, Clock clock) {
         this.simpMessagingTemplate = simpMessagingTemplate;
         this.kafkaTemplate = kafkaTemplate;
         this.sessionService = sessionService;
         this.configurationMessageProcessor = configurationMessageProcessor;
         this.progressionMessageProcessor = progressionMessageProcessor;
         this.gameMessageProcessor = gameMessageProcessor;
+        this.hostedSessionQuota = hostedSessionQuota;
+        this.activityTouchThrottle = Caffeine.newBuilder()
+                .expireAfterWrite(quotaProperties.getSessionTouchInterval())
+                .ticker(() -> clock.millis() * 1_000_000L)
+                .build();
     }
 
     @Value("${sockbowl.kafka.topic.game-topic}")
@@ -113,6 +139,7 @@ public class MessageService {
             // If no error occured, update the game session
             if (!(sockbowlOutMessage instanceof ProcessError)) {
                 sessionService.saveGameSession(gameSession);
+                touchHostedSessionActivity(gameSession.getId());
             }
 
             List<SockbowlOutMessage> sockbowlOutMessagesToProcess;
@@ -144,6 +171,20 @@ public class MessageService {
             }
 
         }
+    }
+
+    /**
+     * Bumps the hosted-session quota's activity score for {@code sessionId} at
+     * most once per {@code sockbowl.quota.session-touch-interval} (plan
+     * m4-limits section 2.3): a game being actively played never goes idle out
+     * of its owner's concurrent quota, without a Redis round trip per message.
+     */
+    private void touchHostedSessionActivity(String sessionId) {
+        if (activityTouchThrottle.getIfPresent(sessionId) != null) {
+            return;
+        }
+        activityTouchThrottle.put(sessionId, Boolean.TRUE);
+        hostedSessionQuota.touchActivity(sessionId);
     }
 
     /**
