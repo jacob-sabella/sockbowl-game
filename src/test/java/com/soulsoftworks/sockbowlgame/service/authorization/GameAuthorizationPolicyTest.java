@@ -212,7 +212,8 @@ class GameAuthorizationPolicyTest {
     void authenticatedOwnerResolvedByKeycloakSubject() {
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
 
-        Player owner = Player.builder().playerId("p1").keycloakId("kc-user").build();
+        // GameSession.addPlayer sets the owner flag for the creator's subject.
+        Player owner = Player.builder().playerId("p1").keycloakId("kc-user").isGameOwner(true).build();
         Player other = Player.builder().playerId("p2").keycloakId("kc-other").build();
         GameSession session = mock(GameSession.class);
         when(session.getGameOwnerId()).thenReturn("kc-user");
@@ -222,6 +223,29 @@ class GameAuthorizationPolicyTest {
         assertTrue(policy.isSessionOwner(session, "p1"));
         // Different authenticated user cannot assume ownership.
         assertFalse(policy.isSessionOwner(session, "p2"));
+    }
+
+    @Test
+    void ownerFlagAloneIsNotEnoughWhenSessionHasAnOwnerSubject() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+
+        // A flag that disagrees with the durable owner subject never grants ownership.
+        Player flaggedImpostor = Player.builder().playerId("p2").keycloakId("kc-other").isGameOwner(true).build();
+        Player flaggedGuest = Player.builder().playerId("p3").isGameOwner(true).build();
+        // And the right subject without the flag (not set by addPlayer) is not owner either.
+        Player unflaggedOwnerSubject = Player.builder().playerId("p4").keycloakId("kc-user").build();
+        GameSession session = mock(GameSession.class);
+        when(session.getGameOwnerId()).thenReturn("kc-user");
+        when(session.getPlayerById("p2")).thenReturn(flaggedImpostor);
+        when(session.getPlayerById("p3")).thenReturn(flaggedGuest);
+        when(session.getPlayerById("p4")).thenReturn(unflaggedOwnerSubject);
+
+        assertFalse(policy.isSessionOwner(session, "p2"));
+        assertFalse(policy.isSessionOwner(session, "p3"));
+        assertFalse(policy.isSessionOwner(session, "p4"));
+        assertFalse(policy.isSessionOwner(session, "missing"));
+        assertFalse(policy.isSessionOwner(session, null));
+        assertFalse(policy.isSessionOwner(null, "p2"));
     }
 
     @Test

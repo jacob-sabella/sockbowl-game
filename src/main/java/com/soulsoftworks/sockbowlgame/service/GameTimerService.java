@@ -5,8 +5,10 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.ReadingUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.TimerUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.util.QuestionTokenizer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -24,13 +26,24 @@ public class GameTimerService {
     private final SessionService sessionService;
     private final MessageService messageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final GameAuthorizationPolicy authorizationPolicy;
 
+    /** Test convenience: a default policy (ownership does not depend on the auth mode). */
     public GameTimerService(SessionService sessionService,
                            MessageService messageService,
                            SimpMessagingTemplate messagingTemplate) {
+        this(sessionService, messageService, messagingTemplate, new GameAuthorizationPolicy(false, null));
+    }
+
+    @Autowired
+    public GameTimerService(SessionService sessionService,
+                           MessageService messageService,
+                           SimpMessagingTemplate messagingTemplate,
+                           GameAuthorizationPolicy authorizationPolicy) {
         this.sessionService = sessionService;
         this.messageService = messageService;
         this.messagingTemplate = messagingTemplate;
+        this.authorizationPolicy = authorizationPolicy;
     }
 
     /**
@@ -200,7 +213,7 @@ public class GameTimerService {
             return proctor.getPlayerId();
         }
         return session.getPlayerList().stream()
-                .filter(Player::isGameOwner)
+                .filter(player -> authorizationPolicy.isSessionOwner(session, player.getPlayerId()))
                 .findFirst()
                 .map(Player::getPlayerId)
                 .orElse(null);

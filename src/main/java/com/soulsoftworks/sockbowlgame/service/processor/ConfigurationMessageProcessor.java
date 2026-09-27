@@ -137,8 +137,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Authorize: proctorless modes have no proctor, so the game owner sets the packet;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
-            Player setter = gameSession.getPlayerById(message.getOriginatingPlayerId());
-            if (setter == null || !setter.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, message.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(message);
             }
         } else if (gameSession.getProctor() == null ||
@@ -273,8 +272,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Authorize: proctorless modes have no proctor, so the game owner updates settings;
         // otherwise only the proctor may.
         if (gameSession.getGameSettings().isProctorless()) {
-            Player editor = gameSession.getPlayerById(updateGameSettingsMsg.getOriginatingPlayerId());
-            if (editor == null || !editor.isGameOwner()) {
+            if (!authorizationPolicy.isSessionOwner(gameSession, updateGameSettingsMsg.getOriginatingPlayerId())) {
                 return ProcessError.accessDeniedMessage(updateGameSettingsMsg);
             }
         } else if (gameSession.getPlayerModeById(updateGameSettingsMsg.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {

@@ -169,10 +169,17 @@ public class GameAuthorizationPolicy {
     /* ------------------------------------------------------------------ */
 
     /**
-     * Whether the given player is the owner of the session. When the session
-     * carries a Keycloak owner subject, ownership is verified against the
-     * player's stored Keycloak subject so a different authenticated user cannot
-     * assume ownership. Otherwise the in-memory owner flag is used (guest play).
+     * Whether the given player is the owner of the session. This is the only
+     * ownership check in the game server (AUTH-11): processors, the timer
+     * service and the other session checks below all call it instead of
+     * reading {@link Player#isGameOwner()} directly.
+     *
+     * <p>The owner flag is set once, in {@link GameSession#addPlayer}. When the
+     * session was created by an authenticated user ({@code gameOwnerId} set),
+     * the player's stored Keycloak subject is re-checked against it as well, so
+     * a flag that disagrees with the durable owner identity never grants
+     * ownership. Guest-created sessions use the first-joiner flag alone.
+     * Independent of {@code sockbowl.auth.enabled}.
      */
     public boolean isSessionOwner(GameSession session, String playerId) {
         if (session == null || playerId == null) {
@@ -181,7 +188,9 @@ public class GameAuthorizationPolicy {
         String ownerKeycloakId = session.getGameOwnerId();
         if (ownerKeycloakId != null && !ownerKeycloakId.isBlank()) {
             Player player = session.getPlayerById(playerId);
-            return player != null && ownerKeycloakId.equals(player.getKeycloakId());
+            return player != null
+                    && player.isGameOwner()
+                    && ownerKeycloakId.equals(player.getKeycloakId());
         }
         return session.isPlayerGameOwner(playerId);
     }
