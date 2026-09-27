@@ -20,6 +20,13 @@ import java.util.Set;
  *
  * <p>A {@code guest} identity (anonymous / header-secret authenticated player)
  * carries no Keycloak subject and no roles.
+ *
+ * <p>A {@code service} identity is a client-credentials token issued to a
+ * backend (the {@code sockbowl-game-backend} service account). It is a valid
+ * token but <b>not a user</b>: it may not host, join, or reach user endpoints
+ * (plan section 2.2). It is recognised by its {@code azp} (authorized party)
+ * claim, or {@code client_id} as a fallback, equalling the configured service
+ * client id ({@code sockbowl.auth.service-client-id}).
  */
 public final class AuthenticatedUser {
 
@@ -28,14 +35,19 @@ public final class AuthenticatedUser {
     private final String email;
     private final Set<String> roles;
     private final boolean guest;
+    private final boolean service;
+
+    /** Default {@code sockbowl.auth.service-client-id}. */
+    public static final String DEFAULT_SERVICE_CLIENT_ID = "sockbowl-game-backend";
 
     private AuthenticatedUser(String keycloakId, String username, String email,
-                              Set<String> roles, boolean guest) {
+                              Set<String> roles, boolean guest, boolean service) {
         this.keycloakId = keycloakId;
         this.username = username;
         this.email = email;
         this.roles = roles == null ? Collections.emptySet() : Set.copyOf(roles);
         this.guest = guest;
+        this.service = service;
     }
 
     /**
@@ -43,15 +55,31 @@ public final class AuthenticatedUser {
      * when a player authenticates only with a header-based player secret.
      */
     public static AuthenticatedUser guest() {
-        return new AuthenticatedUser(null, null, null, Collections.emptySet(), true);
+        return new AuthenticatedUser(null, null, null, Collections.emptySet(), true, false);
+    }
+
+    /**
+     * Build an authenticated identity from a validated Keycloak access token,
+     * recognising the default service client id
+     * ({@value #DEFAULT_SERVICE_CLIENT_ID}) as a service identity. Prefer
+     * {@link #fromJwt(Jwt, String)} with the configured id where one is at hand
+     * (see {@code GameAuthorizationPolicy#identityOf}).
+     */
+    public static AuthenticatedUser fromJwt(Jwt jwt) {
+        return fromJwt(jwt, DEFAULT_SERVICE_CLIENT_ID);
     }
 
     /**
      * Build an authenticated identity from a validated Keycloak access token.
-     * Realm roles are read from the standard {@code realm_access.roles} claim.
+     * Realm roles are read from the standard {@code realm_access.roles} claim
+     * (Keycloak expands composites there, so permission roles such as
+     * {@code game:host} appear directly).
+     *
+     * @param serviceClientId the backend service client id; a token whose
+     *                        {@code azp} (or {@code client_id}) equals it is a
+     *                        service identity
      */
-    @SuppressWarnings("unchecked")
-    public static AuthenticatedUser fromJwt(Jwt jwt) {
+    public static AuthenticatedUser fromJwt(Jwt jwt, String serviceClientId) {
         if (jwt == null) {
             return guest();
         }
@@ -76,8 +104,24 @@ public final class AuthenticatedUser {
                 username,
                 jwt.getClaimAsString("email"),
                 roles,
-                false
+                false,
+                isServiceToken(jwt, serviceClientId)
         );
+    }
+
+    /**
+     * True when the token was issued to the backend service client (a
+     * client-credentials token) rather than to a user.
+     */
+    public static boolean isServiceToken(Jwt jwt, String serviceClientId) {
+        if (jwt == null || serviceClientId == null || serviceClientId.isBlank()) {
+            return false;
+        }
+        String azp = jwt.getClaimAsString("azp");
+        if (azp != null) {
+            return serviceClientId.equals(azp);
+        }
+        return serviceClientId.equals(jwt.getClaimAsString("client_id"));
     }
 
     /**
@@ -96,7 +140,16 @@ public final class AuthenticatedUser {
                 roles.add(authority.startsWith("ROLE_") ? authority.substring(5) : authority);
             }
         }
-        return new AuthenticatedUser(keycloakId, username, email, roles, false);
+        return new AuthenticatedUser(keycloakId, username, email, roles, false, false);
+    }
+
+    /**
+     * A backend service-account identity (client-credentials token) with the
+     * given subject and raw authority names.
+     */
+    public static AuthenticatedUser service(String subject, List<String> authorities) {
+        AuthenticatedUser base = of(subject, null, null, authorities);
+        return new AuthenticatedUser(subject, null, null, base.roles, false, true);
     }
 
     public String getKeycloakId() {
@@ -115,16 +168,43 @@ public final class AuthenticatedUser {
         return roles;
     }
 
+    /**
+     * The raw authority names this identity holds (realm roles and permission
+     * roles, never {@code ROLE_}-prefixed). Same set as {@link #getRoles()};
+     * named for callers that reason in Spring Security authority terms (the
+     * STOMP principal, {@code packet:manage-any} checks).
+     */
+    public Set<String> getAuthorities() {
+        return roles;
+    }
+
     public boolean isGuest() {
         return guest;
     }
 
     /**
-     * True when this identity represents a real, signed-in Keycloak user
-     * (i.e. it has a subject and is not a guest).
+     * True when this identity is a backend service account (client-credentials
+     * token), not a user. Service identities are never allowed to act as a
+     * player or reach user endpoints.
+     */
+    public boolean isService() {
+        return service;
+    }
+
+    /**
+     * True when this identity carries a validated token with a subject (a user
+     * or a service account; see {@link #isService()} to tell them apart).
      */
     public boolean isAuthenticated() {
         return !guest && keycloakId != null;
+    }
+
+    /**
+     * True when this identity is a real, signed-in Keycloak <b>user</b>:
+     * authenticated and not a service account.
+     */
+    public boolean isUser() {
+        return isAuthenticated() && !service;
     }
 
     public boolean hasRole(String role) {

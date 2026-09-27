@@ -6,8 +6,10 @@ import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.Player;
 import com.soulsoftworks.sockbowlgame.service.BanService;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -50,12 +52,101 @@ class GameAuthorizationPolicyTest {
     }
 
     @Test
-    void authEnabledAllowsAnySignedInUserToCreate() {
+    void authEnabledRequiresGameHostForSignedInUsers() {
+        // D1 / AUTH-19: game:host is enforced for authenticated hosts. Every
+        // tier gets it through the player composite, so this only bites when
+        // the permission has been revoked.
         GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
         assertTrue(policy.canCreateGame(user()));
-        // No special game:host role is required — signing in only ADDS features.
+        assertFalse(policy.canCreateGame(userWithoutGameHost()));
+        // The admin role alone (without its composite expansion) is not game:host.
+        assertFalse(policy.canCreateGame(admin()));
+        assertTrue(policy.canCreateGame(AuthenticatedUser.of(
+                "kc-admin", "root", null, List.of("ROLE_admin", "game:host", "admin:access"))));
+    }
+
+    @Test
+    void serviceIdentityCannotCreateWhenAuthEnabled() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        // Even a service token that somehow held game:host is not a user.
+        assertFalse(policy.canCreateGame(serviceIdentity()));
+        assertFalse(policy.canCreateGame(
+                AuthenticatedUser.service("svc", List.of("packet:read", "game:host"))));
+    }
+
+    @Test
+    void authDisabledAllowsEveryoneIncludingServiceAndUsersWithoutGameHost() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(false, null);
+        assertTrue(policy.canCreateGame(null));
         assertTrue(policy.canCreateGame(userWithoutGameHost()));
-        assertTrue(policy.canCreateGame(admin()));
+        assertTrue(policy.canCreateGame(serviceIdentity()));
+    }
+
+    @Test
+    void canCreateGameMatrixWithBans() {
+        BanService banService = mock(BanService.class);
+        when(banService.isBanned("kc-user")).thenReturn(true);
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, banService);
+        assertTrue(policy.canCreateGame(AuthenticatedUser.guest()));
+        assertTrue(policy.canCreateGame(null));
+        assertFalse(policy.canCreateGame(user()));           // banned, holds game:host
+        assertFalse(policy.canCreateGame(userWithoutGameHost()));
+        assertFalse(policy.canCreateGame(serviceIdentity()));
+    }
+
+    /* -------------------- identity resolution -------------------- */
+
+    private static AuthenticatedUser serviceIdentity() {
+        return AuthenticatedUser.service("svc-sub", List.of("packet:read"));
+    }
+
+    private static Jwt token(String azp, String clientId, String... roles) {
+        Jwt.Builder b = Jwt.withTokenValue("t").header("alg", "none").subject("sub-1")
+                .claim("realm_access", Map.of("roles", List.of(roles)));
+        if (azp != null) {
+            b.claim("azp", azp);
+        }
+        if (clientId != null) {
+            b.claim("client_id", clientId);
+        }
+        return b.build();
+    }
+
+    @Test
+    void identityOfRecognisesTheConfiguredServiceClient() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null, "my-backend");
+
+        AuthenticatedUser svc = policy.identityOf(token("my-backend", null, "packet:read"));
+        assertTrue(svc.isService());
+        assertFalse(svc.isUser());
+        assertTrue(policy.isServiceIdentity(svc));
+        assertTrue(policy.isServiceToken(token(null, "my-backend")));
+
+        AuthenticatedUser user = policy.identityOf(token("sockbowl-game", null, "player", "game:host"));
+        assertFalse(user.isService());
+        assertTrue(user.isUser());
+        assertTrue(user.getAuthorities().contains("game:host"));
+        // azp wins over client_id when both are present.
+        assertFalse(policy.isServiceToken(token("sockbowl-game", "my-backend")));
+        // The default id is not special once another is configured.
+        assertFalse(policy.identityOf(token("sockbowl-game-backend", null)).isService());
+    }
+
+    @Test
+    void identityOfNullTokenIsGuest() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        AuthenticatedUser guest = policy.identityOf(null);
+        assertTrue(guest.isGuest());
+        assertFalse(guest.isService());
+        assertFalse(guest.isUser());
+        assertFalse(policy.isServiceToken(null));
+    }
+
+    @Test
+    void defaultServiceClientIdIsSockbowlGameBackend() {
+        GameAuthorizationPolicy policy = new GameAuthorizationPolicy(true, null);
+        assertTrue(policy.identityOf(token("sockbowl-game-backend", null, "packet:read")).isService());
+        assertTrue(AuthenticatedUser.fromJwt(token("sockbowl-game-backend", null)).isService());
     }
 
     @Test
