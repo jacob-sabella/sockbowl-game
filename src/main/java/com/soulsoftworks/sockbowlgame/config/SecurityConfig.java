@@ -1,8 +1,10 @@
 package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.model.security.AuthenticatedUser;
+import com.soulsoftworks.sockbowlgame.ratelimit.RequestGuardFilter;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +31,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 import java.io.IOException;
@@ -55,7 +58,14 @@ import java.util.function.Supplier;
  * invalid bearer is rejected with 401 even on the {@code permitAll} guest
  * endpoints.
  *
- * <p>When auth is disabled, {@link NoSecurityConfig} applies instead.
+ * <p>The M4 {@link RequestGuardFilter} (IP/subject bans and REST rate limits)
+ * runs just before {@link AuthorizationFilter}: after bearer authentication, so
+ * the caller's {@code sub} and tier are known, and before any authorization
+ * decision. A request with an invalid bearer is answered 401 by the resource
+ * server before it reaches the guard.
+ *
+ * <p>When auth is disabled, {@link NoSecurityConfig} applies instead (with the
+ * same guard).
  */
 @Configuration
 @EnableWebSecurity
@@ -76,7 +86,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   ObjectProvider<RequestGuardFilter> requestGuardFilter)
+            throws Exception {
         AuthenticationEntryPoint entryPoint = jsonAuthenticationEntryPoint();
 
         http
@@ -130,6 +142,11 @@ public class SecurityConfig {
                 .authenticationEntryPoint(entryPoint)
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtAuthenticationConverter()))
             );
+
+        // M4 request guard (bans + REST rate limits). Always present in the
+        // application context (RequestGuardFilterConfig); absent only in
+        // security-matrix @WebMvcTest slices that import this class alone.
+        requestGuardFilter.ifAvailable(guard -> http.addFilterBefore(guard, AuthorizationFilter.class));
 
         return http.build();
     }
