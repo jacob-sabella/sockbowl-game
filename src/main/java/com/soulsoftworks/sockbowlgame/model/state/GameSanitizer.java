@@ -37,15 +37,20 @@ public class GameSanitizer {
                 sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
                 sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
 
-                RoundState roundState = gameSession.getCurrentMatch().getCurrentRound().getRoundState();
+                Round currentRound = gameSession.getCurrentMatch().getCurrentRound();
                 GameMode gameMode = gameSession.getGameSettings().getGameMode();
 
-                if (roundState != RoundState.COMPLETED) {
+                if (currentRound != null && currentRound.getRoundState() != RoundState.COMPLETED) {
                     Round replacement = (gameMode != null && gameMode.isAutoJudgedMultiplayer())
                             ? revealQuestionHideAnswer(sanitizedGameSession.getCurrentRound(), gameMode)
                             : sanitizeRound(sanitizedGameSession.getCurrentRound());
                     sanitizedGameSession.getCurrentMatch().setCurrentRound(replacement);
+                } else if (currentRound != null) {
+                    sanitizedGameSession.getCurrentMatch().setCurrentRound(
+                            publicRoundView(sanitizedGameSession.getCurrentRound()));
                 }
+                sanitizedGameSession.getCurrentMatch().setPreviousRounds(
+                        publicRounds(sanitizedGameSession.getCurrentMatch().getPreviousRounds()));
         }
 
         return sanitizedGameSession;
@@ -120,6 +125,96 @@ public class GameSanitizer {
             copy.setQuestion(QuestionTokenizer.truncate(round.getQuestion(), round.getRevealedWordCount()));
         }
         return copy;
+    }
+
+    /**
+     * The view of a round that any player may see once its tossup is decided
+     * (bonus phase or COMPLETED), G-02:
+     * <ul>
+     *   <li>the tossup answer is kept only when the tossup is decided (a bonus
+     *       state or COMPLETED); otherwise it is cleared;</li>
+     *   <li>bonus part answers are kept only for parts already judged: parts
+     *       before {@link Round#getCurrentBonusPartIndex()} in reading order, or
+     *       every part once the bonus is BONUS_COMPLETED or the round is
+     *       COMPLETED;</li>
+     *   <li>a bonus that was never played ({@code currentBonus == null}, e.g. a
+     *       dead tossup or bonuses turned off) keeps no answers at all.</li>
+     * </ul>
+     * Returns a deep copy; the input is not modified. Null-safe.
+     */
+    public static Round publicRoundView(Round round) {
+        if (round == null) {
+            return null;
+        }
+        Round copy = DeepCopyUtil.deepCopy(round, Round.class);
+        RoundState state = round.getRoundState();
+        if (!isTossupDecided(state)) {
+            copy.setAnswer("");
+        }
+        if (copy.getCurrentBonus() == null) {
+            // Never played: nothing about it is public.
+            hideBonusAnswers(copy.getAssociatedBonus());
+            return copy;
+        }
+        int judged = (state == RoundState.BONUS_COMPLETED || state == RoundState.COMPLETED)
+                ? Integer.MAX_VALUE
+                : round.getCurrentBonusPartIndex();
+        hideBonusAnswersFrom(copy.getCurrentBonus(), judged);
+        hideBonusAnswersFrom(copy.getAssociatedBonus(), judged);
+        return copy;
+    }
+
+    /** {@link #publicRoundView} applied to every round of a list (a new list). Null-safe. */
+    public static List<Round> publicRounds(List<Round> rounds) {
+        if (rounds == null) {
+            return null;
+        }
+        List<Round> views = new java.util.ArrayList<>(rounds.size());
+        for (Round r : rounds) {
+            views.add(publicRoundView(r));
+        }
+        return views;
+    }
+
+    private static boolean isTossupDecided(RoundState state) {
+        if (state == null) {
+            return false;
+        }
+        return switch (state) {
+            case BONUS_PENDING, BONUS_READING_PREAMBLE, BONUS_READING_PART, BONUS_AWAITING_ANSWER,
+                 BONUS_COMPLETED, COMPLETED -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Clear the answers of every part whose reading-order position is
+     * {@code >= firstHidden}. Reading order is the part's {@code order}
+     * (list position when unset), the same order clients sort parts by.
+     */
+    private static void hideBonusAnswersFrom(com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus,
+                                             int firstHidden) {
+        if (bonus == null || bonus.getBonusParts() == null) {
+            return;
+        }
+        List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts = bonus.getBonusParts();
+        List<Integer> byReadingOrder = new java.util.ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            byReadingOrder.add(i);
+        }
+        byReadingOrder.sort(java.util.Comparator.comparingInt(i -> readingKey(parts, i)));
+        for (int rank = 0; rank < byReadingOrder.size(); rank++) {
+            var part = parts.get(byReadingOrder.get(rank));
+            if (rank >= firstHidden && part != null && part.getBonusPart() != null) {
+                part.getBonusPart().setAnswer("");
+            }
+        }
+    }
+
+    private static int readingKey(List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts,
+                                  int index) {
+        var part = parts.get(index);
+        return part != null && part.getOrder() != null ? part.getOrder() : index;
     }
 
     private static void hideBonusAnswers(com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus) {
