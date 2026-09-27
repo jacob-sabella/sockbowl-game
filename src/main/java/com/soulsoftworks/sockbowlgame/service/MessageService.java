@@ -105,7 +105,7 @@ public class MessageService {
      * @param message The message to be sent.
      */
     public void sendMessage(SockbowlInMessage message) {
-        log.info("Sending message to Kafka - type: {}, gameSessionId: {}, playerId: {}",
+        log.debug("Sending message to Kafka - type: {}, gameSessionId: {}, playerId: {}",
             message.getMessageType(), message.getGameSessionId(), message.getOriginatingPlayerId());
         sendMessage(gameTopic, message);
     }
@@ -122,7 +122,7 @@ public class MessageService {
         if (record != null) {
             // Retrieve the game session from the incoming message
             SockbowlInMessage message = record.value();
-            log.info("Received message from Kafka - type: {}, gameSessionId: {}, playerId: {}",
+            log.debug("Received message from Kafka - type: {}, gameSessionId: {}, playerId: {}",
                 message.getMessageType(), message.getGameSessionId(), message.getOriginatingPlayerId());
 
             GameSession gameSession = sessionService.getGameSessionById(message.getGameSessionId());
@@ -134,7 +134,7 @@ public class MessageService {
 
             // Direct the message to the appropriate service for processing
             SockbowlOutMessage sockbowlOutMessage = directMessageToService(message);
-            log.info("Processed message - outgoing type: {}", sockbowlOutMessage.getClass().getSimpleName());
+            log.debug("Processed message - outgoing type: {}", sockbowlOutMessage.getClass().getSimpleName());
 
             // If no error occured, update the game session
             if (!(sockbowlOutMessage instanceof ProcessError)) {
@@ -155,7 +155,7 @@ public class MessageService {
                 // If there are specified recipients for the outgoing message, send the message to them.
                 // Otherwise, send the message to all clients connected to the game session.
                 if (!singleMessage.getRecipients().isEmpty()) {
-                    log.info("Sending targeted message to {} recipients for game {}",
+                    log.debug("Sending targeted message to {} recipients for game {}",
                         singleMessage.getRecipients().size(), gameSession.getId());
                     singleMessage.getRecipients().forEach(recipient -> {
                         String destination = "/" + MessageQueues.GAME_EVENT_QUEUE + "/" +
@@ -165,7 +165,7 @@ public class MessageService {
                     });
                 } else {
                     String destination = "/" + MessageQueues.GAME_EVENT_QUEUE + "/" + gameSession.getId();
-                    log.info("Broadcasting message to all players at: {}", destination);
+                    log.debug("Broadcasting message to all players at: {}", destination);
                     simpMessagingTemplate.convertAndSend(destination, singleMessage);
                 }
             }
