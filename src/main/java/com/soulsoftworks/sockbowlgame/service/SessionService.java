@@ -171,7 +171,7 @@ public class SessionService {
      * change (M2R2-LIVE-01).
      */
     public void saveGameSession(GameSession gameSession) {
-        gameSessionRepository.save(gameSession);
+        GameSessionLocks.duringSave(() -> gameSessionRepository.save(gameSession));
     }
 
     public GameSession getGameSessionById(String id) {
@@ -179,8 +179,14 @@ public class SessionService {
         return gameSession.orElse(null);
     }
 
+    /**
+     * Find a session by join code. The search runs with no save in flight
+     * (see {@link GameSessionLocks#duringSearch}): a concurrent save of the
+     * same session can make the search come back empty.
+     */
     public GameSession getGameSessionByJoinCode(String joinCode) {
-        Optional<GameSession> gameSession = gameSessionRepository.findGameSessionByJoinCode(joinCode);
+        Optional<GameSession> gameSession = GameSessionLocks.duringSearch(
+                () -> gameSessionRepository.findGameSessionByJoinCode(joinCode));
         return gameSession.orElse(null);
     }
 
@@ -201,8 +207,7 @@ public class SessionService {
     }
 
     public boolean isGameSessionExistsByJoinCode(String joinCode) {
-        Optional<GameSession> gameSession = gameSessionRepository.findGameSessionByJoinCode(joinCode);
-        return gameSession.isPresent();
+        return getGameSessionByJoinCode(joinCode) != null;
     }
 
     /** Unambiguous uppercase alphabet (no O/0/I/1) for guest join codes. */

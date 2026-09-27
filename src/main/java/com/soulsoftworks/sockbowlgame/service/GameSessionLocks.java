@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 
 /**
@@ -34,6 +35,18 @@ import java.util.function.Supplier;
  * auto-timeout is delivered synchronously by a test loopback) cannot
  * deadlock on its own session. A writer never takes a second session's lock
  * while holding one.
+ *
+ * <p>A second, global lock keeps join-code searches apart from saves. A
+ * session is found by its join code through a RediSearch query, and the Redis
+ * query engine can return no result for a document that is being rewritten
+ * (JSON.SET plus EXPIRE) at the same moment: a probe against Redis 8 lost
+ * about one search in ten to a concurrent save of the same session. A join
+ * that lands while that session is being saved then fails with a spurious
+ * 404 "Game not found" (seen in full-match). Saves hold this lock shared, so
+ * they still run in parallel with each other; a join-code search holds it
+ * exclusively, so no save from this process overlaps it. Searches happen only
+ * on join and create, and a save never waits on a session lock while holding
+ * it, so it cannot deadlock with the per-session locks.
  */
 public final class GameSessionLocks {
 
@@ -47,7 +60,29 @@ public final class GameSessionLocks {
         }
     }
 
+    private static final ReentrantReadWriteLock SEARCH_VS_SAVE = new ReentrantReadWriteLock();
+
     private GameSessionLocks() {
+    }
+
+    /** Run a session save; saves share the lock, so they only exclude searches. */
+    public static void duringSave(Runnable save) {
+        SEARCH_VS_SAVE.readLock().lock();
+        try {
+            save.run();
+        } finally {
+            SEARCH_VS_SAVE.readLock().unlock();
+        }
+    }
+
+    /** Run a join-code search with no session save from this process in flight. */
+    public static <T> T duringSearch(Supplier<T> search) {
+        SEARCH_VS_SAVE.writeLock().lock();
+        try {
+            return search.get();
+        } finally {
+            SEARCH_VS_SAVE.writeLock().unlock();
+        }
     }
 
     private static ReentrantLock lockFor(String gameSessionId) {
