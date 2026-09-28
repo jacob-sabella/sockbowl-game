@@ -16,6 +16,25 @@ public class GameSanitizer {
      * it to ensure privacy and integrity based on the player mode. For example, if the
      * player mode is not PROCTOR, it removes sensitive data such as toss-ups, bonuses,
      * and current round questions and answers.
+     * <p>
+     * In every view, the proctor's included:
+     * <ul>
+     *   <li>player credentials and identity and the session owner subject are
+     *       removed (AUTH-10);</li>
+     *   <li>{@code packet.ownerId} (the packet author's Keycloak subject) is
+     *       removed from the current match and every previous match (G2-02);</li>
+     *   <li>every previous match is reduced to its public view
+     *       ({@link #publicMatchView}): no packet questions or answers, only the
+     *       rounds that were played, each as any player may see it (G2-01). The
+     *       current proctor may not be the proctor who loaded that packet, so
+     *       even the proctor view carries no unplayed question.</li>
+     *   <li>the session's {@code proctorsByPacketId} bookkeeping is removed
+     *       (R3-G2-03).</li>
+     * </ul>
+     * Every view but the proctor's also drops the packet id of the current and
+     * every previous match (R3-G-01): with the id a player could load the
+     * packet as proctor of another game and read its answers there. They keep
+     * the packet name.
      *
      * @param gameSession The original game session to be sanitized.
      * @param playerMode  The player mode determining the level of sanitization.
@@ -32,23 +51,133 @@ public class GameSanitizer {
         stripTeamIdentity(sanitizedGameSession.getTeamList());
         sanitizedGameSession.setGameOwnerId(null);
 
-        if (playerMode != PlayerMode.PROCTOR && sanitizedGameSession.getCurrentMatch().getPacket() != null) {
+        // Who proctored which packet is server-side bookkeeping (R3-G2-03),
+        // and it names packet ids.
+        sanitizedGameSession.setProctorsByPacketId(null);
 
-                sanitizedGameSession.getCurrentMatch().getPacket().setTossups(null);
-                sanitizedGameSession.getCurrentMatch().getPacket().setBonuses(null);
+        // Finished matches: public view only, for everyone (G2-01, G2-02).
+        sanitizedGameSession.setPreviousMatches(publicMatches(sanitizedGameSession.getPreviousMatches()));
 
-                RoundState roundState = gameSession.getCurrentMatch().getCurrentRound().getRoundState();
+        boolean proctorView = playerMode == PlayerMode.PROCTOR;
+        if (!proctorView) {
+            // A player who knows a packet's id can load it as proctor of
+            // another game and read its answers there (R3-G-01).
+            stripPacketIds(sanitizedGameSession.getPreviousMatches());
+        }
+
+        Match currentMatch = sanitizedGameSession.getCurrentMatch();
+        if (currentMatch == null) {
+            return sanitizedGameSession;
+        }
+        // The packet author's subject is identity, not game data (G2-02).
+        stripPacketOwner(currentMatch.getPacket());
+
+        if (!proctorView && currentMatch.getPacket() != null) {
+
+                currentMatch.getPacket().setId(null);
+                currentMatch.getPacket().setTossups(null);
+                currentMatch.getPacket().setBonuses(null);
+
+                Round currentRound = gameSession.getCurrentMatch().getCurrentRound();
                 GameMode gameMode = gameSession.getGameSettings().getGameMode();
 
-                if (roundState != RoundState.COMPLETED) {
+                if (currentRound != null && currentRound.getRoundState() != RoundState.COMPLETED) {
                     Round replacement = (gameMode != null && gameMode.isAutoJudgedMultiplayer())
                             ? revealQuestionHideAnswer(sanitizedGameSession.getCurrentRound(), gameMode)
                             : sanitizeRound(sanitizedGameSession.getCurrentRound());
-                    sanitizedGameSession.getCurrentMatch().setCurrentRound(replacement);
+                    currentMatch.setCurrentRound(replacement);
+                } else if (currentRound != null) {
+                    currentMatch.setCurrentRound(publicRoundView(sanitizedGameSession.getCurrentRound()));
                 }
+                currentMatch.setPreviousRounds(publicRounds(currentMatch.getPreviousRounds()));
         }
 
         return sanitizedGameSession;
+    }
+
+    /**
+     * The view of a finished match that any player may see (G2-01): a match
+     * ended early (end-match at round 1, say) still holds its whole packet, so
+     * the packet keeps only its metadata (no tossups, no bonuses, no owner
+     * subject), every played round is reduced to {@link #publicRoundView}, a
+     * round still in progress when the match ended keeps its question and
+     * answer only if its tossup had been decided, and a bonus that was never
+     * started is dropped. Returns a deep copy; the
+     * input is not modified. Null-safe.
+     */
+    public static Match publicMatchView(Match match) {
+        if (match == null) {
+            return null;
+        }
+        Match copy = DeepCopyUtil.deepCopy(match, Match.class);
+        if (copy.getPacket() != null) {
+            copy.getPacket().setTossups(null);
+            copy.getPacket().setBonuses(null);
+            stripPacketOwner(copy.getPacket());
+        }
+        copy.setCurrentRound(finishedRoundView(copy.getCurrentRound()));
+        List<Round> previousRounds = copy.getPreviousRounds();
+        if (previousRounds != null) {
+            List<Round> views = new java.util.ArrayList<>(previousRounds.size());
+            for (Round r : previousRounds) {
+                views.add(finishedRoundView(r));
+            }
+            copy.setPreviousRounds(views);
+        }
+        return copy;
+    }
+
+    /**
+     * A round of a finished match: {@link #publicRoundView} when its tossup was
+     * decided, otherwise nothing of its question or answer. A bonus that was
+     * never started is dropped whole (preamble and part questions too), since
+     * the same packet can be played again.
+     */
+    private static Round finishedRoundView(Round round) {
+        if (round == null) {
+            return null;
+        }
+        if (!isTossupDecided(round.getRoundState())) {
+            Round hidden = sanitizeRound(round);
+            hidden.setCurrentBonus(null);
+            hidden.setAssociatedBonus(null);
+            return hidden;
+        }
+        Round view = publicRoundView(round);
+        if (view.getCurrentBonus() == null) {
+            view.setAssociatedBonus(null);
+        }
+        return view;
+    }
+
+    /** {@link #publicMatchView} applied to every match of a list (a new list). Null-safe. */
+    public static List<Match> publicMatches(List<Match> matches) {
+        if (matches == null) {
+            return null;
+        }
+        List<Match> views = new java.util.ArrayList<>(matches.size());
+        for (Match m : matches) {
+            views.add(publicMatchView(m));
+        }
+        return views;
+    }
+
+    private static void stripPacketIds(List<Match> matches) {
+        if (matches == null) {
+            return;
+        }
+        for (Match m : matches) {
+            if (m != null && m.getPacket() != null) {
+                m.getPacket().setId(null);
+            }
+        }
+    }
+
+    private static void stripPacketOwner(com.soulsoftworks.sockbowlquestions.models.nodes.Packet packet) {
+        if (packet != null) {
+            packet.setOwnerId(null);
+            packet.setOwnerDisplayName(null);
+        }
     }
 
     /**
@@ -120,6 +249,96 @@ public class GameSanitizer {
             copy.setQuestion(QuestionTokenizer.truncate(round.getQuestion(), round.getRevealedWordCount()));
         }
         return copy;
+    }
+
+    /**
+     * The view of a round that any player may see once its tossup is decided
+     * (bonus phase or COMPLETED), G-02:
+     * <ul>
+     *   <li>the tossup answer is kept only when the tossup is decided (a bonus
+     *       state or COMPLETED); otherwise it is cleared;</li>
+     *   <li>bonus part answers are kept only for parts already judged: parts
+     *       before {@link Round#getCurrentBonusPartIndex()} in reading order, or
+     *       every part once the bonus is BONUS_COMPLETED or the round is
+     *       COMPLETED;</li>
+     *   <li>a bonus that was never played ({@code currentBonus == null}, e.g. a
+     *       dead tossup or bonuses turned off) keeps no answers at all.</li>
+     * </ul>
+     * Returns a deep copy; the input is not modified. Null-safe.
+     */
+    public static Round publicRoundView(Round round) {
+        if (round == null) {
+            return null;
+        }
+        Round copy = DeepCopyUtil.deepCopy(round, Round.class);
+        RoundState state = round.getRoundState();
+        if (!isTossupDecided(state)) {
+            copy.setAnswer("");
+        }
+        if (copy.getCurrentBonus() == null) {
+            // Never played: nothing about it is public.
+            hideBonusAnswers(copy.getAssociatedBonus());
+            return copy;
+        }
+        int judged = (state == RoundState.BONUS_COMPLETED || state == RoundState.COMPLETED)
+                ? Integer.MAX_VALUE
+                : round.getCurrentBonusPartIndex();
+        hideBonusAnswersFrom(copy.getCurrentBonus(), judged);
+        hideBonusAnswersFrom(copy.getAssociatedBonus(), judged);
+        return copy;
+    }
+
+    /** {@link #publicRoundView} applied to every round of a list (a new list). Null-safe. */
+    public static List<Round> publicRounds(List<Round> rounds) {
+        if (rounds == null) {
+            return null;
+        }
+        List<Round> views = new java.util.ArrayList<>(rounds.size());
+        for (Round r : rounds) {
+            views.add(publicRoundView(r));
+        }
+        return views;
+    }
+
+    private static boolean isTossupDecided(RoundState state) {
+        if (state == null) {
+            return false;
+        }
+        return switch (state) {
+            case BONUS_PENDING, BONUS_READING_PREAMBLE, BONUS_READING_PART, BONUS_AWAITING_ANSWER,
+                 BONUS_COMPLETED, COMPLETED -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Clear the answers of every part whose reading-order position is
+     * {@code >= firstHidden}. Reading order is the part's {@code order}
+     * (list position when unset), the same order clients sort parts by.
+     */
+    private static void hideBonusAnswersFrom(com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus,
+                                             int firstHidden) {
+        if (bonus == null || bonus.getBonusParts() == null) {
+            return;
+        }
+        List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts = bonus.getBonusParts();
+        List<Integer> byReadingOrder = new java.util.ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            byReadingOrder.add(i);
+        }
+        byReadingOrder.sort(java.util.Comparator.comparingInt(i -> readingKey(parts, i)));
+        for (int rank = 0; rank < byReadingOrder.size(); rank++) {
+            var part = parts.get(byReadingOrder.get(rank));
+            if (rank >= firstHidden && part != null && part.getBonusPart() != null) {
+                part.getBonusPart().setAnswer("");
+            }
+        }
+    }
+
+    private static int readingKey(List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts,
+                                  int index) {
+        var part = parts.get(index);
+        return part != null && part.getOrder() != null ? part.getOrder() : index;
     }
 
     private static void hideBonusAnswers(com.soulsoftworks.sockbowlquestions.models.nodes.Bonus bonus) {

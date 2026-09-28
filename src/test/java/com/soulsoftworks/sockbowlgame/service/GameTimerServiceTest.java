@@ -69,6 +69,8 @@ class GameTimerServiceTest {
         session.getCurrentMatch().setCurrentRound(round);
 
         when(sessionService.getAllActiveSessions()).thenReturn(List.of(session));
+        // The tick re-reads each session under its lock (M2R2-LIVE-01).
+        when(sessionService.getGameSessionById(session.getId())).thenReturn(session);
 
         return session;
     }

@@ -9,6 +9,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetProctor;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdateGameSettings;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.UpdatePlayerTeam;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.config.PlayerRosterUpdate;
@@ -52,7 +53,8 @@ public class ConfigurationMessageProcessorTest {
     void setup() {
         closeable = MockitoAnnotations.openMocks(this);
 
-        processor = new ConfigurationMessageProcessor(packetClient, authorizationPolicy);
+        processor = new ConfigurationMessageProcessor(packetClient, authorizationPolicy,
+                new com.soulsoftworks.sockbowlgame.support.InMemoryEphemeralPacketBindings());
 
         gameOwner = Player.builder()
                 .playerId("gameOwner")
@@ -241,10 +243,19 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);
 
-            assertInstanceOf(MatchPacketUpdate.class, result);
-            MatchPacketUpdate update = (MatchPacketUpdate) result;
+            // The proctor gets the id; everyone else the name without it (R3-G-01).
+            java.util.List<SockbowlOutMessage> frames = result instanceof SockbowlMultiOutMessage multi
+                    ? multi.getSockbowlOutMessages() : java.util.List.of(result);
+            MatchPacketUpdate update = frames.stream().map(MatchPacketUpdate.class::cast)
+                    .filter(u -> u.getRecipients().contains(gameOwner.getPlayerId())).findFirst().orElseThrow();
+            assertEquals(java.util.List.of(gameOwner.getPlayerId()), update.getRecipients());
             assertEquals("1", update.getPacketId());
             assertEquals("Default Packet", update.getPacketName());
+            frames.stream().map(MatchPacketUpdate.class::cast).filter(u -> u != update).forEach(u -> {
+                assertNull(u.getPacketId());
+                assertEquals("Default Packet", u.getPacketName());
+                assertFalse(u.getRecipients().contains(gameOwner.getPlayerId()));
+            });
         }
 
 
