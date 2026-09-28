@@ -102,10 +102,13 @@ public class SessionService {
         String gameSessionId = requireGameSessionByJoinCode(joinGameRequest.getJoinCode()).getId();
 
         // Load, add and save under the session's lock (M2R2-LIVE-01). The
-        // session is re-read inside the lock: the copy found above may already
-        // be stale, and saving it would erase a concurrent writer's change.
+        // session is re-read inside the lock, by id: the copy found above may
+        // already be stale, and saving it would erase a concurrent writer's
+        // change. The join-code search runs once, above, outside any session
+        // lock, since it holds the global search lock that stalls every save
+        // (R3-G-LOCK).
         return GameSessionLocks.withLock(gameSessionId, () -> {
-            GameSession gameSession = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
+            GameSession gameSession = requireGameSessionById(gameSessionId);
 
             PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(gameSession.getGameSettings().getGameMode());
 
@@ -206,6 +209,18 @@ public class SessionService {
         return gameSession;
     }
 
+    /**
+     * The session with this id, or a 404 when it is gone (it expired or was
+     * removed between the join-code lookup and taking the session lock).
+     */
+    private GameSession requireGameSessionById(String gameSessionId) {
+        GameSession gameSession = getGameSessionById(gameSessionId);
+        if (gameSession == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Game not found");
+        }
+        return gameSession;
+    }
+
     public boolean isGameSessionExistsByJoinCode(String joinCode) {
         return getGameSessionByJoinCode(joinCode) != null;
     }
@@ -276,12 +291,13 @@ public class SessionService {
         user.setLastLoginAt(Instant.now());
         userRepository.save(user);
 
-        // Join game session: load, add and save under the session's lock
+        // Join game session: load (by id, so no join-code search runs under
+        // the lock, R3-G-LOCK), add and save under the session's lock
         // (M2R2-LIVE-01), then record history outside it.
         String gameSessionId = gameSession.getId();
         JoinGameResponse response = new JoinGameResponse();
         Player player = GameSessionLocks.withLock(gameSessionId, () -> {
-            GameSession current = requireGameSessionByJoinCode(joinGameRequest.getJoinCode());
+            GameSession current = requireGameSessionById(gameSessionId);
             PlayerSettings playerSettings = PLAYER_SETTINGS_BY_GAME_MODE.get(
                     current.getGameSettings().getGameMode()
             );

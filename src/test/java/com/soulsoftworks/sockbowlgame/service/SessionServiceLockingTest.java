@@ -73,6 +73,7 @@ class SessionServiceLockingTest {
         session.getTeamList().add(new Team());
         session.getTeamList().add(new Team());
         when(sessions.findGameSessionByJoinCode(CODE)).thenReturn(Optional.of(session));
+        when(sessions.findById(ID)).thenReturn(Optional.of(session));
     }
 
     @Test
@@ -103,13 +104,18 @@ class SessionServiceLockingTest {
             // Parked on the lock: it has only resolved the join code (to learn
             // the id), and has neither re-read nor saved the session.
             verify(sessions, times(1)).findGameSessionByJoinCode(CODE);
+            verify(sessions, never()).findById(any());
             verify(sessions, never()).save(any());
         });
 
         joiner.join(TimeUnit.SECONDS.toMillis(10));
         assertThat(joiner.isAlive()).isFalse();
         assertThat(response.get().getJoinStatus()).isEqualTo(JoinStatus.SUCCESS);
-        verify(sessions, times(2)).findGameSessionByJoinCode(CODE);
+        // One join-code search, before the lock; the re-read under the lock
+        // is by id, so no search (and its global save-blocking lock) runs
+        // while the session lock is held (R3-G-LOCK).
+        verify(sessions, times(1)).findGameSessionByJoinCode(CODE);
+        verify(sessions, times(1)).findById(ID);
         verify(sessions, times(1)).save(session);
         assertThat(session.getPlayerById(response.get().getPlayerSessionId())).isNotNull();
     }

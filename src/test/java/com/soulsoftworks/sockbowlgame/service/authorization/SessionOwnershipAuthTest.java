@@ -131,6 +131,7 @@ class SessionOwnershipAuthTest {
         session.getTeamList().add(new Team());
         session.getTeamList().add(new Team());
         when(sessions.findGameSessionByJoinCode("CODE")).thenReturn(Optional.of(session));
+        when(sessions.findById("S")).thenReturn(Optional.of(session));
 
         // A guest gets in first by code: not owner.
         JoinGameResponse guest = service.addPlayerToGameSessionWithJoinCode(
