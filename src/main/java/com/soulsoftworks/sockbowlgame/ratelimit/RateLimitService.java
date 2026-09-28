@@ -60,7 +60,17 @@ public class RateLimitService {
             throw new IllegalArgumentException("Policy '" + policyName
                     + "' is CONNECTION-keyed; charge it through LocalBucketRegistry");
         }
-        BucketConfiguration configuration = configurations.forPolicy(policyName, spec, subject.tier());
+        // G-M4-V1-08: bucket4j's Redis ProxyManager only builds a bucket's
+        // configuration the first time its key is seen in Redis; every later
+        // caller sharing that key gets whatever was stored then. An IP-keyed
+        // policy's key never includes the tier, so if it were sized for
+        // whichever caller happened to hit it first, an admin (or any
+        // higher-tier caller) touching a shared address first would leave
+        // behind an over-scaled bucket that a guest on the same address then
+        // inherits. IP-keyed policies are always sized as GUEST, matching what
+        // StompRateLimitGuard already does for its own IP-keyed policy.
+        Tier configTier = spec.getKeyBy() == KeyBy.IP ? Tier.GUEST : subject.tier();
+        BucketConfiguration configuration = configurations.forPolicy(policyName, spec, configTier);
         long limit = BucketConfigurations.capacityOf(configuration);
         String key = UsageKeys.rateLimit(properties.getKeyPrefix(), policyName, subject.keyFor(spec.getKeyBy()));
         try {
