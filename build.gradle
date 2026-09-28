@@ -36,6 +36,12 @@ dependencyManagement {
         // the same 1.18.48 as the explicitly versioned `implementation` one and
         // the compile classpath and the annotation-processor path stay in sync.
         dependency 'org.projectlombok:lombok:1.18.48'
+        // Latest-deps bump (M6 DEP1-G, audit/m6/deps-game.json): caffeine isn't
+        // declared directly here (it's pulled in transitively via
+        // kafka-storage, a spring-kafka-test dependency), but Spring Boot's
+        // BOM manages it to 3.2.4, which outranks a plain `constraints{}`
+        // entry. Overriding it here (like lombok above) is what actually wins.
+        dependency 'com.github.ben-manes.caffeine:caffeine:3.3.0'
     }
 }
 
