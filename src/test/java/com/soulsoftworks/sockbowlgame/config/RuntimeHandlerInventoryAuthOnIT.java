@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.config;
 
 import com.soulsoftworks.sockbowlgame.SockbowlGameApplication;
+import com.soulsoftworks.sockbowlgame.repository.IpBanRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.service.BanService;
@@ -48,6 +49,8 @@ class RuntimeHandlerInventoryAuthOnIT extends RuntimeHandlerInventorySupport {
     UserRepository userRepository;
     @MockitoBean
     UserGameHistoryRepository userGameHistoryRepository;
+    @MockitoBean
+    IpBanRepository ipBanRepository;
 
     @Test
     void everyRegisteredRestHandlerIsInventoried() {
