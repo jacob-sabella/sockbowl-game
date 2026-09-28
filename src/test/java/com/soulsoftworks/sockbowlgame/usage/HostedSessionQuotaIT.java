@@ -43,13 +43,20 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -82,7 +89,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         // this is where the class actually under test declares the tier limits
         // it needs (mirrors application.properties' own guest=2, player=3).
         "sockbowl.quota.tiers.guest.hosted-sessions=2",
-        "sockbowl.quota.tiers.player.hosted-sessions=3"
+        "sockbowl.quota.tiers.player.hosted-sessions=3",
+        // concurrentCreatesByTheSamePlayerNeverExceedTheQuota fires 12 reserve()
+        // calls at once; the default 200ms per-command timeout is tuned for
+        // production latency, not a full-suite Gradle run where this class's
+        // own JVM is also running dozens of other Spring/Testcontainers
+        // contexts. A slow command there must never be mistaken for a genuine
+        // Redis outage and fail the reservation open (D12), which would let
+        // more than the quota through and make this class's central assertion
+        // flaky under load rather than testing the atomic reservation itself.
+        "sockbowl.ratelimit.redis.timeout=5s"
 })
 @AutoConfigureMockMvc
 @Import(HostedSessionQuotaIT.ClockConfig.class)
@@ -266,6 +282,54 @@ class HostedSessionQuotaIT {
         create(host("kc-bob"), 200);
         create(host("kc-bob"), 200);
         create(host("kc-bob"), 429);
+    }
+
+    /**
+     * G-M4-V1-01: {@code reserve()} used to be check-then-act
+     * ({@code countActive} then a separate {@code ZADD} in
+     * {@code recordCreated}), so 12 requests firing at once could all read the
+     * count before any of them recorded a session, and all 12 would pass. The
+     * atomic Lua reservation must cap admitted creates at the quota (3) even
+     * when they race.
+     */
+    @Test
+    void concurrentCreatesByTheSamePlayerNeverExceedTheQuota() throws Exception {
+        RequestPostProcessor carol = host("kc-carol");
+        int attempts = 12;
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<MvcResult>> futures = new ArrayList<>();
+            for (int i = 0; i < attempts; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    return mvc.perform(post(CREATE).with(carol)
+                                    .contentType(MediaType.APPLICATION_JSON).content(createBody()))
+                            .andReturn();
+                }));
+            }
+            start.countDown();
+
+            int ok = 0;
+            int quotaExceeded = 0;
+            for (Future<MvcResult> f : futures) {
+                MvcResult result = f.get(30, TimeUnit.SECONDS);
+                int status = result.getResponse().getStatus();
+                if (status == 200) {
+                    ok++;
+                } else if (status == 429) {
+                    JsonObject body = gson.fromJson(result.getResponse().getContentAsString(), JsonObject.class);
+                    assertThat(body.get("error").getAsString()).isEqualTo("quota_exceeded");
+                    quotaExceeded++;
+                } else {
+                    fail("unexpected status " + status + ": " + result.getResponse().getContentAsString());
+                }
+            }
+            assertThat(ok).as("admitted creates never exceed the quota (3)").isLessThanOrEqualTo(3);
+            assertThat(quotaExceeded).as("at least 9 of 12 rejected").isGreaterThanOrEqualTo(attempts - 3);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     private void deleteSession(String id) {
