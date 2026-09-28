@@ -153,6 +153,38 @@ class RateLimitServiceIT {
         assertThat(redis.sync().exists(UsageKeys.rateLimit("per-ip", "ip:198.51.100.3"))).isEqualTo(1);
     }
 
+    /**
+     * G-M4-V1-08: bucket4j's Redis {@code ProxyManager} only builds a bucket's
+     * configuration the first time its key is seen; every later caller sharing
+     * that key gets whatever was already stored. Since an IP-keyed policy's key
+     * never includes the tier, an admin touching it first at a shared address
+     * (e.g. a shared NAT/office IP) must not leave behind an admin-scaled (x10)
+     * bucket that a guest on the same address would then inherit. IP-keyed
+     * policies must always be sized as {@link Tier#GUEST}, regardless of who
+     * happens to hit the key first.
+     */
+    @Test
+    void ipKeyedPolicyAlwaysScalesAsGuestRegardlessOfWhoTouchesItFirst() {
+        properties.getTierMultipliers().put(Tier.ADMIN, 10.0);
+        String ip = "198.51.100.9";
+        LimitSubject admin = new LimitSubject("admin-1", ip, Tier.ADMIN);
+        LimitSubject guest = LimitSubject.guest(ip);
+
+        // "per-ip" is capacity 2. If the admin's first call sized the bucket for
+        // ADMIN (x10 = 20), a guest sharing the address would ride that capacity.
+        Decision adminFirst = service.tryConsume("per-ip", admin);
+        assertThat(adminFirst.allowed()).isTrue();
+        assertThat(adminFirst.limit()).as("admin sees the guest-scaled limit too").isEqualTo(2);
+
+        assertThat(service.tryConsume("per-ip", guest).allowed()).isTrue();
+        assertThat(service.tryConsume("per-ip", guest).allowed())
+                .as("guest must be capped at 2, not the admin's x10 capacity")
+                .isFalse();
+        assertThat(service.tryConsume("per-ip", admin).allowed())
+                .as("the shared IP bucket is exhausted for the admin too")
+                .isFalse();
+    }
+
     @Test
     void bucketKeyExpiresNoLaterThanTheRefillPeriod() {
         LimitSubject guest = LimitSubject.guest("192.0.2.44");

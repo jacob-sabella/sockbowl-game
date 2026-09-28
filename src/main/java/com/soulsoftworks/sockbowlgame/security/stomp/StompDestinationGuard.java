@@ -22,6 +22,15 @@ import java.time.Instant;
  * <ul>
  *   <li>A SEND, SUBSCRIBE (or any frame other than CONNECT, DISCONNECT,
  *       UNSUBSCRIBE and heart-beats) with no principal: {@code AUTH_REQUIRED}.</li>
+ *   <li>Every destination is canonicalized first ({@link #isNonCanonical}):
+ *       {@code //}, {@code /./}, a trailing {@code /.} or {@code /}, a
+ *       backslash, a percent-encoded byte or {@code ..} anywhere is
+ *       {@code FORBIDDEN_DESTINATION}. Spring's {@code AntPathMatcher}
+ *       (used by {@code @MessageMapping} routing) treats empty path segments
+ *       as no-ops, so without this a SEND to
+ *       {@code /app/game//player-incoming-buzz} still reached the buzz
+ *       handler while matching none of {@link StompRateLimitGuard}'s exact-string
+ *       policy checks (G-M4-V1-02).</li>
  *   <li><b>SEND</b> only to {@code /app/**}, never straight to a broker
  *       destination ({@code FORBIDDEN_DESTINATION}); {@code gameSessionId} /
  *       {@code playerSessionId} headers, when present, must be the principal's
@@ -88,7 +97,7 @@ public class StompDestinationGuard implements StompInboundGuard {
 
     private void checkSend(StompHeaderAccessor accessor, StompPrincipal principal) {
         String destination = accessor.getDestination();
-        if (destination == null || !destination.startsWith(APP_PREFIX) || destination.contains("..")) {
+        if (destination == null || !destination.startsWith(APP_PREFIX) || isNonCanonical(destination)) {
             throw new StompRejectedException(StompErrorCode.FORBIDDEN_DESTINATION,
                     "SEND is only allowed to /app/** destinations");
         }
@@ -140,7 +149,7 @@ public class StompDestinationGuard implements StompInboundGuard {
         String destination = accessor.getDestination();
         String ownGame = EVENT_QUEUE_PREFIX + principal.getGameSessionId();
         String ownPlayer = ownGame + "/" + principal.getPlayerSessionId();
-        boolean allowed = destination != null
+        boolean allowed = destination != null && !isNonCanonical(destination)
                 && (destination.equals(ownGame)
                 || destination.equals(ownPlayer)
                 || destination.equals(USER_ERRORS)
@@ -165,6 +174,23 @@ public class StompDestinationGuard implements StompInboundGuard {
             throw new StompRejectedException(StompErrorCode.IDENTITY_MISMATCH,
                     "Frame identity headers do not match the connected player");
         }
+    }
+
+    /**
+     * True for a destination that could be routed or matched differently by
+     * different pieces of code than its literal string suggests: repeated or
+     * trailing slashes, a {@code /./} segment, a backslash or a
+     * percent-encoded byte (never legitimate in a destination Spring itself
+     * builds), on top of the pre-existing {@code ..} check (G-M4-V1-02).
+     */
+    static boolean isNonCanonical(String destination) {
+        return destination.contains("..")
+                || destination.contains("//")
+                || destination.contains("/./")
+                || destination.endsWith("/.")
+                || destination.endsWith("/")
+                || destination.contains("\\")
+                || destination.contains("%");
     }
 
     static boolean isConnect(StompHeaderAccessor accessor) {

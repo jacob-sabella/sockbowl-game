@@ -14,6 +14,12 @@ import java.util.Map;
  * m4-limits section 2.1).
  *
  * <ul>
+ *   <li>{@code server.forward-headers-strategy} anything other than
+ *       {@code none} or {@code native} - in particular {@code framework}
+ *       (G-M4-V1-04): Spring's {@code ForwardedHeaderFilter} then rewrites
+ *       {@code getRemoteAddr} from any client's own {@code X-Forwarded-For},
+ *       with no proxy trust at all, defeating every IP-keyed limiter and IP
+ *       ban.</li>
  *   <li>{@code server.forward-headers-strategy=native} with a blank
  *       {@code server.tomcat.remoteip.internal-proxies}: in Spring Boot an
  *       <b>empty</b> internal-proxies regex trusts every peer, so any client could
@@ -46,7 +52,11 @@ public class LimitsStartupValidator implements InitializingBean {
 
         String strategy = environment.getProperty(STRATEGY, "none").trim().toLowerCase(Locale.ROOT);
         String proxies = environment.getProperty(INTERNAL_PROXIES);
-        if ("native".equals(strategy) && (proxies == null || proxies.isBlank())) {
+        if (!"none".equals(strategy) && !"native".equals(strategy)) {
+            problems.add(STRATEGY + "=" + strategy + " is not allowed (SOCKBOWL_FORWARD_HEADERS_STRATEGY must be"
+                    + " none or native); framework trusts X-Forwarded-For from any client with no proxy check"
+                    + " at all, which lets it pick its own rate-limit key and evade IP bans");
+        } else if ("native".equals(strategy) && (proxies == null || proxies.isBlank())) {
             problems.add(STRATEGY + "=native requires an explicit " + INTERNAL_PROXIES
                     + " regex (SOCKBOWL_TRUSTED_PROXIES_REGEX); a blank value trusts every client's"
                     + " X-Forwarded-For");

@@ -204,10 +204,16 @@ public class AdminUsageService {
      * has no admin bearer token to relay to sockbowl-questions), matching the
      * "unavailable" convention used elsewhere on this page.
      *
-     * @throws IllegalArgumentException for a metric this API doesn't know
+     * @throws IllegalArgumentException for a metric this API doesn't know, or
+     *                                   for a {@code limit} more negative than
+     *                                   {@code -1} (the "unlimited" sentinel;
+     *                                   G-M4-V1-09)
      */
     public UsageCounter setQuotaOverride(String sub, String metric, Long limit, String updatedBy) {
         requireKnownMetric(metric);
+        if (limit != null && limit < -1) {
+            throw new IllegalArgumentException("limit must be -1 (unlimited) or >= 0, was " + limit);
+        }
         overrideService.setOverride(sub, metric, limit, updatedBy);
         Map<String, String> meta = safeHgetAll(UsageKeys.meta(sub));
         LimitSubject subject = new LimitSubject(sub, null, parseTier(meta.get("tier")));

@@ -83,7 +83,14 @@ class StompDestinationGuardTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"/queue/event/g1", "/queue/event/g1/p2", "/user/x", "/user/p2/queue/errors",
-            "/topic/x", "/queue/heartbeat", "/app", "app/game/x", "/apps/game", "/app/../queue/event/g1"})
+            "/topic/x", "/queue/heartbeat", "/app", "app/game/x", "/apps/game", "/app/../queue/event/g1",
+            // G-M4-V1-02: AntPathMatcher-based @MessageMapping routing ignores
+            // empty path segments, so these still reached the buzz handler
+            // before this canonicalization check existed.
+            "/app/game//player-incoming-buzz", "/app//game/player-incoming-buzz",
+            "/app/game/./player-incoming-buzz", "/app/game/player-incoming-buzz/",
+            "/app/game/player-incoming-buzz/.", "/app/game\\player-incoming-buzz",
+            "/app/game/%2e%2e/player-incoming-buzz"})
     void sendOutsideAppIsForbidden(String destination) {
         assertRejected(() -> guard(false).check(send(destination), guest), StompErrorCode.FORBIDDEN_DESTINATION);
         assertRejected(() -> guard(true).check(send(destination), alice(Instant.now().plusSeconds(60))),
@@ -210,7 +217,9 @@ class StompDestinationGuardTest {
             "/user/g1:p2/queue/errors",
             "/topic/anything",
             "/app/game/x",
-            "/anything"})
+            "/anything",
+            "/queue/event//g1",
+            "/queue/event/./g1"})
     void subscribeElsewhereIsForbidden(String destination) {
         assertRejected(() -> guard(false).check(subscribe(destination), guest), StompErrorCode.FORBIDDEN_DESTINATION);
     }

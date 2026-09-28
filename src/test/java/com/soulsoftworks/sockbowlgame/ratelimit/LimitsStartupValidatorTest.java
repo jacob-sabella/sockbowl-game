@@ -30,6 +30,28 @@ class LimitsStartupValidatorTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    /**
+     * G-M4-V1-04: {@code framework} rewrites {@code getRemoteAddr} from any
+     * client's own {@code X-Forwarded-For} with no proxy trust at all, so it
+     * must be refused just like a blank {@code native} proxy regex is.
+     */
+    @Test
+    void frameworkStrategyFailsStartupEvenWithAProxyRegex() {
+        MockEnvironment env = new MockEnvironment()
+                .withProperty("server.forward-headers-strategy", "framework")
+                .withProperty("server.tomcat.remoteip.internal-proxies", "172\\.18\\.0\\.\\d+");
+        assertThatThrownBy(() -> new LimitsStartupValidator(env, properties).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("server.forward-headers-strategy");
+    }
+
+    @Test
+    void unknownStrategyFailsStartup() {
+        MockEnvironment env = new MockEnvironment().withProperty("server.forward-headers-strategy", "FRAMEWORK");
+        assertThatThrownBy(() -> new LimitsStartupValidator(env, properties).afterPropertiesSet())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void nativeStrategyWithAnExplicitRegexStarts() {
         MockEnvironment env = new MockEnvironment()

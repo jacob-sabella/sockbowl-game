@@ -86,20 +86,29 @@ public class GameSessionController {
         }
 
         // Concurrent hosted-session quota (D10, plan m4-limits section 2.3):
-        // checked before creating so a caller at their limit never leaks a
-        // GameSession document, charged after so a check that passes can't be
-        // raced into an over-count by two requests from the same caller.
+        // reserve() atomically claims a slot (a Lua script; see
+        // HostedSessionQuota) before creating, so a caller at their limit
+        // never leaks a GameSession document AND two concurrent requests from
+        // the same caller can't both pass the check (G-M4-V1-01). The
+        // reservation is swapped for the real session id on success, or
+        // released if creation fails, so it never leaks a phantom slot.
         LimitSubject limitSubject = limitSubjectResolver.forUser(identity, clientIpResolver.resolve(request));
-        hostedSessionQuota.reserve(limitSubject);
+        HostedSessionQuota.Reservation reservation = hostedSessionQuota.reserve(limitSubject);
 
         String gameOwnerId = identity.isUser() ? identity.getKeycloakId() : null;
-        GameSession gameSession = sessionService.createNewGame(createGameRequest, gameOwnerId);
-
-        hostedSessionQuota.recordCreated(limitSubject, gameSession.getId());
-
-        return GameSessionIdentifiers.builder()
-                .fromGameSession(gameSession)
-                .build();
+        boolean created = false;
+        try {
+            GameSession gameSession = sessionService.createNewGame(createGameRequest, gameOwnerId);
+            hostedSessionQuota.recordCreated(limitSubject, gameSession.getId(), reservation);
+            created = true;
+            return GameSessionIdentifiers.builder()
+                    .fromGameSession(gameSession)
+                    .build();
+        } finally {
+            if (!created) {
+                hostedSessionQuota.release(reservation);
+            }
+        }
     }
 
     /**
