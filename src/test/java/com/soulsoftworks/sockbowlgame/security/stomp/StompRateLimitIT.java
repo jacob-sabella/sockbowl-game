@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -20,6 +21,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -223,6 +225,40 @@ class StompRateLimitIT extends StompSecurityITSupport {
         String body = "{\"padding\":\"" + "x".repeat(20 * 1024) + "\"}";
         c.send("/app/game/config/get-game", body);
         assertThat(c.awaitClosed()).as("socket closed after a message over 16 KiB").isTrue();
+    }
+
+    /**
+     * G-M4-FIX3-01 (the blocker): a real client that UNSUBSCRIBEs the same
+     * subscription twice frees only one slot on the second, now-stale id -
+     * before this fix, the guard decremented a bare counter on ANY
+     * UNSUBSCRIBE, so the second one would wrongly free a slot too, and a
+     * client at the cap could keep re-subscribing forever this way.
+     */
+    @Test
+    void doubleUnsubscribeFreesOnlyOneSlotSoTheCapStillHolds() throws Exception {
+        StompTestClient.Connection c = connectAlice();
+        // Every subscription targets the one destination StompDestinationGuard
+        // allows this connection; WebSocketStompClient still gives each of
+        // these SUBSCRIBE frames its own distinct id, which is what the cap
+        // (and the bypass this guards against) actually tracks.
+        List<StompSession.Subscription> subs = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            subs.add(c.subscribeForHandle(aliceQueue(), new LinkedBlockingQueue<>()));
+        }
+
+        // A bogus (already-removed) UNSUBSCRIBE: the same subscription, twice.
+        subs.get(0).unsubscribe();
+        subs.get(0).unsubscribe();
+
+        // Exactly one slot was freed: one more subscribe is admitted...
+        c.subscribeForHandle(aliceQueue(), new LinkedBlockingQueue<>());
+        // ...but the next one (the bypass this test guards against) is refused fatally.
+        try {
+            c.subscribeForHandle(aliceQueue(), new LinkedBlockingQueue<>());
+        } catch (RuntimeException alreadyClosing) {
+            // The client can race the server's ERROR/close; assertFatal below still verifies it.
+        }
+        assertFatal(c, StompErrorCode.RATE_LIMITED);
     }
 
     @Test

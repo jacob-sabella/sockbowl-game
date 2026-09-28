@@ -25,9 +25,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * STOMP inbound throttling (plan m4-limits section 2.5, WP-G3; M4-RL-05, and the
@@ -62,9 +62,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       it, the frame is refused fatally ({@code RATE_LIMITED}) rather than
  *       merely dropped, since letting a connection accumulate unbounded
  *       broker subscriptions is itself the amplification risk, independent of
- *       how fast they arrived. UNSUBSCRIBE decrements the count.</li>
+ *       how fast they arrived. The cap tracks the connection's live
+ *       {@code id} headers as a {@link Set} (G-M4-FIX3-01: a counter that any
+ *       UNSUBSCRIBE could decrement - even one with a missing or unknown id -
+ *       let a client hold 16 subscriptions, "free" a slot with a bogus
+ *       UNSUBSCRIBE, and subscribe again forever). A SUBSCRIBE that repeats an
+ *       id already on the connection does not grow the set (the broker either
+ *       treats it as a re-subscribe or errors on its own; this guard neither
+ *       admits nor refuses it). UNSUBSCRIBE removes only an id that is
+ *       actually a member of the set; a missing or unrecognized id frees
+ *       nothing.</li>
  *   <li><b>DISCONNECT</b> (and {@link SessionDisconnectEvent}): the
- *       connection's local buckets and subscription count are dropped.</li>
+ *       connection's local buckets and subscription ids are dropped.</li>
  * </ul>
  *
  * <p>With {@code sockbowl.ratelimit.enabled=false} only the IP-ban check runs
@@ -102,8 +111,14 @@ public class StompRateLimitGuard implements StompInboundGuard {
     private final RateLimitProperties properties;
     private final Clock clock;
 
-    /** Live SUBSCRIBE count per connection key ({@link UsageKeys#connectionPart}); see {@link #STOMP_SUBSCRIPTIONS}. */
-    private final ConcurrentMap<String, AtomicInteger> subscriptionCounts = new ConcurrentHashMap<>();
+    /**
+     * Live SUBSCRIBE {@code id}s per connection key
+     * ({@link UsageKeys#connectionPart}); see {@link #STOMP_SUBSCRIPTIONS}.
+     * Each inner {@link Set} is only ever mutated while holding its own
+     * monitor ({@code synchronized}), since a check-then-act against it
+     * (size, then add) must be atomic per connection.
+     */
+    private final ConcurrentMap<String, Set<String>> subscriptionIds = new ConcurrentHashMap<>();
 
     public StompRateLimitGuard(RateLimitService rateLimitService,
                                LocalBucketRegistry localBuckets,
@@ -204,7 +219,7 @@ public class StompRateLimitGuard implements StompInboundGuard {
                 return checkSubscriptionCap(accessor, principal, connectionKey, ip, tier);
             }
             if (command == StompCommand.UNSUBSCRIBE) {
-                decrementSubscriptionCount(connectionKey);
+                forgetSubscription(connectionKey, accessor.getSubscriptionId());
             }
             return StompGuardResult.PASS;
         }
@@ -226,13 +241,24 @@ public class StompRateLimitGuard implements StompInboundGuard {
     }
 
     /**
-     * G-M4-V1-03: a hard cap on live subscriptions per connection, separate
-     * from (and checked after) the token-bucket charge above, so a burst that
-     * stays under the bucket capacities can't still accumulate unbounded
-     * broker subscriptions. Past the cap the SUBSCRIBE is refused fatally
-     * (the socket closes) rather than dropped, since - unlike a SEND - there
-     * is no useful "try again in a moment" for it: the caller is already at
-     * as many subscriptions as it's ever allowed to hold at once.
+     * G-M4-V1-03 / G-M4-FIX3-01: a hard cap on live subscriptions per
+     * connection, separate from (and checked after) the token-bucket charge
+     * above, so a burst that stays under the bucket capacities can't still
+     * accumulate unbounded broker subscriptions. Past the cap the SUBSCRIBE
+     * is refused fatally (the socket closes) rather than dropped, since -
+     * unlike a SEND - there is no useful "try again in a moment" for it: the
+     * caller is already at as many subscriptions as it's ever allowed to
+     * hold at once.
+     *
+     * <p>Membership is tracked by the frame's {@code id} header, not a bare
+     * count, so only an UNSUBSCRIBE for an id this connection actually holds
+     * can free a slot (see {@link #forgetSubscription}). A SUBSCRIBE whose id
+     * is already on the connection does not grow the set - it is left to the
+     * broker to treat as a re-subscribe or reject, and this guard neither
+     * admits nor refuses the frame on the strength of the cap. A SUBSCRIBE
+     * with no {@code id} header (malformed; the broker would reject it
+     * itself) is given a synthetic, unguessable id so it still consumes a
+     * slot rather than being a free, unbounded subscription.
      */
     private StompGuardResult checkSubscriptionCap(StompHeaderAccessor accessor, StompPrincipal principal,
                                                    String connectionKey, String ip, Tier tier) {
@@ -240,25 +266,38 @@ public class StompRateLimitGuard implements StompInboundGuard {
             return StompGuardResult.PASS;
         }
         int max = properties.getStomp().getMaxSubscriptionsPerConnection();
-        int count = subscriptionCounts.computeIfAbsent(connectionKey, k -> new AtomicInteger()).incrementAndGet();
-        if (count > max) {
-            subscriptionCounts.get(connectionKey).decrementAndGet();
-            LimitSubject subject = new LimitSubject(principal == null ? null : principal.getKeycloakId(), ip, tier);
-            eventRecorder.record(STOMP_SUBSCRIPTIONS, RateLimitEventRecorder.KIND_RATE, subject,
-                    accessor.getDestination());
-            log.info("Closing STOMP connection {} ({}) for exceeding {} subscriptions",
-                    accessor.getSessionId(), principal, max);
-            throw new StompRejectedException(StompErrorCode.RATE_LIMITED,
-                    "Too many active subscriptions on this connection", null, STOMP_SUBSCRIPTIONS);
+        String subscriptionId = accessor.getSubscriptionId();
+        String id = subscriptionId != null ? subscriptionId : "\u0000anonymous:" + UUID.randomUUID();
+        Set<String> ids = subscriptionIds.computeIfAbsent(connectionKey, k -> ConcurrentHashMap.newKeySet());
+        synchronized (ids) {
+            if (ids.contains(id)) {
+                // Duplicate id on this connection: don't grow the set.
+                return StompGuardResult.PASS;
+            }
+            if (ids.size() >= max) {
+                LimitSubject subject = new LimitSubject(principal == null ? null : principal.getKeycloakId(), ip,
+                        tier);
+                eventRecorder.record(STOMP_SUBSCRIPTIONS, RateLimitEventRecorder.KIND_RATE, subject,
+                        accessor.getDestination());
+                log.info("Closing STOMP connection {} ({}) for exceeding {} subscriptions",
+                        accessor.getSessionId(), principal, max);
+                throw new StompRejectedException(StompErrorCode.RATE_LIMITED,
+                        "Too many active subscriptions on this connection", null, STOMP_SUBSCRIPTIONS);
+            }
+            ids.add(id);
         }
         return StompGuardResult.PASS;
     }
 
-    private void decrementSubscriptionCount(String connectionKey) {
-        subscriptionCounts.computeIfPresent(connectionKey, (k, count) -> {
-            int updated = count.updateAndGet(v -> Math.max(0, v - 1));
-            return updated == 0 ? null : count;
-        });
+    /** Frees a slot only for an {@code id} this connection actually holds; a missing or unknown id is a no-op. */
+    private void forgetSubscription(String connectionKey, String subscriptionId) {
+        if (subscriptionId == null) {
+            return;
+        }
+        Set<String> ids = subscriptionIds.get(connectionKey);
+        if (ids != null) {
+            ids.remove(subscriptionId);
+        }
     }
 
     /** @return the rejecting decision, or null when a token was taken */
@@ -271,7 +310,7 @@ public class StompRateLimitGuard implements StompInboundGuard {
         if (connectionId != null) {
             String connectionKey = UsageKeys.connectionPart(connectionId);
             localBuckets.invalidate(connectionKey);
-            subscriptionCounts.remove(connectionKey);
+            subscriptionIds.remove(connectionKey);
             notifier.forget(connectionId);
         }
     }
