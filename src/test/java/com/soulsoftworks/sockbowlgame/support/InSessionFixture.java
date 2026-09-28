@@ -50,6 +50,8 @@ public final class InSessionFixture {
 
     public final GameAuthorizationPolicy policy;
     public final PacketClient packetClient = mock(PacketClient.class);
+    /** Shared by every room this fixture builds, as the Redis bindings are by every game. */
+    public final InMemoryEphemeralPacketBindings ephemeralBindings = new InMemoryEphemeralPacketBindings();
     private final List<MessageProcessor> processors;
 
     /** Auth on: the in-session authorization rules under test. */
@@ -62,7 +64,7 @@ public final class InSessionFixture {
         policy = new GameAuthorizationPolicy(authEnabled, null);
         when(packetClient.getPacketById(any())).thenAnswer(inv -> Mono.just(packet()));
         processors = List.of(
-                new ConfigurationMessageProcessor(packetClient, policy),
+                new ConfigurationMessageProcessor(packetClient, policy, ephemeralBindings),
                 new GameMessageProcessor(policy),
                 new ProgressionMessageProcessor(policy));
     }

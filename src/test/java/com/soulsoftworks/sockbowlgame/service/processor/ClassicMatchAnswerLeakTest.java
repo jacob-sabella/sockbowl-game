@@ -86,7 +86,7 @@ class ClassicMatchAnswerLeakTest {
         gameProcessor = new GameMessageProcessor();
         progressionProcessor = new ProgressionMessageProcessor();
         configProcessor = new ConfigurationMessageProcessor(mock(PacketClient.class),
-                new GameAuthorizationPolicy(false, null));
+                new GameAuthorizationPolicy(false, null), new com.soulsoftworks.sockbowlgame.support.InMemoryEphemeralPacketBindings());
 
         proctor = Player.builder().playerId("proctor").name("proctor")
                 .playerMode(PlayerMode.PROCTOR).isGameOwner(true).build();

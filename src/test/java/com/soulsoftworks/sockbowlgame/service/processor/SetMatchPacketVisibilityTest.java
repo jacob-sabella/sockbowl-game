@@ -97,8 +97,16 @@ class SetMatchPacketVisibilityTest {
     }
 
     private static void assertLoaded(SockbowlOutMessage out, GameSession session) {
-        assertThat(out).isInstanceOf(MatchPacketUpdate.class);
-        assertThat(((MatchPacketUpdate) out).getPacketId()).isEqualTo(InSessionFixture.PACKET_ID);
+        // One MatchPacketUpdate with the id, for the loader alone; any other
+        // is id-free (R3-G-01).
+        java.util.List<SockbowlOutMessage> frames = out instanceof com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage multi
+                ? multi.getSockbowlOutMessages() : java.util.List.of(out);
+        assertThat(frames).allMatch(MatchPacketUpdate.class::isInstance);
+        java.util.List<MatchPacketUpdate> withId = frames.stream().map(MatchPacketUpdate.class::cast)
+                .filter(u -> u.getPacketId() != null).toList();
+        assertThat(withId).hasSize(1);
+        assertThat(withId.get(0).getPacketId()).isEqualTo(InSessionFixture.PACKET_ID);
+        assertThat(withId.get(0).getRecipients()).hasSize(1);
         assertThat(session.getCurrentMatch().getPacket()).isNotNull();
     }
 
@@ -284,7 +292,7 @@ class SetMatchPacketVisibilityTest {
         SessionService sessions = mock(SessionService.class);
         when(sessions.getGameSessionById(room.session().getId())).thenReturn(room.session());
         MessageService service = new MessageService(stomp, mock(KafkaTemplate.class), sessions,
-                new ConfigurationMessageProcessor(fx.packetClient, fx.policy),
+                new ConfigurationMessageProcessor(fx.packetClient, fx.policy, fx.ephemeralBindings),
                 new ProgressionMessageProcessor(fx.policy),
                 new GameMessageProcessor(fx.policy));
 

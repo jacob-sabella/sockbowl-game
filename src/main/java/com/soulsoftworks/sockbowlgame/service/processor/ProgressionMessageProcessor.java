@@ -110,6 +110,24 @@ public class ProgressionMessageProcessor extends MessageProcessor {
             return ProcessError.builder().error("A packet must be selected for the match.").build();
         }
 
+        // Nobody who proctored this packet (and so read its answers) may play
+        // on it (R3-G2-03): a player can take the seat, load the packet, read
+        // it, and go back to a team before the real proctor reloads it.
+        for (Team team : gameSession.getTeamList()) {
+            if (team.getTeamPlayers() == null) {
+                continue;
+            }
+            for (Player teamPlayer : team.getTeamPlayers()) {
+                if (teamPlayer != null
+                        && gameSession.hasProctoredPacket(selectedPacket.getId(), teamPlayer.getPlayerId())) {
+                    return ProcessError.coded(startMatchMessage, ConfigurationMessageProcessor.PACKET_ANSWERS_SEEN,
+                            (teamPlayer.getName() == null ? "A player" : teamPlayer.getName())
+                                    + " proctored this packet and has seen its answers, so cannot play on it."
+                                    + " Move them off their team or load another packet.");
+                }
+            }
+        }
+
         // Verify that a proctored match has a proctor (single player needs none)
         if (!proctorless && gameSession.getProctor() == null) {
             return ProcessError.builder().error("No proctor assigned to the match.").build();

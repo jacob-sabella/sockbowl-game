@@ -47,6 +47,11 @@ import java.util.function.Supplier;
  * exclusively, so no save from this process overlaps it. Searches happen only
  * on join and create, and a save never waits on a session lock while holding
  * it, so it cannot deadlock with the per-session locks.
+ *
+ * <p>A join-code search must not run while a session lock is held (R3-G-LOCK):
+ * it would keep every save in the process waiting for as long as that session
+ * is locked. The join paths search once, outside the lock, and re-read the
+ * session by id inside it.
  */
 public final class GameSessionLocks {
 

@@ -19,12 +19,15 @@ import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
+import com.soulsoftworks.sockbowlgame.service.packet.EphemeralPacketBindings;
+import com.soulsoftworks.sockbowlquestions.models.nodes.PacketVisibility;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ConfigurationMessageProcessor extends MessageProcessor {
@@ -35,14 +38,23 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     public static final String PACKET_NOT_FOUND = "PACKET_NOT_FOUND";
     public static final String PACKET_NOT_AVAILABLE = "PACKET_NOT_AVAILABLE";
     public static final String PACKET_SERVICE_UNAVAILABLE = "PACKET_SERVICE_UNAVAILABLE";
+    /**
+     * The player held the proctor seat while the loaded packet was loaded,
+     * so read its answers, and may not play on it (R3-G2-03). Also returned
+     * by start-match ({@link ProgressionMessageProcessor}).
+     */
+    public static final String PACKET_ANSWERS_SEEN = "PACKET_ANSWERS_SEEN";
 
     private final PacketClient packetClient;
     private final GameAuthorizationPolicy authorizationPolicy;
+    private final EphemeralPacketBindings ephemeralPacketBindings;
 
     public ConfigurationMessageProcessor(PacketClient packetClient,
-                                         GameAuthorizationPolicy authorizationPolicy) {
+                                         GameAuthorizationPolicy authorizationPolicy,
+                                         EphemeralPacketBindings ephemeralPacketBindings) {
         this.packetClient = packetClient;
         this.authorizationPolicy = authorizationPolicy;
+        this.ephemeralPacketBindings = ephemeralPacketBindings;
     }
 
     @Override
@@ -102,6 +114,15 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // A proctor who moves to a team (or is moved) gives up the seat (G2-03).
         boolean vacatesProctorSeat = targetPlayer.getPlayerMode() == PlayerMode.PROCTOR;
+
+        // A player who proctored the loaded packet has read its answers, so
+        // may not play on it (R3-G2-03). A proctor leaving the seat takes the
+        // packet with them (it is cleared below), so there is nothing to refuse.
+        if (!vacatesProctorSeat && !message.getTargetTeam().equals(Team.SPECTATOR_TEAM)
+                && gameSession.hasProctoredPacket(gameSession.loadedPacketId(), targetPlayer.getPlayerId())) {
+            return ProcessError.coded(message, PACKET_ANSWERS_SEEN,
+                    "This player proctored the loaded packet and has seen its answers, so cannot join a team for it");
+        }
 
         // If the player is currently in a team, remove the player from the current team
         if (currentTeam != null && !currentTeam.getTeamId().equals(Team.SPECTATOR_TEAM)) {
@@ -195,6 +216,25 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                     "Packet id " + message.getPacketId() + " is not available for play");
         }
 
+        // An EPHEMERAL packet belongs to the one game that first loaded it
+        // (R3-G-01): loading it in a second game would hand that game's proctor
+        // every answer of a packet only the game service can read.
+        if (authorizationPolicy.isAuthEnabled() && packet.getVisibility() == PacketVisibility.EPHEMERAL) {
+            String packetId = packet.getId() != null ? packet.getId() : message.getPacketId();
+            boolean bound;
+            try {
+                bound = ephemeralPacketBindings.bindToGame(packetId, gameSession.getId());
+            } catch (RuntimeException e) {
+                log.warn("SetMatchPacket {} for session {}: could not bind the EPHEMERAL packet",
+                        packetId, gameSession.getId(), e);
+                return packetServiceUnavailable(message);
+            }
+            if (!bound) {
+                return ProcessError.coded(message, PACKET_NOT_AVAILABLE,
+                        "Packet id " + message.getPacketId() + " is not available for play");
+            }
+        }
+
         // The author's Keycloak subject was only needed for the visibility check
         // above; it is identity, so it is never stored in or sent with the
         // session (G2-02, AUTH-10).
@@ -207,11 +247,51 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
 
-        // Return a MatchPacketUpdate (with the tossup count for "Tossup N of M" progress)
-        return MatchPacketUpdate.builder()
+        // The proctor who loaded it can read every answer from now on (R3-G2-03).
+        // A proctorless owner gets the player view, so reads none.
+        if (!gameSession.getGameSettings().isProctorless()) {
+            gameSession.recordPacketProctor(gameSession.loadedPacketId(), message.getOriginatingPlayerId());
+        }
+
+        return packetUpdateFor(packet, message.getOriginatingPlayerId(), gameSession);
+    }
+
+    /**
+     * The MatchPacketUpdate for a newly loaded packet, per recipient
+     * (R3-G-01): the sender (the proctor, or the owner in a proctorless mode)
+     * gets the full update; every other player gets the name and counts but
+     * no packet id, which would let them load the packet as proctor of
+     * another game and read its answers there.
+     */
+    static SockbowlOutMessage packetUpdateFor(Packet packet, String loaderId, GameSession gameSession) {
+        int tossupCount = packet.getTossups() == null ? 0 : packet.getTossups().size();
+        int bonusCount = packet.getBonuses() == null ? 0 : packet.getBonuses().size();
+        MatchPacketUpdate full = MatchPacketUpdate.builder()
                 .packetId(packet.getId())
                 .packetName(packet.getName())
-                .tossupCount(packet.getTossups().size())
+                .tossupCount(tossupCount)
+                .bonusCount(bonusCount)
+                .recipient(loaderId)
+                .build();
+        List<String> others = gameSession.getPlayerList().stream()
+                .map(Player::getPlayerId)
+                .filter(Objects::nonNull)
+                .filter(id -> !id.equals(loaderId))
+                .toList();
+        // An empty recipient list is a broadcast, so the id-free update is
+        // only added when someone else is present.
+        if (others.isEmpty()) {
+            return full;
+        }
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(full)
+                .sockbowlOutMessage(MatchPacketUpdate.builder()
+                        .packetId(null)
+                        .packetName(packet.getName())
+                        .tossupCount(tossupCount)
+                        .bonusCount(bonusCount)
+                        .recipients(others)
+                        .build())
                 .build();
     }
 
@@ -295,6 +375,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // Set the target player as proctor for the current match in the game session
         targetPlayer.setPlayerMode(PlayerMode.PROCTOR);
+
+        // A packet still loaded (the owner replacing a proctor mid-match, or
+        // the proctor re-claiming their own seat) is now readable by them
+        // (R3-G2-03).
+        gameSession.recordPacketProctor(gameSession.loadedPacketId(), targetPlayer.getPlayerId());
 
         // Remove the proctor from any team they might be a part of
         Team team = gameSession.getTeamByPlayerId(targetPlayer.getPlayerId());
@@ -419,7 +504,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
         return SockbowlMultiOutMessage.builder()
                 .sockbowlOutMessage(update)
-                .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).build())
+                .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).bonusCount(0).build())
                 .build();
     }
 }

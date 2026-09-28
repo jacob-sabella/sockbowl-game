@@ -50,6 +50,8 @@ class SessionServiceTest {
         GameSession session = sessionService.createNewGame(request);
         when(gameSessionRepository.findGameSessionByJoinCode(session.getJoinCode()))
                 .thenReturn(Optional.of(session));
+        // The join re-reads the session by id under its lock (R3-G-LOCK).
+        when(gameSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
 
         JoinGameRequest joinRequest = JoinGameRequest.builder()
                 .joinCode(session.getJoinCode())
@@ -77,6 +79,8 @@ class SessionServiceTest {
         GameSession session = sessionService.createNewGame(request);
         when(gameSessionRepository.findGameSessionByJoinCode(session.getJoinCode()))
                 .thenReturn(Optional.of(session));
+        // The join re-reads the session by id under its lock (R3-G-LOCK).
+        when(gameSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
 
         sessionService.addPlayerToGameSessionWithJoinCode(JoinGameRequest.builder()
                 .joinCode(session.getJoinCode()).name("Alice").build());
@@ -98,6 +102,8 @@ class SessionServiceTest {
         GameSession session = sessionService.createNewGame(request);
         when(gameSessionRepository.findGameSessionByJoinCode(session.getJoinCode()))
                 .thenReturn(Optional.of(session));
+        // The join re-reads the session by id under its lock (R3-G-LOCK).
+        when(gameSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
 
         // One null-name joiner, one blank-name joiner — neither should collapse
         // into an indistinguishable "Player" team.
