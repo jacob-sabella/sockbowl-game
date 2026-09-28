@@ -42,6 +42,10 @@ dependencyManagement {
         // BOM manages it to 3.2.4, which outranks a plain `constraints{}`
         // entry. Overriding it here (like lombok above) is what actually wins.
         dependency 'com.github.ben-manes.caffeine:caffeine:3.3.0'
+        // Same story for lettuce-core: managed by the Boot BOM via
+        // spring-boot-starter-data-redis, so override the managed version
+        // here rather than via `constraints{}` (which the BOM would outrank).
+        dependency 'io.lettuce:lettuce-core:7.8.0.RELEASE'
     }
 }
 
