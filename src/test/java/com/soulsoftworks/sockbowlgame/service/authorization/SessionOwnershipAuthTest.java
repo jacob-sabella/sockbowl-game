@@ -660,6 +660,121 @@ class SessionOwnershipAuthTest {
         assertNoAnswers(getGameJson(fx, room, cheater));
     }
 
+    private static SockbowlOutMessage loadPacketById(InSessionFixture fx, Room room, String sender, String packetId) {
+        return fx.dispatch(InSessionFixture.message(SET_MATCH_PACKET, room.session(), sender,
+                m -> ((SetMatchPacket) m).setPacketId(packetId)));
+    }
+
+    private static void assertAnswersSeen(SockbowlOutMessage out, String recipient) {
+        ProcessError error = assertInstanceOf(ProcessError.class, out);
+        assertEquals(com.soulsoftworks.sockbowlgame.service.processor.ConfigurationMessageProcessor.PACKET_ANSWERS_SEEN,
+                error.getCode(), "" + error);
+        assertEquals(List.of(recipient), error.getRecipients());
+    }
+
+    @Test
+    @DisplayName("R3-G2-03: a player who took the vacated seat and reloaded the packet by id cannot play a match on it")
+    void vacatedSeatThenReloadSamePacketIdCannotPlayOnIt() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
+        String proctor = room.teammate();
+        String cheater = room.nonOwners().get(0);
+        String team2 = room.session().getTeamList().get(1).getTeamId();
+
+        assertFalse(claimProctor(fx, room, proctor, proctor) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, proctor) instanceof ProcessError);
+        // The id is no longer broadcast (R3-G-01); the cheater learned it some other way.
+        String knownId = InSessionFixture.PACKET_ID;
+
+        // The proctor steps off (packet cleared); the cheater claims the seat and reloads by id.
+        assertFalse(moveToTeam(fx, room, proctor, proctor, team2) instanceof ProcessError);
+        assertFalse(claimProctor(fx, room, cheater, cheater) instanceof ProcessError);
+        assertFalse(loadPacketById(fx, room, cheater, knownId) instanceof ProcessError);
+        assertTrue(getGameJson(fx, room, cheater).contains("Napoleon"), "as proctor the cheater reads the packet");
+
+        // Back to a team (the seat change clears the packet), the real proctor reclaims and reloads it.
+        assertFalse(moveToTeam(fx, room, cheater, cheater, team2) instanceof ProcessError);
+        assertFalse(claimProctor(fx, room, proctor, proctor) instanceof ProcessError);
+        assertFalse(loadPacketById(fx, room, proctor, knownId) instanceof ProcessError);
+
+        // The match cannot start with the cheater on a team.
+        SockbowlOutMessage refused = fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), proctor, null));
+        assertAnswersSeen(refused, proctor);
+        assertEquals(MatchState.CONFIG, room.session().getCurrentMatch().getMatchState());
+
+        // Nor can the cheater move to the other team while that packet is loaded.
+        assertAnswersSeen(moveToTeam(fx, room, room.owner(), cheater, room.session().getTeamList().get(0).getTeamId()),
+                room.owner());
+    }
+
+    @Test
+    @DisplayName("R3-G2-03: a player who proctored the loaded packet is refused a team seat while it is loaded")
+    void formerProctorOfTheLoadedPacketIsRefusedATeamSeat() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
+        String proctor = room.teammate();
+        String cheater = room.nonOwners().get(0);
+        String team1 = room.session().getTeamList().get(0).getTeamId();
+
+        // The cheater proctors and loads the packet, then goes to the spectators.
+        assertFalse(claimProctor(fx, room, cheater, cheater) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, cheater) instanceof ProcessError);
+        assertFalse(moveToTeam(fx, room, cheater, cheater, Team.SPECTATOR_TEAM) instanceof ProcessError);
+
+        // The real proctor loads the same packet; the cheater may not take a team seat for it.
+        assertFalse(claimProctor(fx, room, proctor, proctor) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, proctor) instanceof ProcessError);
+        assertAnswersSeen(moveToTeam(fx, room, cheater, cheater, team1), cheater);
+        assertAnswersSeen(moveToTeam(fx, room, room.owner(), cheater, team1), room.owner());
+        assertEquals(PlayerMode.SPECTATOR, room.player(cheater).getPlayerMode());
+        assertFalse(room.session().getTeamList().get(0).getTeamPlayers().stream()
+                .anyMatch(p -> p.getPlayerId().equals(cheater)), "the cheater must not be on team 1");
+    }
+
+    @Test
+    @DisplayName("R3-G2-03: a mode switch does not launder a former proctor into a proctorless match on the same packet")
+    void modeSwitchDoesNotLaunderAFormerProctor() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
+        String owner = room.owner();
+        // The owner proctors and loads the packet...
+        assertFalse(claimProctor(fx, room, owner, owner) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, owner) instanceof ProcessError);
+        // ...switches to AUTO_PROCTOR (seat and packet cleared), joins a team, reloads and tries to start.
+        SockbowlOutMessage switched = fx.dispatch(InSessionFixture.message(UPDATE_GAME_SETTINGS, room.session(), owner,
+                m -> ((UpdateGameSettings) m).setGameSettings(GameSettings.builder()
+                        .gameMode(GameMode.AUTO_PROCTOR).timerSettings(new TimerSettings()).build())));
+        assertFalse(switched instanceof ProcessError, "" + switched);
+        assertNull(packetId(room));
+        assertFalse(moveToTeam(fx, room, owner, owner, room.session().getTeamList().get(0).getTeamId()) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, owner) instanceof ProcessError);
+
+        assertAnswersSeen(fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), owner, null)), owner);
+    }
+
+    @Test
+    @DisplayName("R3-G2-03: the proctor who loaded a packet keeps their seat, and a new packet lets everyone play")
+    void formerProctorMayPlayOnAnotherPacket() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
+        String proctor = room.teammate();
+        String cheater = room.nonOwners().get(0);
+        String team2 = room.session().getTeamList().get(1).getTeamId();
+        assertFalse(claimProctor(fx, room, cheater, cheater) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, cheater) instanceof ProcessError);
+        assertFalse(moveToTeam(fx, room, cheater, cheater, team2) instanceof ProcessError);
+
+        when(fx.packetClient.getPacketById(any())).thenAnswer(inv -> {
+            var other = InSessionFixture.packet();
+            other.setId("PKT-OTHER");
+            return reactor.core.publisher.Mono.just(other);
+        });
+        assertFalse(claimProctor(fx, room, proctor, proctor) instanceof ProcessError);
+        assertFalse(loadPacketById(fx, room, proctor, "PKT-OTHER") instanceof ProcessError);
+        SockbowlOutMessage started = fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), proctor, null));
+        assertFalse(started instanceof ProcessError, "start refused: " + started);
+    }
+
     @Test
     @DisplayName("G2-03: a packet loaded by one proctor never reaches a player who claims the seat after them")
     void claimAfterProctorLeftWithPacketLoadedReadsNoAnswers() {

@@ -7,7 +7,9 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,6 +50,17 @@ public class GameSession {
 
     @Builder.Default
     private List<Match> previousMatches = new ArrayList<>();
+
+    /**
+     * For each packet id, the players who held the proctor seat while that
+     * packet was loaded in this session, and so could read its answers
+     * (R3-G2-03). None of them may play a match on that packet: they are
+     * refused a team seat while it is loaded, and a match on it cannot start
+     * while one of them is on a team. Server-side only: every client view
+     * drops it ({@link GameSanitizer}).
+     */
+    @Builder.Default
+    private Map<String, List<String>> proctorsByPacketId = new HashMap<>();
 
     /**
      * Add a guest player. Equivalent to {@code addPlayer(joinGameRequest, null)}.
@@ -197,4 +210,38 @@ public class GameSession {
                 .orElse(null);
     }
 
+    /**
+     * Record that {@code playerId} held the proctor seat while {@code packetId}
+     * was loaded (see {@link #proctorsByPacketId}). No-op for a blank id.
+     */
+    public void recordPacketProctor(String packetId, String playerId) {
+        if (packetId == null || packetId.isBlank() || playerId == null) {
+            return;
+        }
+        if (proctorsByPacketId == null) {
+            proctorsByPacketId = new HashMap<>();
+        }
+        List<String> proctors = proctorsByPacketId.computeIfAbsent(packetId, id -> new ArrayList<>());
+        if (!proctors.contains(playerId)) {
+            proctors.add(playerId);
+        }
+    }
+
+    /** Whether {@code playerId} held the proctor seat while {@code packetId} was loaded. */
+    public boolean hasProctoredPacket(String packetId, String playerId) {
+        if (packetId == null || packetId.isBlank() || playerId == null || proctorsByPacketId == null) {
+            return false;
+        }
+        List<String> proctors = proctorsByPacketId.get(packetId);
+        return proctors != null && proctors.contains(playerId);
+    }
+
+    /** The id of the packet loaded in the current match, or null when none is. Not a bean getter, so no serializer picks it up. */
+    public String loadedPacketId() {
+        if (currentMatch == null || currentMatch.getPacket() == null) {
+            return null;
+        }
+        String id = currentMatch.getPacket().getId();
+        return id == null || id.isBlank() ? null : id;
+    }
 }

@@ -28,7 +28,13 @@ public class GameSanitizer {
      *       rounds that were played, each as any player may see it (G2-01). The
      *       current proctor may not be the proctor who loaded that packet, so
      *       even the proctor view carries no unplayed question.</li>
+     *   <li>the session's {@code proctorsByPacketId} bookkeeping is removed
+     *       (R3-G2-03).</li>
      * </ul>
+     * Every view but the proctor's also drops the packet id of the current and
+     * every previous match (R3-G-01): with the id a player could load the
+     * packet as proctor of another game and read its answers there. They keep
+     * the packet name.
      *
      * @param gameSession The original game session to be sanitized.
      * @param playerMode  The player mode determining the level of sanitization.
@@ -45,8 +51,19 @@ public class GameSanitizer {
         stripTeamIdentity(sanitizedGameSession.getTeamList());
         sanitizedGameSession.setGameOwnerId(null);
 
+        // Who proctored which packet is server-side bookkeeping (R3-G2-03),
+        // and it names packet ids.
+        sanitizedGameSession.setProctorsByPacketId(null);
+
         // Finished matches: public view only, for everyone (G2-01, G2-02).
         sanitizedGameSession.setPreviousMatches(publicMatches(sanitizedGameSession.getPreviousMatches()));
+
+        boolean proctorView = playerMode == PlayerMode.PROCTOR;
+        if (!proctorView) {
+            // A player who knows a packet's id can load it as proctor of
+            // another game and read its answers there (R3-G-01).
+            stripPacketIds(sanitizedGameSession.getPreviousMatches());
+        }
 
         Match currentMatch = sanitizedGameSession.getCurrentMatch();
         if (currentMatch == null) {
@@ -55,8 +72,9 @@ public class GameSanitizer {
         // The packet author's subject is identity, not game data (G2-02).
         stripPacketOwner(currentMatch.getPacket());
 
-        if (playerMode != PlayerMode.PROCTOR && currentMatch.getPacket() != null) {
+        if (!proctorView && currentMatch.getPacket() != null) {
 
+                currentMatch.getPacket().setId(null);
                 currentMatch.getPacket().setTossups(null);
                 currentMatch.getPacket().setBonuses(null);
 
@@ -142,6 +160,17 @@ public class GameSanitizer {
             views.add(publicMatchView(m));
         }
         return views;
+    }
+
+    private static void stripPacketIds(List<Match> matches) {
+        if (matches == null) {
+            return;
+        }
+        for (Match m : matches) {
+            if (m != null && m.getPacket() != null) {
+                m.getPacket().setId(null);
+            }
+        }
     }
 
     private static void stripPacketOwner(com.soulsoftworks.sockbowlquestions.models.nodes.Packet packet) {
