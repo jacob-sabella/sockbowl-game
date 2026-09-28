@@ -82,6 +82,16 @@ public class KafkaConfig {
         // consumer's first assignment is lost. It has no effect on a group
         // with already-committed offsets (mid-life restarts still resume from
         // the last committed offset either way).
+        //
+        // Accepted risk (G2-05, D21): if the group's committed offsets expire
+        // (offsets.retention.minutes, 7 days of the group having no member by
+        // default) the group restarts from the start of the topic and replays
+        // old commands. That needs the game service to have been down for the
+        // whole retention period, and every session it could touch expires
+        // from Redis after 6 hours (GameSession timeToLive), so a replayed
+        // command finds no session and is dropped (MessageService). Dropping
+        // records older than listener start was rejected: it would drop the
+        // commands this setting exists to keep.
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
