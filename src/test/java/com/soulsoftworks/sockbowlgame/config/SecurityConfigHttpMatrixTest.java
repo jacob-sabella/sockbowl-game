@@ -3,6 +3,7 @@ package com.soulsoftworks.sockbowlgame.config;
 import com.google.gson.Gson;
 import com.soulsoftworks.sockbowlgame.controller.api.AdminBanController;
 import com.soulsoftworks.sockbowlgame.controller.api.AdminIpBanController;
+import com.soulsoftworks.sockbowlgame.controller.api.AdminUsageController;
 import com.soulsoftworks.sockbowlgame.controller.api.AuthController;
 import com.soulsoftworks.sockbowlgame.controller.api.GameSessionController;
 import com.soulsoftworks.sockbowlgame.controller.api.UserController;
@@ -12,7 +13,9 @@ import com.soulsoftworks.sockbowlgame.model.entity.IpBan;
 import com.soulsoftworks.sockbowlgame.model.entity.User;
 import com.soulsoftworks.sockbowlgame.model.entity.UserStats;
 import com.soulsoftworks.sockbowlgame.model.request.CreateGameRequest;
+import com.soulsoftworks.sockbowlgame.model.response.GlobalUsage;
 import com.soulsoftworks.sockbowlgame.model.response.JoinGameResponse;
+import com.soulsoftworks.sockbowlgame.model.response.UsageCounter;
 import com.soulsoftworks.sockbowlgame.model.state.GameMode;
 import com.soulsoftworks.sockbowlgame.model.state.GameSession;
 import com.soulsoftworks.sockbowlgame.model.state.GameSettings;
@@ -25,6 +28,7 @@ import com.soulsoftworks.sockbowlgame.ratelimit.ClientIpResolver;
 import com.soulsoftworks.sockbowlgame.ratelimit.LimitSubjectResolver;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.service.ban.IpBanService;
+import com.soulsoftworks.sockbowlgame.usage.AdminUsageService;
 import com.soulsoftworks.sockbowlgame.usage.HostedSessionQuota;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +58,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -61,6 +66,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -83,7 +89,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(properties = {"sockbowl.auth.enabled=true", "sockbowl.test.url-probes=true"})
 @Import({SecurityConfig.class, GlobalExceptionHandler.class, GameAuthorizationPolicy.class,
         GameSessionController.class, AuthController.class, UserController.class, AdminBanController.class,
-        AdminIpBanController.class,
+        AdminIpBanController.class, AdminUsageController.class,
         SecurityMatrixProbeController.class})
 @ContextConfiguration(classes = SecurityConfigHttpMatrixTest.TestApp.class)
 class SecurityConfigHttpMatrixTest {
@@ -117,6 +123,8 @@ class SecurityConfigHttpMatrixTest {
     private LimitSubjectResolver limitSubjectResolver;
     @MockitoBean
     private ClientIpResolver clientIpResolver;
+    @MockitoBean
+    private AdminUsageService adminUsageService;
 
     @BeforeEach
     void stubServices() {
@@ -145,6 +153,17 @@ class SecurityConfigHttpMatrixTest {
                 IpBan.builder().id(UUID.randomUUID()).cidr("203.0.113.7/32").reason("r")
                         .createdAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).build());
         when(ipBanService.remove(any())).thenReturn(true);
+
+        when(adminUsageService.listUsers(any(), any(), any())).thenReturn(Page.empty());
+        when(adminUsageService.getGlobal()).thenReturn(GlobalUsage.builder()
+                .aiServerKey(UsageCounter.builder().metric("ai-generations").used(0).limit(200)
+                        .kind(UsageCounter.KIND_GLOBAL_DAILY).overridden(false).build())
+                .activeHostedSessions(0).topGuestIps(List.of()).rejectionsLastHour(0).build());
+        when(adminUsageService.recentEvents(anyInt())).thenReturn(List.of());
+        when(adminUsageService.getDetail(anyString(), any())).thenReturn(Optional.empty());
+        when(adminUsageService.setQuotaOverride(anyString(), anyString(), any(), any())).thenReturn(
+                UsageCounter.builder().metric("hosted-sessions").used(0).limit(1)
+                        .kind(UsageCounter.KIND_CONCURRENT).overridden(true).build());
 
         when(jwtDecoder.decode(eq("not-a-valid-token"))).thenThrow(new BadJwtException("bad token"));
     }
@@ -198,6 +217,8 @@ class SecurityConfigHttpMatrixTest {
     static Stream<Arguments> matrix() {
         String banPath = "/api/v1/admin/bans/" + UUID.randomUUID();
         String ipBanPath = "/api/v1/admin/bans/ip/" + UUID.randomUUID();
+        String quotaPath = "/api/v1/admin/usage/some-sub/quota/hosted-sessions";
+        String resetPath = "/api/v1/admin/usage/some-sub/reset";
         return Stream.of(
             // Guest endpoints (D1): anyone may host/join; a service token may not.
             row("POST", "/api/v1/session/create-new-game-session", CREATE_BODY, 200, 200, 200, 200, 403),
@@ -224,6 +245,13 @@ class SecurityConfigHttpMatrixTest {
             row("DELETE", ipBanPath, null, 401, 403, 204, 204, 403),
             // Other admin pages: admin:access only.
             row("GET", "/api/v1/admin/console", null, 401, 403, 403, 200, 403),
+            // Usage/quota admin view (M4, WP-G6): admin:access only.
+            row("GET", "/api/v1/admin/usage", null, 401, 403, 403, 200, 403),
+            row("GET", "/api/v1/admin/usage/global", null, 401, 403, 403, 200, 403),
+            row("GET", "/api/v1/admin/usage/events", null, 401, 403, 403, 200, 403),
+            row("GET", "/api/v1/admin/usage/some-sub", null, 401, 403, 403, 404, 403),
+            row("PUT", quotaPath, "{\"limit\":5}", 401, 403, 403, 200, 403),
+            row("POST", resetPath, null, 401, 403, 403, 204, 403),
             // Removed routes and unmapped paths: denied, never served.
             row("GET", "/api/v1/test", null, 401, 403, 403, 403, 403),
             row("GET", "/api/v1/auth/login", null, 401, 403, 403, 403, 403),

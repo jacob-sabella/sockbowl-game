@@ -94,10 +94,38 @@ class PacketIdExposureAuthTest {
         }
     }
 
+    /**
+     * Everything {@code playerId}'s get-game sends them: the sanitized session
+     * and, for a non-proctor with a packet loaded, the id-free
+     * MatchPacketUpdate that carries the counts (R4-NG-02).
+     */
     static String getGameJson(InSessionFixture fx, Room room, String playerId) {
+        List<SockbowlOutMessage> frames = getGame(fx, room, playerId);
+        StringBuilder json = new StringBuilder(wire(((GameSessionUpdate) frames.get(0)).getGameSession()));
+        for (SockbowlOutMessage frame : frames.subList(1, frames.size())) {
+            json.append('\n').append(wire(frame));
+        }
+        return json.toString();
+    }
+
+    /** The get-game frames: a GameSessionUpdate first, then at most one MatchPacketUpdate, all to the requester only. */
+    static List<SockbowlOutMessage> getGame(InSessionFixture fx, Room room, String playerId) {
         List<SockbowlOutMessage> frames = flat(fx.dispatch(InSessionFixture.message(GET_GAME, room.session(), playerId, null)));
-        assertEquals(1, frames.size());
-        return wire(((GameSessionUpdate) frames.get(0)).getGameSession());
+        assertTrue(frames.size() == 1 || frames.size() == 2, "get-game frames: " + frames);
+        assertInstanceOf(GameSessionUpdate.class, frames.get(0));
+        if (frames.size() == 2) {
+            assertInstanceOf(MatchPacketUpdate.class, frames.get(1));
+        }
+        for (SockbowlOutMessage frame : frames) {
+            assertEquals(List.of(playerId), frame.getRecipients(), "get-game answers the requester only: " + frame);
+        }
+        return frames;
+    }
+
+    /** The MatchPacketUpdate in {@code playerId}'s get-game, or null when there is none. */
+    static MatchPacketUpdate getGamePacketUpdate(InSessionFixture fx, Room room, String playerId) {
+        List<SockbowlOutMessage> frames = getGame(fx, room, playerId);
+        return frames.size() == 2 ? (MatchPacketUpdate) frames.get(1) : null;
     }
 
     static SockbowlOutMessage claim(InSessionFixture fx, Room room, String sender) {
@@ -436,5 +464,69 @@ class PacketIdExposureAuthTest {
         }
         // The notice still names the dropped destination (the client's own frame).
         assertTrue(wire(frames.get(0)).contains(SET_MATCH_PACKET));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* R4-NG-02: a late joiner or a reload still learns the counts         */
+    /* ------------------------------------------------------------------ */
+
+    @ParameterizedTest
+    @EnumSource(value = GameMode.class, names = {"QUIZ_BOWL_CLASSIC", "AUTO_PROCTOR", "FREE_FOR_ALL"})
+    @DisplayName("R4-NG-02: a non-proctor's get-game carries the name and counts in an id-free MatchPacketUpdate, never the id or answers")
+    void nonProctorGetGameCarriesCountsButNoIdOrAnswers(GameMode mode) {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, mode);
+        String loader;
+        if (mode.isProctorless()) {
+            loader = room.owner();
+        } else {
+            loader = room.teammate();
+            assertFalse(claim(fx, room, loader) instanceof ProcessError);
+        }
+        assertFalse(load(fx, room, loader, InSessionFixture.PACKET_ID) instanceof ProcessError);
+
+        // A player who joins after the packet was loaded never saw the load's MatchPacketUpdate.
+        Player late = room.session().addPlayer(com.soulsoftworks.sockbowlgame.model.request.JoinGameRequest.builder()
+                .playerSessionId("late").name("late").joinCode("JOIN").build(), null);
+        late.setPlayerMode(PlayerMode.SPECTATOR);
+
+        for (Player p : room.session().getPlayerList()) {
+            String id = p.getPlayerId();
+            if (p.getPlayerMode() == PlayerMode.PROCTOR) {
+                assertNull(getGamePacketUpdate(fx, room, id), "the proctor's view already holds the packet");
+                continue;
+            }
+            MatchPacketUpdate counts = getGamePacketUpdate(fx, room, id);
+            assertNotNull(counts, p.getName() + " gets no counts on get-game");
+            assertNull(counts.getPacketId());
+            assertEquals("Fixture Packet", counts.getPacketName());
+            assertEquals(2, counts.getTossupCount());
+            assertEquals(2, counts.getBonusCount());
+
+            String json = getGameJson(fx, room, id);
+            assertTrue(json.contains("\"tossupCount\":2") && json.contains("\"bonusCount\":2"), json);
+            assertFalse(json.contains(InSessionFixture.PACKET_ID), p.getName() + "'s get-game carries the packet id: " + json);
+            assertNoAnswers(json);
+        }
+        assertEquals(InSessionFixture.PACKET_ID, room.session().loadedPacketId(), "get-game changes nothing");
+    }
+
+    @Test
+    @DisplayName("R4-NG-02: with no packet loaded get-game is the session alone")
+    void getGameWithoutAPacketHasNoPacketUpdate() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.GUEST, GameMode.QUIZ_BOWL_CLASSIC);
+        for (Player p : room.session().getPlayerList()) {
+            assertNull(getGamePacketUpdate(fx, room, p.getPlayerId()));
+        }
+        // A cleared packet (the seat changed hands) is the same as none.
+        String proctor = room.teammate();
+        assertFalse(claim(fx, room, proctor) instanceof ProcessError);
+        assertFalse(load(fx, room, proctor, InSessionFixture.PACKET_ID) instanceof ProcessError);
+        assertFalse(claim(fx, room, room.owner()) instanceof ProcessError);
+        assertNull(room.session().loadedPacketId());
+        for (Player p : room.session().getPlayerList()) {
+            assertNull(getGamePacketUpdate(fx, room, p.getPlayerId()));
+        }
     }
 }

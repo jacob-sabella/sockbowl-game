@@ -6,6 +6,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.EndMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.BonusUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.progression.GameSessionUpdate;
@@ -177,6 +178,16 @@ class ClassicMatchAnswerLeakTest {
     private SockbowlOutMessage getGame(String playerId) {
         SockbowlOutMessage out = configProcessor.processMessage(GetGameState.builder()
                 .gameSession(session).originatingPlayerId(playerId).build());
+        if (out instanceof SockbowlMultiOutMessage multi) {
+            // A non-proctor with a packet loaded also gets the id-free counts (R4-NG-02).
+            List<SockbowlOutMessage> frames = multi.getSockbowlOutMessages();
+            assertEquals(2, frames.size(), "" + frames);
+            assertInstanceOf(GameSessionUpdate.class, frames.get(0));
+            MatchPacketUpdate counts = assertInstanceOf(MatchPacketUpdate.class, frames.get(1));
+            assertNull(counts.getPacketId(), "" + counts);
+            frames.forEach(f -> assertEquals(List.of(playerId), f.getRecipients()));
+            return out;
+        }
         assertInstanceOf(GameSessionUpdate.class, out);
         assertEquals(List.of(playerId), out.getRecipients());
         return out;
