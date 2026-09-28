@@ -69,6 +69,30 @@ public class KafkaConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonJsonDeserializer.class);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "game-consumers");
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "PLAINTEXT");
+        // Spring's default is "latest", which means a *newly formed* consumer
+        // group (a fresh broker, or the group's offsets having expired/been
+        // wiped) starts reading only from messages produced *after* its first
+        // partition assignment. Anything produced in the window between the
+        // container starting and that first rebalance completing (which has
+        // been observed to take tens of seconds on a fresh stack while the
+        // broker and consumer group stabilize) is silently skipped: the SEND
+        // succeeds, the message lands on the topic, and nobody ever consumes
+        // it (M2-LIVE-01). "earliest" makes a fresh/reset group start from the
+        // beginning of the topic instead, so no message produced before this
+        // consumer's first assignment is lost. It has no effect on a group
+        // with already-committed offsets (mid-life restarts still resume from
+        // the last committed offset either way).
+        //
+        // Accepted risk (G2-05, D21): if the group's committed offsets expire
+        // (offsets.retention.minutes, 7 days of the group having no member by
+        // default) the group restarts from the start of the topic and replays
+        // old commands. That needs the game service to have been down for the
+        // whole retention period, and every session it could touch expires
+        // from Redis after 6 hours (GameSession timeToLive), so a replayed
+        // command finds no session and is dropped (MessageService). Dropping
+        // records older than listener start was rejected: it would drop the
+        // commands this setting exists to keep.
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 

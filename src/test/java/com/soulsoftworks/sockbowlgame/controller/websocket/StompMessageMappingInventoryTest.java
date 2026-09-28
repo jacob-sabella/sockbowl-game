@@ -23,6 +23,7 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.kafka.support.serializer.JacksonJsonDeserializer;
 import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.simp.annotation.SubscribeMapping;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.stereotype.Controller;
 
@@ -65,10 +66,25 @@ import static org.mockito.Mockito.verify;
  * ({@code SessionOwnershipAuthTest}, {@code InSessionRoleMatrixTest}) iterate,
  * so a new mapping that nobody classified (and so nobody authorization-tested)
  * fails the build.
+ *
+ * <p><b>FIX-G2 (defect G-05):</b> the classpath scan below covers the whole
+ * {@code com.soulsoftworks.sockbowlgame} tree, not just
+ * {@code controller.websocket}, and looks for {@code @SubscribeMapping} as
+ * well as {@code @MessageMapping}: a client-reachable STOMP handler dropped
+ * into any other package, or one written to reply on SUBSCRIBE rather than
+ * handle a SEND, would previously have gone entirely uninventoried and
+ * unauthorization-tested. The SEND-oriented assertions below (the injection,
+ * stamping and classification checks, which assume a {@link GameSessionInjection}
+ * parameter and a {@code messageService.sendMessage(...)} call) still apply
+ * only to {@code @MessageMapping} entries; a {@code @SubscribeMapping} entry is
+ * still required to resolve under {@code /app/} and to be listed in
+ * {@link #EXPECTED_SUBSCRIBE_DESTINATIONS} (currently empty — there are none
+ * today), so one added later without being accounted for here fails the build
+ * rather than silently reaching production unreviewed.
  */
 class StompMessageMappingInventoryTest {
 
-    private static final String WEBSOCKET_PACKAGE = "com.soulsoftworks.sockbowlgame.controller.websocket";
+    private static final String SCAN_BASE_PACKAGE = "com.soulsoftworks.sockbowlgame";
 
     /** Every client-reachable STOMP destination. A new mapping must be added here (and classified by G3/G4). */
     static final Set<String> EXPECTED_DESTINATIONS = Set.of(
@@ -95,31 +111,51 @@ class StompMessageMappingInventoryTest {
     /** Mappings that take no player context and produce no game message. */
     private static final Set<String> STATELESS_DESTINATIONS = Set.of("/app/heartbeat");
 
+    /**
+     * Every client-reachable {@code @SubscribeMapping} destination. Empty
+     * today: there are none anywhere in the app. A new one must be added here
+     * (see the class Javadoc, FIX-G2 / defect G-05).
+     */
+    static final Set<String> EXPECTED_SUBSCRIBE_DESTINATIONS = Set.of();
+
     private static final String REAL_GAME = "game-real";
     private static final String REAL_PLAYER = "player-real";
     private static final String REAL_SUB = "kc-real";
 
-    record Mapping(String destination, Class<?> controller, Method method) {
+    record Mapping(String destination, Class<?> controller, Method method, boolean subscribe) {
     }
 
+    /** Every {@code @MessageMapping} (SEND-handling) entry. */
     static List<Mapping> allMappings() throws Exception {
+        return allMappingsIncludingSubscribe().stream().filter(m -> !m.subscribe()).toList();
+    }
+
+    /** Every {@code @SubscribeMapping} (SUBSCRIBE-handling) entry. */
+    static List<Mapping> subscribeMappings() throws Exception {
+        return allMappingsIncludingSubscribe().stream().filter(Mapping::subscribe).toList();
+    }
+
+    private static List<Mapping> allMappingsIncludingSubscribe() throws Exception {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(Controller.class));
         List<Mapping> mappings = new ArrayList<>();
-        for (BeanDefinition candidate : scanner.findCandidateComponents(WEBSOCKET_PACKAGE)) {
+        for (BeanDefinition candidate : scanner.findCandidateComponents(SCAN_BASE_PACKAGE)) {
             Class<?> controller = Class.forName(candidate.getBeanClassName());
             MessageMapping classMapping = controller.getAnnotation(MessageMapping.class);
             String[] prefixes = classMapping == null || classMapping.value().length == 0
                     ? new String[]{""} : classMapping.value();
             for (Method method : controller.getDeclaredMethods()) {
                 MessageMapping methodMapping = method.getAnnotation(MessageMapping.class);
-                if (methodMapping == null) {
+                SubscribeMapping subscribeMapping = method.getAnnotation(SubscribeMapping.class);
+                if (methodMapping == null && subscribeMapping == null) {
                     continue;
                 }
-                assertThat(methodMapping.value()).as("%s has an explicit destination", method).isNotEmpty();
+                boolean subscribe = methodMapping == null;
+                String[] values = subscribe ? subscribeMapping.value() : methodMapping.value();
+                assertThat(values).as("%s has an explicit destination", method).isNotEmpty();
                 for (String prefix : prefixes) {
-                    for (String value : methodMapping.value()) {
-                        mappings.add(new Mapping(destination(prefix, value), controller, method));
+                    for (String value : values) {
+                        mappings.add(new Mapping(destination(prefix, value), controller, method, subscribe));
                     }
                 }
             }
@@ -157,6 +193,27 @@ class StompMessageMappingInventoryTest {
         }
         assertThat(destinations).containsExactlyInAnyOrderElementsOf(EXPECTED_DESTINATIONS);
         assertThat(destinations).hasSize(19);
+    }
+
+    /**
+     * FIX-G2 (defect G-05): the class Javadoc claims a {@code @SubscribeMapping}
+     * dropped anywhere in the app must resolve under {@code /app/} and be
+     * inventoried in {@link #EXPECTED_SUBSCRIBE_DESTINATIONS}. Without this
+     * test, {@link #subscribeMappings()} was collected but never asserted
+     * against, so that claim wasn't actually enforced: a new
+     * {@code @SubscribeMapping} handler could reach clients uninventoried and
+     * unauthorization-tested despite the wider {@code SCAN_BASE_PACKAGE} scan.
+     */
+    @Test
+    void everySubscribeMappingIsUnderAppAndInventoried() throws Exception {
+        List<Mapping> mappings = subscribeMappings();
+        Set<String> destinations = new TreeSet<>();
+        for (Mapping mapping : mappings) {
+            assertThat(mapping.destination()).as("%s.%s", mapping.controller().getSimpleName(),
+                    mapping.method().getName()).startsWith("/app/");
+            assertThat(destinations.add(mapping.destination())).as("duplicate %s", mapping.destination()).isTrue();
+        }
+        assertThat(destinations).containsExactlyInAnyOrderElementsOf(EXPECTED_SUBSCRIBE_DESTINATIONS);
     }
 
     @Test

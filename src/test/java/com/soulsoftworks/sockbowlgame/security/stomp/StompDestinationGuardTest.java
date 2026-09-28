@@ -1,5 +1,6 @@
 package com.soulsoftworks.sockbowlgame.security.stomp;
 
+import com.soulsoftworks.sockbowlgame.service.BanService;
 import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,8 @@ import static com.soulsoftworks.sockbowlgame.security.stomp.StompConnectAuthenti
 import static com.soulsoftworks.sockbowlgame.security.stomp.StompTestFrames.frame;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * SEND/SUBSCRIBE rules for connected sockets (plan m2-auth WP-G2, section 2.5;
@@ -215,6 +218,55 @@ class StompDestinationGuardTest {
     @Test
     void subscribeWithoutPrincipalIsAuthRequired() {
         assertRejected(() -> guard(false).check(subscribe("/queue/event/g1"), null), StompErrorCode.AUTH_REQUIRED);
+    }
+
+    /* ------------------- SUBSCRIBE: expiry and bans (G-04) ------------------ */
+
+    @Test
+    void subscribeWithAnExpiredTokenIsTokenExpired() {
+        Instant expiry = Instant.parse("2026-01-01T00:00:00Z");
+        Clock after = Clock.fixed(expiry.plusSeconds(1), ZoneOffset.UTC);
+        Clock before = Clock.fixed(expiry.minusSeconds(1), ZoneOffset.UTC);
+        assertThat(guard(true, before).check(subscribe("/queue/event/g1"), alice(expiry)))
+                .isEqualTo(StompGuardResult.PASS);
+        assertRejected(() -> guard(true, after).check(subscribe("/queue/event/g1"), alice(expiry)),
+                StompErrorCode.TOKEN_EXPIRED);
+        assertRejected(() -> guard(true, after).check(subscribe("/queue/event/g1/p1"), alice(expiry)),
+                StompErrorCode.TOKEN_EXPIRED);
+    }
+
+    @Test
+    void authorizationOnSubscribeRefreshesAnExpiredPrincipal() {
+        StompPrincipal p = alice(Instant.now().minusSeconds(10));
+        StompHeaderAccessor frame = frame(StompCommand.SUBSCRIBE, "/queue/event/g1",
+                "Authorization", "Bearer " + issuer.user("kc-alice", "game:host"));
+        assertThat(guard(true).check(frame, p)).isEqualTo(StompGuardResult.PASS);
+        assertThat(p.getTokenExpiresAt()).isAfter(Instant.now());
+    }
+
+    @Test
+    void guestsAndAuthOffSkipTheExpiryCheckOnSubscribe() {
+        StompPrincipal expired = alice(Instant.now().minusSeconds(10));
+        assertThat(guard(false).check(subscribe("/queue/event/g1"), expired)).isEqualTo(StompGuardResult.PASS);
+        assertThat(guard(true).check(subscribe("/queue/event/g1"), guest)).isEqualTo(StompGuardResult.PASS);
+    }
+
+    @Test
+    void bannedUserCannotSubscribe() {
+        BanService bans = mock(BanService.class);
+        when(bans.isBanned("kc-alice")).thenReturn(true);
+        StompDestinationGuard guard = new StompDestinationGuard(new GameAuthorizationPolicy(true, bans),
+                provider(issuer.decoder()), Clock.systemUTC());
+
+        assertRejected(() -> guard.check(subscribe("/queue/event/g1"), alice(Instant.now().plusSeconds(60))),
+                StompErrorCode.BANNED);
+        assertRejected(() -> guard.check(subscribe("/user/queue/errors"), alice(Instant.now().plusSeconds(60))),
+                StompErrorCode.BANNED);
+        // A guest carries no subject to ban.
+        assertThat(guard.check(subscribe("/queue/event/g1"), guest)).isEqualTo(StompGuardResult.PASS);
+        // Someone else is not affected.
+        StompPrincipal bob = StompPrincipal.user(GAME, ME, "kc-bob", Set.of(), Instant.now().plusSeconds(60));
+        assertThat(guard.check(subscribe("/queue/event/g1"), bob)).isEqualTo(StompGuardResult.PASS);
     }
 
     /* ---------------------------- other frames ---------------------------- */

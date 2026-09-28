@@ -37,6 +37,15 @@ public class MessageService {
 
     private static final Logger log = LoggerFactory.getLogger(MessageService.class);
 
+    /**
+     * The Spring {@code @KafkaListener} container id (distinct from the Kafka
+     * consumer {@code groupId}, though they happen to share this value) for
+     * the game-topic listener below. {@code config.health.KafkaListenerReadinessHealthIndicator}
+     * looks the container up by this id via {@code KafkaListenerEndpointRegistry}
+     * to report readiness (M2-LIVE-01).
+     */
+    public static final String LISTENER_ID = "game-consumers";
+
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final KafkaTemplate<String, SockbowlInMessage> kafkaTemplate;
     private final SessionService sessionService;
@@ -117,8 +126,17 @@ public class MessageService {
      *
      * @param record The Kafka consumer record containing the game message.
      */
-    @KafkaListener(topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers")
+    @KafkaListener(id = LISTENER_ID, topics = "${sockbowl.kafka.topic.game-topic}", groupId = "game-consumers")
     public void processGameMessage(ConsumerRecord<String, SockbowlInMessage> record) {
+        // Load, process, save and broadcast under the session's lock
+        // (M2R2-LIVE-01): a REST join or timer tick that saves in between would
+        // otherwise be overwritten by this handler's stale copy. Broadcasting
+        // inside the lock also keeps clients' updates in save order.
+        String gameSessionId = record == null || record.value() == null ? null : record.value().getGameSessionId();
+        GameSessionLocks.withLock(gameSessionId, () -> processGameMessageLocked(record));
+    }
+
+    private void processGameMessageLocked(ConsumerRecord<String, SockbowlInMessage> record) {
         if (record != null) {
             // Retrieve the game session from the incoming message
             SockbowlInMessage message = record.value();
