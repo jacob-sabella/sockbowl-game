@@ -349,6 +349,34 @@ class AdminUsageControllerIT {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * G-M4-V1-09: {@code -1} means unlimited (D12-adjacent quota convention),
+     * but anything more negative than that is nonsensical and previously
+     * passed straight through to Postgres and the Redis mirror unvalidated.
+     */
+    @Test
+    void putQuotaRejectsALimitBelowNegativeOne() throws Exception {
+        saveUser("kc-dave", "dave@example.com", "Dave");
+
+        mvc.perform(put(BASE + "/kc-dave/quota/ai.generations").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"limit\":-5}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(quotaOverrideRepository.findByKeycloakId("kc-dave")).isEmpty();
+        assertThat(redis.sync().hget(UsageKeys.quotaOverride("kc-dave"), "ai.generations")).isNull();
+    }
+
+    @Test
+    void putQuotaAcceptsNegativeOneAsUnlimited() throws Exception {
+        saveUser("kc-dave", "dave@example.com", "Dave");
+
+        mvc.perform(put(BASE + "/kc-dave/quota/ai.generations").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"limit\":-1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit").value(-1))
+                .andExpect(jsonPath("$.overridden").value(true));
+    }
+
     @Test
     void resetClearsTodaysHostedSessionCounterSoALimitedActionSucceedsAgain() throws Exception {
         RequestPostProcessor eve = host("kc-eve");

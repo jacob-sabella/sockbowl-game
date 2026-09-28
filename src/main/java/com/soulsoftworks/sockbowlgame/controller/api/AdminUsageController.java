@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.controller.api;
 
 import com.soulsoftworks.sockbowlgame.model.request.ResetUsageRequest;
 import com.soulsoftworks.sockbowlgame.model.request.SetQuotaOverrideRequest;
+import jakarta.validation.Valid;
 import com.soulsoftworks.sockbowlgame.model.response.GlobalUsage;
 import com.soulsoftworks.sockbowlgame.model.response.UsageCounter;
 import com.soulsoftworks.sockbowlgame.model.response.UsageDetail;
@@ -84,7 +85,7 @@ public class AdminUsageController {
     @PutMapping("/{sub}/quota/{metric}")
     public UsageCounter setQuota(@PathVariable String sub,
                                 @PathVariable String metric,
-                                @RequestBody SetQuotaOverrideRequest request,
+                                @Valid @RequestBody SetQuotaOverrideRequest request,
                                 @AuthenticationPrincipal Jwt jwt) {
         try {
             return adminUsageService.setQuotaOverride(sub, metric, request.getLimit(),
