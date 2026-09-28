@@ -3,8 +3,11 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.client.PacketNotFoundException;
 import com.soulsoftworks.sockbowlgame.client.QuestionsUnavailableException;
+import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Packet;
+import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsBonus;
 import com.soulsoftworks.sockbowlquestions.models.relationships.ContainsTossup;
+import com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.SockbowlInMessage;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.GetGameState;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
@@ -25,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -38,6 +42,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
     public static final String PACKET_NOT_FOUND = "PACKET_NOT_FOUND";
     public static final String PACKET_NOT_AVAILABLE = "PACKET_NOT_AVAILABLE";
     public static final String PACKET_SERVICE_UNAVAILABLE = "PACKET_SERVICE_UNAVAILABLE";
+    public static final String PACKET_EMPTY = "PACKET_EMPTY";
     /**
      * The player held the proctor seat while the loaded packet was loaded,
      * so read its answers, and may not play on it (R3-G2-03). Also returned
@@ -216,6 +221,14 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                     "Packet id " + message.getPacketId() + " is not available for play");
         }
 
+        // PB-13/D7: null tossup lists are treated as empty, and an empty packet
+        // can't be played (there's nothing for AdvanceRound to advance through).
+        // Null elements are skipped (M3V1-G-03), so a list of only nulls is empty too.
+        List<ContainsTossup> incomingTossups = sortedByOrder(packet.getTossups(), ContainsTossup::getOrder);
+        if (incomingTossups.isEmpty()) {
+            return ProcessError.coded(message, PACKET_EMPTY, "Packet has no tossups");
+        }
+
         // An EPHEMERAL packet belongs to the one game that first loaded it
         // (R3-G-01): loading it in a second game would hand that game's proctor
         // every answer of a packet only the game service can read.
@@ -241,8 +254,32 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         packet.setOwnerId(null);
         packet.setOwnerDisplayName(null);
 
-        // Sort the tossups by number
-        packet.getTossups().sort(Comparator.comparingInt(ContainsTossup::getOrder));
+        // Sort the tossups by number, into a fresh mutable list: the incoming
+        // list may be immutable (e.g. built with List.of/List.copyOf), so a
+        // shuffled wire order never determines play order regardless of how
+        // the packet was assembled.
+        packet.setTossups(incomingTossups);
+
+        // Sort bonuses by order, then each bonus's parts by order, dropping any
+        // bonus left with 0 parts (D7: bonuses pair with tossups by index, so a
+        // dropped bonus mid-packet is logged as a data-quality warning). A null
+        // bonus list means "no bonuses", not an error.
+        List<ContainsBonus> sortedBonuses = sortedByOrder(packet.getBonuses(), ContainsBonus::getOrder);
+
+        List<ContainsBonus> playableBonuses = new ArrayList<>(sortedBonuses.size());
+        for (ContainsBonus containsBonus : sortedBonuses) {
+            Bonus bonus = containsBonus.getBonus();
+            List<HasBonusPart> parts = bonus == null
+                    ? List.of() : sortedByOrder(bonus.getBonusParts(), HasBonusPart::getOrder);
+            if (parts.isEmpty()) {
+                log.warn("SetMatchPacket {} for session {}: dropping bonus {} with no parts",
+                        message.getPacketId(), gameSession.getId(), bonus == null ? null : bonus.getId());
+                continue;
+            }
+            bonus.setBonusParts(parts);
+            playableBonuses.add(containsBonus);
+        }
+        packet.setBonuses(playableBonuses);
 
         // Set the packet for the current match in the game session
         gameSession.getCurrentMatch().setPacket(packet);
@@ -538,5 +575,32 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                 .sockbowlOutMessage(update)
                 .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).bonusCount(0).build())
                 .build();
+    }
+
+    /**
+     * A new mutable list of the non-null elements of {@code items}, sorted by
+     * their {@code order}. An element whose order is null sorts by its list
+     * position instead, the same rule as {@code GameSanitizer.readingKey}
+     * (M3V1-G-03); the sort is stable, so equal keys keep their wire order.
+     * A null list gives an empty list.
+     */
+    static <T> List<T> sortedByOrder(List<T> items, java.util.function.Function<T, Integer> order) {
+        if (items == null) {
+            return new ArrayList<>();
+        }
+        List<int[]> keyed = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            T item = items.get(i);
+            if (item != null) {
+                Integer o = order.apply(item);
+                keyed.add(new int[]{o != null ? o : i, i});
+            }
+        }
+        keyed.sort(Comparator.comparingInt(k -> k[0]));
+        List<T> sorted = new ArrayList<>(keyed.size());
+        for (int[] k : keyed) {
+            sorted.add(items.get(k[1]));
+        }
+        return sorted;
     }
 }

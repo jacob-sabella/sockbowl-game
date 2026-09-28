@@ -164,7 +164,7 @@ public class Round {
      * Processes a bonus part answer from the proctor.
      * Note: Does not change state - that is handled by advanceToNextBonusPart().
      *
-     * @param partIndex Index of the bonus part (0-2)
+     * @param partIndex Index of the bonus part (0 to {@link #bonusPartCount()} - 1)
      * @param correct Whether the answer was correct
      */
     public void processBonusPartAnswer(int partIndex, boolean correct) {
@@ -189,7 +189,9 @@ public class Round {
     public void advanceToNextBonusPart() {
         currentBonusPartIndex++;
 
-        if (currentBonusPartIndex >= 3) {
+        // M3V1-G-01: a bonus has as many parts as its packet gives it (1 to 6;
+        // D7 only warns when that is not 3), never an assumed three.
+        if (currentBonusPartIndex >= bonusPartCount()) {
             // All parts complete
             this.roundState = RoundState.BONUS_COMPLETED;
         } else {
@@ -217,7 +219,7 @@ public class Round {
     /**
      * Calculates total bonus points earned.
      *
-     * @return Total bonus points (0-30)
+     * @return Total bonus points: 10 per correct part, so 0 to 10 x {@link #bonusPartCount()}
      */
     public int getBonusPoints() {
         return (int) bonusPartAnswers.stream()
@@ -226,12 +228,28 @@ public class Round {
     }
 
     /**
-     * Checks if this round has an associated bonus.
+     * The number of parts of the bonus being played: the size of
+     * {@code currentBonus.bonusParts}, or 0 when no bonus is being played.
+     * Not a bean getter, so it is never serialized with the round.
+     */
+    public int bonusPartCount() {
+        if (currentBonus == null || currentBonus.getBonusParts() == null) {
+            return 0;
+        }
+        return currentBonus.getBonusParts().size();
+    }
+
+    /**
+     * Checks if this round has an associated bonus that can be played.
+     * A bonus with no parts cannot (SetMatchPacket already drops those, D7),
+     * so the bonus phase is skipped for it rather than started and never ended.
      *
-     * @return true if there is an associated bonus, false otherwise
+     * @return true if there is an associated bonus with at least one part
      */
     public boolean hasAssociatedBonus() {
-        return associatedBonus != null;
+        return associatedBonus != null
+                && associatedBonus.getBonusParts() != null
+                && !associatedBonus.getBonusParts().isEmpty();
     }
 
     /**

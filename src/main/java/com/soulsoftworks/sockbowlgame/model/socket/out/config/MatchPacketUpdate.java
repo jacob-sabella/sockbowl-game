@@ -21,7 +21,10 @@ public class MatchPacketUpdate extends SockbowlOutMessage {
     private String packetName;
     /** Number of tossups in the packet, so clients can show "Tossup N of M" progress. */
     private int tossupCount;
-    /** Number of bonuses in the packet, so non-proctors need not ask sockbowl-questions. */
+    /**
+     * Number of playable bonuses (0-part bonuses dropped), so the UI can show "no bonuses"
+     * and non-proctors need not ask sockbowl-questions.
+     */
     private int bonusCount;
 
     @Override

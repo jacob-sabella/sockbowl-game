@@ -51,6 +51,9 @@ import static org.mockito.Mockito.when;
  *       (the proctor's included) may hold the packet author's subject. get-game,
  *       per-player queues, broadcasts, end-match and the packet reset are all
  *       among the destinations and outputs covered.</li>
+ *   <li>M3 packet shapes: SetMatchPacket with a shuffled packet holding a
+ *       0-part bonus (M3, PB-13), then get-game, checked for answers, the
+ *       author's subject and the packet id (R3-G-01).</li>
  * </ol>
  * The later phases (answers judged, match completed with an unplayed bonus)
  * are covered by {@code ClassicMatchAnswerLeakTest}.
@@ -239,6 +242,102 @@ class SessionWireLeakSweepTest {
             }
         }
         return flat.size();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 3. M3 packet shapes (merge-forward of M2 into M3)                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * M3 (PB-13, D7) normalizes what SetMatchPacket loads: shuffled tossups,
+     * bonuses and parts are sorted and 0-part bonuses are dropped, and the reply
+     * carries the playable bonusCount. This runs that path in every mode, for
+     * every creator and phase, from every sender, then get-game from every
+     * player, and checks the M2 rules on each frame: no answer and no packet id
+     * reaches anyone but the proctor (or, in a proctorless mode, the owner who
+     * loaded it), and the packet author's subject reaches nobody.
+     */
+    @TestFactory
+    @DisplayName("M3 packet shapes: SetMatchPacket and get-game put no answer or packet id before a non-proctor")
+    Stream<DynamicTest> m3PacketShapeSweep() {
+        List<DynamicTest> tests = new ArrayList<>();
+        for (GameMode mode : GameMode.values()) {
+            for (Creator creator : Creator.values()) {
+                for (Phase phase : Phase.values()) {
+                    boolean proctored = !GameSettings.builder().gameMode(mode).build().isProctorless();
+                    if (!proctored && phase == Phase.CONFIG_PROCTOR) {
+                        continue;
+                    }
+                    tests.add(DynamicTest.dynamicTest(mode + " " + phase + " [" + creator + "]",
+                            () -> sweepM3PacketLoad(mode, creator, phase)));
+                }
+            }
+        }
+        return tests.stream();
+    }
+
+    private void sweepM3PacketLoad(GameMode mode, Creator creator, Phase phase) {
+        int loaded = 0;
+        List<String> senders = setUp(mode, creator, phase).session().getPlayerList().stream()
+                .map(Player::getPlayerId).toList();
+        for (String sender : senders) {
+            InSessionFixture fx = new InSessionFixture();
+            stubOwnedPacket(fx);
+            Room room = setUp(fx, mode, creator, phase);
+            when(fx.packetClient.getPacketById(any())).thenAnswer(inv -> {
+                Packet packet = InSessionFixture.m3ShapedPacket();
+                packet.setOwnerId(PACKET_OWNER_SUB);
+                return Mono.just(packet);
+            });
+            GameSession session = room.session();
+            String where = mode + " " + phase + " [" + creator + "] set-match-packet (M3 shape) from " + sender;
+
+            SockbowlOutMessage out = fx.dispatch(InSessionFixture.message(SET_MATCH_PACKET, session, sender, null));
+            checkOut(where, session, out);
+            checkPacketId(where, session, sender, out);
+            if (!(out instanceof ProcessError)) {
+                loaded++;
+                Packet stored = session.getCurrentMatch().getPacket();
+                assertEquals(2, stored.getBonuses().size(), where + ": the 0-part bonus is dropped");
+                assertEquals(0, stored.getTossups().get(0).getOrder(), where + ": tossups sorted");
+                assertNull(stored.getOwnerId(), where + ": the author's subject is not stored");
+            }
+            for (Player viewer : session.getPlayerList()) {
+                SockbowlOutMessage view = fx.dispatch(InSessionFixture.message(GET_GAME, session,
+                        viewer.getPlayerId(), null));
+                String viewWhere = where + ", then get-game from " + viewer.getPlayerId();
+                checkOut(viewWhere, session, view);
+                checkPacketId(viewWhere, session, viewer.getPlayerId(), view);
+            }
+        }
+        boolean proctored = !GameSettings.builder().gameMode(mode).build().isProctorless();
+        int expected = phase == Phase.IN_GAME || (proctored && phase == Phase.CONFIG_NO_PROCTOR) ? 0 : 1;
+        assertEquals(expected, loaded, mode + " " + phase + " [" + creator + "]: senders who could load the packet");
+    }
+
+    /**
+     * No frame that reaches a non-proctor carries the packet id (R3-G-01). The one
+     * exemption is the frame addressed solely to the loader in a proctorless mode
+     * (the owner, who sent the id) and a ProcessError back to the sender of the id.
+     */
+    private static void checkPacketId(String where, GameSession session, String sender, SockbowlOutMessage out) {
+        List<SockbowlOutMessage> flat = out instanceof SockbowlMultiOutMessage multi
+                ? multi.getSockbowlOutMessages() : List.of(out);
+        Player proctor = session.getProctor();
+        boolean proctorless = session.getGameSettings().isProctorless();
+        for (SockbowlOutMessage m : flat) {
+            List<String> to = m.getRecipients();
+            boolean proctorOnly = proctor != null && !to.isEmpty() && to.stream().allMatch(proctor.getPlayerId()::equals);
+            boolean ownerLoaderOnly = proctorless && to.equals(List.of(sender))
+                    && session.getPlayerById(sender) != null && session.getPlayerById(sender).isGameOwner();
+            boolean errorToSender = m instanceof ProcessError && to.equals(List.of(sender));
+            if (proctorOnly || ownerLoaderOnly || errorToSender) {
+                continue;
+            }
+            String json = JSON.writeValueAsString(m);
+            assertFalse(json.contains(InSessionFixture.PACKET_ID), where + " -> " + m.getClass().getSimpleName()
+                    + " to " + (to.isEmpty() ? "everyone" : to) + " carries the packet id: " + json);
+        }
     }
 
     /* ------------------------------------------------------------------ */

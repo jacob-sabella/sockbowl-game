@@ -1,9 +1,15 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.support.InMemoryEphemeralPacketBindings;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
+import com.soulsoftworks.sockbowlgame.client.PacketClient;
+import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
 import com.soulsoftworks.sockbowlgame.model.socket.in.progression.StartMatch;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
+import com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.*;
+import com.soulsoftworks.sockbowlgame.service.authorization.GameAuthorizationPolicy;
 import com.soulsoftworks.sockbowlgame.util.PacketBuilderHelper;
 import com.soulsoftworks.sockbowlquestions.models.nodes.Bonus;
 import com.soulsoftworks.sockbowlquestions.models.nodes.BonusPart;
@@ -16,12 +22,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static com.soulsoftworks.sockbowlgame.service.processor.MatchContextUtils.createTeams;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Full-game (multi-round, packet-to-match-completion) coverage for QUIZ_BOWL_CLASSIC —
@@ -303,6 +315,227 @@ class FullGameQuizBowlClassicTest {
             judge(false);
             assertEquals(RoundState.COMPLETED, round().getRoundState());
             assertNull(round().getCurrentBonus());
+        }
+    }
+
+    /**
+     * M3V1-G-01: a bonus is played for exactly as many parts as it has. Packets
+     * from the builder or an import may carry 1 to 6 parts (D7 only warns when
+     * the count is not 3), so the game must never assume three.
+     */
+    @Nested
+    @DisplayName("Bonus part count (M3V1-G-01)")
+    class BonusPartCount {
+
+        private Bonus nPartBonus(int n) {
+            List<HasBonusPart> parts = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                parts.add(part(i, "<u>part" + i + "</u>"));
+            }
+            return Bonus.builder().preamble("A " + n + "-part bonus.").bonusParts(parts).build();
+        }
+
+        private void startWithBonus(int n) {
+            session.getGameSettings().setBonusesEnabled(true);
+            Packet packet = twoTossupPacket(false, false);
+            packet.getBonuses().get(0).setBonus(nPartBonus(n));
+            session.getCurrentMatch().setPacket(packet);
+            startMatch();
+            finishedReading();
+            buzz(p1);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            finishedReadingBonusPreamble();
+        }
+
+        @ParameterizedTest(name = "{0}-part bonus asks exactly {0} parts")
+        @ValueSource(ints = {1, 2, 4, 5})
+        void asksExactlyEveryPart(int n) {
+            startWithBonus(n);
+            for (int i = 0; i < n; i++) {
+                assertEquals(RoundState.BONUS_READING_PART, round().getRoundState(), "before part " + i);
+                assertEquals(i, round().getCurrentBonusPartIndex());
+                finishedReadingBonusPart();
+                assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+                SockbowlOutMessage result = bonusPartAnswer(i, true);
+                assertFalse(result instanceof ProcessError, "part " + i + " of " + n + " was rejected");
+            }
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(n, round().getBonusPartAnswers().size());
+            assertEquals(n * 10, round().getBonusPoints());
+        }
+
+        @Test
+        @DisplayName("A 2-part bonus asks exactly 2 parts, scores at most 20 and refuses a third answer")
+        void twoPartBonusMaxTwenty() {
+            startWithBonus(2);
+            finishedReadingBonusPart();
+            bonusPartAnswer(0, true);
+            finishedReadingBonusPart();
+            bonusPartAnswer(1, true);
+
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(20, round().getBonusPoints());
+            assertInstanceOf(ProcessError.class, bonusPartAnswer(2, true));
+            assertEquals(20, round().getBonusPoints());
+            assertEquals(2, round().getBonusPartAnswers().size());
+        }
+
+        @Test
+        @DisplayName("A 4-part bonus asks all 4 parts before the round completes")
+        void fourPartBonusAsksAllFour() {
+            startWithBonus(4);
+            for (int i = 0; i < 3; i++) {
+                finishedReadingBonusPart();
+                bonusPartAnswer(i, i % 2 == 0);
+                assertEquals(RoundState.BONUS_READING_PART, round().getRoundState(), "after part " + i);
+            }
+            finishedReadingBonusPart();
+            bonusPartAnswer(3, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(30, round().getBonusPoints());
+        }
+
+        @ParameterizedTest(name = "partIndex {1} on a {0}-part bonus is rejected")
+        @org.junit.jupiter.params.provider.CsvSource({"1,1", "2,2", "3,3", "4,4", "2,5", "2,-1"})
+        void partIndexOutsideThePartsIsRejected(int n, int badIndex) {
+            startWithBonus(n);
+            finishedReadingBonusPart();
+            SockbowlOutMessage result = bonusPartAnswer(badIndex, true);
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+            assertEquals(0, round().getBonusPartAnswers().size());
+            assertEquals(0, round().getCurrentBonusPartIndex());
+        }
+
+        @Test
+        @DisplayName("A bonus with no parts is never started: the round completes on the tossup")
+        void zeroPartBonusIsSkipped() {
+            session.getGameSettings().setBonusesEnabled(true);
+            Packet packet = twoTossupPacket(false, false);
+            packet.getBonuses().get(0).setBonus(nPartBonus(0));
+            session.getCurrentMatch().setPacket(packet);
+            startMatch();
+            finishedReading();
+            buzz(p1);
+            judge(true);
+
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertNull(round().getCurrentBonus());
+            assertEquals(0, round().getBonusPoints());
+        }
+
+        @Test
+        @DisplayName("Timing out every part of a 2-part bonus completes the round after 2 parts")
+        void timeoutsHonourPartCount() {
+            startWithBonus(2);
+            for (int i = 0; i < 2; i++) {
+                finishedReadingBonusPart();
+                assertFalse(gameProcessor.timeoutBonusPart(TimeoutBonusPart.builder()
+                        .gameSession(session).originatingPlayerId(proctor.getPlayerId()).build())
+                        instanceof ProcessError);
+            }
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(2, round().getBonusPartAnswers().size());
+            assertEquals(0, round().getBonusPoints());
+        }
+    }
+
+    /**
+     * PB-13/D7: the packet the game plays is whatever {@link ConfigurationMessageProcessor#setPacketForMatch}
+     * stored after sorting, so these route SetMatchPacket through the real processor (a mocked
+     * {@link PacketClient}) instead of assigning the match packet directly, unlike the fixtures above.
+     */
+    @Nested
+    @DisplayName("Bonus ordering (PB-13/D7)")
+    class BonusOrdering {
+
+        private ContainsBonus bonusFor(long linkId, int order, String label) {
+            Bonus bonus = Bonus.builder()
+                    .id("bonus-" + label)
+                    .preamble("Bonus for " + label)
+                    .bonusParts(List.of(
+                            part(0, label + "-alpha"), part(1, label + "-beta"), part(2, label + "-gamma")))
+                    .build();
+            return PacketBuilderHelper.createBonus(linkId, order, bonus);
+        }
+
+        /** A packet whose bonuses arrive in the wrong wire order (T2's bonus before T1's), by order. */
+        private Packet shuffledBonusPacket() {
+            List<ContainsTossup> tossups = List.of(
+                    PacketBuilderHelper.createTossup(1, 0,
+                            Tossup.builder().id("t1").question("Tossup one").answer("Answer one").build()),
+                    PacketBuilderHelper.createTossup(2, 1,
+                            Tossup.builder().id("t2").question("Tossup two").answer("Answer two").build()));
+            // Wire order: T2's bonus first, T1's bonus second — but `order` still says T1 (0) before T2 (1).
+            List<ContainsBonus> bonuses = new ArrayList<>(List.of(
+                    bonusFor(2, 1, "T2"),
+                    bonusFor(1, 0, "T1")));
+            return PacketBuilderHelper.createPacket("SHUFFLED", "Shuffled Packet",
+                    PacketBuilderHelper.createDifficulty("D1", "Regionals"), tossups, bonuses);
+        }
+
+        private SockbowlOutMessage setShuffledPacket() {
+            PacketClient packetClient = mock(PacketClient.class);
+            when(packetClient.getPacketById("SHUFFLED")).thenReturn(Mono.just(shuffledBonusPacket()));
+            ConfigurationMessageProcessor configProcessor =
+                    new ConfigurationMessageProcessor(packetClient, new GameAuthorizationPolicy(false, null),
+                            new InMemoryEphemeralPacketBindings());
+            return configProcessor.setPacketForMatch(SetMatchPacket.builder()
+                    .gameSession(session).originatingPlayerId(proctor.getPlayerId()).packetId("SHUFFLED").build());
+        }
+
+        @Test
+        @DisplayName("A shuffled wire order is corrected: round i's bonus is ordered bonus i, not wire-order bonus i")
+        void bonusIMatchesOrderedBonusI() {
+            session.getGameSettings().setBonusesEnabled(true);
+
+            SockbowlOutMessage setResult = setShuffledPacket();
+            // Per-recipient reply (R3-G-01): the proctor's copy has the id, the
+            // players' copies don't; every copy counts the 2 playable bonuses.
+            List<SockbowlOutMessage> frames = setResult instanceof SockbowlMultiOutMessage multi
+                    ? multi.getSockbowlOutMessages() : List.of(setResult);
+            assertEquals(1, frames.stream().filter(frame -> frame.getRecipients().contains(proctor.getPlayerId())).count());
+            for (SockbowlOutMessage frame : frames) {
+                MatchPacketUpdate update = assertInstanceOf(MatchPacketUpdate.class, frame);
+                assertEquals(2, update.getBonusCount());
+                if (update.getRecipients().contains(proctor.getPlayerId())) {
+                    assertEquals("SHUFFLED", update.getPacketId());
+                } else {
+                    assertNull(update.getPacketId());
+                }
+            }
+
+            startMatch();
+
+            // Round 1 (tossup "t1") must pair with the bonus whose `order` is 0 (T1's),
+            // even though T2's bonus arrived first on the wire.
+            finishedReading();
+            buzz(p1);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            assertEquals("Bonus for T1", round().getAssociatedBonus().getPreamble());
+
+            runBonus(true, true, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+
+            advance(proctor);
+            assertEquals(2, round().getRoundNumber());
+
+            // Round 2 (tossup "t2") pairs with T2's bonus.
+            finishedReading();
+            buzz(p2);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            assertEquals("Bonus for T2", round().getAssociatedBonus().getPreamble());
+
+            runBonus(true, true, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+
+            SockbowlOutMessage result = advance(proctor);
+            assertNotNull(result);
+            assertEquals(MatchState.COMPLETED, session.getCurrentMatch().getMatchState());
         }
     }
 }
