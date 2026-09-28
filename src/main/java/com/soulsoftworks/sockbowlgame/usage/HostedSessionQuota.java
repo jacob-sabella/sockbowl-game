@@ -148,6 +148,17 @@ public class HostedSessionQuota {
      * swapping out the {@code reservation}'s provisional member (if any -
      * {@link Reservation#NONE} for an unlimited/disabled/fail-open caller
      * still records the session itself, just without a slot to swap).
+     *
+     * <p>G-M4-FIX3-02: the real session is {@code ZADD}ed <b>before</b> the
+     * reservation token is {@code ZREM}ed, not after. Both round trips are
+     * against the same ZSET, so a swap that removed the reservation first
+     * would leave a window - between the {@code ZREM} and the {@code ZADD} -
+     * where {@link #countActive} briefly reads one fewer member than are
+     * actually claimed. A concurrent {@link #reserve} that samples the count
+     * during exactly that window could then admit a caller who is really
+     * already at the limit (limit+1 slot). Adding first means the ZSET's
+     * member count only ever goes up by one, then down by one - it never
+     * dips below the count a concurrent reader should see.
      */
     public void recordCreated(LimitSubject subject, String sessionId, Reservation reservation) {
         if (!quotaService.isEnabled()) {
@@ -158,10 +169,10 @@ public class HostedSessionQuota {
             var sync = redis.sync();
             long now = clock.millis();
             String sessionsKey = UsageKeys.sessions(owner);
+            sync.zadd(sessionsKey, now, sessionId);
             if (reservation != null && reservation.token() != null) {
                 sync.zrem(sessionsKey, reservation.token());
             }
-            sync.zadd(sessionsKey, now, sessionId);
             sync.expire(sessionsKey, INDEX_TTL_SECONDS);
             String ownerIndex = ownerIndexKey(sessionId);
             sync.set(ownerIndex, owner);

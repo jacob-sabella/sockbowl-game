@@ -130,7 +130,18 @@ public class StompTestClient {
 
         public BlockingQueue<String> subscribe(String destination) {
             BlockingQueue<String> queue = new LinkedBlockingQueue<>();
-            session.subscribe(destination, new StompSessionHandlerAdapter() {
+            subscribeForHandle(destination, queue);
+            return queue;
+        }
+
+        /**
+         * Like {@link #subscribe}, but also returns the
+         * {@link StompSession.Subscription} handle, so a caller can send a real
+         * UNSUBSCRIBE (including a second, now-stale one) with
+         * {@code Subscription#unsubscribe()}.
+         */
+        public StompSession.Subscription subscribeForHandle(String destination, BlockingQueue<String> queue) {
+            return session.subscribe(destination, new StompSessionHandlerAdapter() {
                 @Override
                 public Type getPayloadType(StompHeaders headers) {
                     return String.class;
@@ -141,7 +152,6 @@ public class StompTestClient {
                     queue.add((String) payload);
                 }
             });
-            return queue;
         }
 
         public void send(String destination, String json, String... extraHeaders) {

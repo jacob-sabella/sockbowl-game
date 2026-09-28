@@ -134,6 +134,16 @@ class StompRateLimitGuardTest {
         return guard.check(frame(StompCommand.SEND, connectionId, ip, destination, headers), guest);
     }
 
+    /** A SUBSCRIBE carrying its own distinct {@code id} header, as a real STOMP client sends. */
+    private StompGuardResult subscribe(String connectionId, String ip, String id) {
+        return guard.check(frame(StompCommand.SUBSCRIBE, connectionId, ip, "/queue/event/" + id, "id", id), guest);
+    }
+
+    /** An UNSUBSCRIBE carrying an explicit {@code id} header. */
+    private StompGuardResult unsubscribe(String connectionId, String ip, String id) {
+        return guard.check(frame(StompCommand.UNSUBSCRIBE, connectionId, ip, null, "id", id), guest);
+    }
+
     private void connect(String connectionId, String ip) {
         guard.check(frame(StompCommand.CONNECT, connectionId, ip, null), null);
     }
@@ -434,8 +444,7 @@ class StompRateLimitGuardTest {
     void subscribesUpToTheDefaultCapOfSixteenAllPass() {
         String ip = nextIp();
         for (int i = 1; i <= 16; i++) {
-            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
-                    .as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
+            assertThat(subscribe("c1", ip, "s" + i)).as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
         }
     }
 
@@ -443,42 +452,114 @@ class StompRateLimitGuardTest {
     void seventeenthSubscribeOnOneConnectionIsRejectedFatally() {
         String ip = nextIp();
         for (int i = 1; i <= 16; i++) {
-            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+            subscribe("c1", ip, "s" + i);
         }
-        StompRejectedException rejected = rejection(() ->
-                guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g17"), guest));
+        StompRejectedException rejected = rejection(() -> subscribe("c1", ip, "s17"));
         assertThat(rejected.getCode()).isEqualTo(StompErrorCode.RATE_LIMITED);
         assertThat(rejected.getPolicy()).isEqualTo(StompRateLimitGuard.STOMP_SUBSCRIPTIONS);
         verify(recorder).record(eq(StompRateLimitGuard.STOMP_SUBSCRIPTIONS), eq(RateLimitEventRecorder.KIND_RATE),
-                any(LimitSubject.class), eq("/queue/event/g17"));
+                any(LimitSubject.class), eq("/queue/event/s17"));
 
         // Another connection is unaffected.
-        assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c2", ip, "/queue/event/g1"), guest))
-                .isEqualTo(StompGuardResult.PASS);
+        assertThat(subscribe("c2", ip, "s1")).isEqualTo(StompGuardResult.PASS);
     }
 
+    /**
+     * G-M4-FIX3-01: rewritten from the old {@code unsubscribeFreesASlotUnderTheCap},
+     * which sent an UNSUBSCRIBE with no {@code id} header and only happened to
+     * pass because the guard used to decrement a bare counter on ANY
+     * UNSUBSCRIBE. It now unsubscribes one of the connection's real ids.
+     */
     @Test
     void unsubscribeFreesASlotUnderTheCap() {
         String ip = nextIp();
         for (int i = 1; i <= 16; i++) {
-            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+            subscribe("c1", ip, "s" + i);
         }
-        assertThat(guard.check(frame(StompCommand.UNSUBSCRIBE, "c1", ip, null), guest))
+        assertThat(unsubscribe("c1", ip, "s1")).isEqualTo(StompGuardResult.PASS);
+        assertThat(subscribe("c1", ip, "s17")).as("a freed slot admits one more")
                 .isEqualTo(StompGuardResult.PASS);
-        assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g17"), guest))
-                .as("a freed slot admits one more").isEqualTo(StompGuardResult.PASS);
+    }
+
+    /**
+     * G-M4-FIX3-01 (the blocker): before this fix, an UNSUBSCRIBE with no id or
+     * an id never subscribed on this connection still freed a slot, so a client
+     * at the cap could keep sending bogus UNSUBSCRIBEs and re-subscribing
+     * forever.
+     */
+    @Test
+    void unsubscribeWithNoIdOrAnUnknownIdFreesNoSlot() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            subscribe("c1", ip, "s" + i);
+        }
+
+        assertThat(guard.check(frame(StompCommand.UNSUBSCRIBE, "c1", ip, null), guest))
+                .as("no id header at all").isEqualTo(StompGuardResult.PASS);
+        assertThat(unsubscribe("c1", ip, "never-subscribed")).as("an id never subscribed on this connection")
+                .isEqualTo(StompGuardResult.PASS);
+        assertThat(unsubscribe("c1", ip, "s1")).as("unsubscribing s1 elsewhere doesn't matter here")
+                .isEqualTo(StompGuardResult.PASS);
+        // s1 was the only real id freed above; two bogus UNSUBSCRIBEs freed nothing.
+        assertThat(subscribe("c1", ip, "s17")).as("only one slot was actually freed")
+                .isEqualTo(StompGuardResult.PASS);
+        StompRejectedException rejected = rejection(() -> subscribe("c1", ip, "s18"));
+        assertThat(rejected.getPolicy()).isEqualTo(StompRateLimitGuard.STOMP_SUBSCRIPTIONS);
+    }
+
+    /**
+     * G-M4-FIX3-01 (the exact bypass described in the plan): 16 subscriptions,
+     * then a flood of bogus UNSUBSCRIBEs, then a 17th SUBSCRIBE is still
+     * refused. Before this fix, every one of those bogus UNSUBSCRIBEs would
+     * have freed a slot, letting the client subscribe again forever.
+     */
+    @Test
+    void sixteenSubscriptionsThenBogusUnsubscribesStillRejectsTheSeventeenth() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            subscribe("c1", ip, "s" + i);
+        }
+        // Clock advances keep every bogus UNSUBSCRIBE within the stomp-send
+        // budget, so it actually reaches the subscription bookkeeping instead
+        // of being send-rate-dropped (which would prove nothing here).
+        for (int batch = 0; batch < 5; batch++) {
+            clock.advance(Duration.ofSeconds(2));
+            for (int i = 0; i < 5; i++) {
+                assertThat(guard.check(frame(StompCommand.UNSUBSCRIBE, "c1", ip, null), guest))
+                        .as("bogus (no id) unsubscribe").isEqualTo(StompGuardResult.PASS);
+                assertThat(unsubscribe("c1", ip, "bogus-" + batch + "-" + i)).as("bogus (unknown id) unsubscribe")
+                        .isEqualTo(StompGuardResult.PASS);
+            }
+        }
+        clock.advance(Duration.ofSeconds(2));
+        StompRejectedException rejected = rejection(() -> subscribe("c1", ip, "s17"));
+        assertThat(rejected.getCode()).isEqualTo(StompErrorCode.RATE_LIMITED);
+        assertThat(rejected.getPolicy()).isEqualTo(StompRateLimitGuard.STOMP_SUBSCRIPTIONS);
+    }
+
+    /** A SUBSCRIBE that repeats an id already live on the connection does not grow the set (documented choice). */
+    @Test
+    void resubscribingTheSameIdDoesNotGrowTheSet() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            subscribe("c1", ip, "s" + i);
+        }
+        assertThat(subscribe("c1", ip, "s1")).as("s1 is already live; this is a no-op for the cap")
+                .isEqualTo(StompGuardResult.PASS);
+        // s1 was never re-added, so the set is still exactly 16 and a real new id is refused.
+        StompRejectedException rejected = rejection(() -> subscribe("c1", ip, "s17"));
+        assertThat(rejected.getPolicy()).isEqualTo(StompRateLimitGuard.STOMP_SUBSCRIPTIONS);
     }
 
     @Test
     void disconnectResetsTheSubscriptionCount() {
         String ip = nextIp();
         for (int i = 1; i <= 16; i++) {
-            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+            subscribe("c1", ip, "s" + i);
         }
         guard.check(frame(StompCommand.DISCONNECT, "c1", ip, null), guest);
         for (int i = 1; i <= 16; i++) {
-            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
-                    .as("reconnect %d", i).isEqualTo(StompGuardResult.PASS);
+            assertThat(subscribe("c1", ip, "s" + i)).as("reconnect %d", i).isEqualTo(StompGuardResult.PASS);
         }
     }
 
@@ -487,8 +568,7 @@ class StompRateLimitGuardTest {
         properties.setEnabled(false);
         String ip = nextIp();
         for (int i = 1; i <= 30; i++) {
-            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
-                    .as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
+            assertThat(subscribe("c1", ip, "s" + i)).as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
         }
     }
 }
