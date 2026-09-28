@@ -162,6 +162,19 @@ class LimitsConfigurationTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void redisPasswordDefaultsBlankAndIsOverriddenBySockbowlRedisPassword() throws IOException {
+        // DK-3: blank by default, so an unauthenticated dev/local/CI Redis (no
+        // SOCKBOWL_REDIS_PASSWORD set) is unaffected - both RedisGameCacheConfig's
+        // Jedis factory and RateLimitRedisConfig's Lettuce connection read this
+        // exact property.
+        assertThat(bind(Map.of()).env().getProperty("sockbowl.redis.game-cache.password")).isEmpty();
+
+        Bound withPassword = bind(Map.of("SOCKBOWL_REDIS_PASSWORD", "prod-secret-value"));
+        assertThat(withPassword.env().getProperty("sockbowl.redis.game-cache.password"))
+                .isEqualTo("prod-secret-value");
+    }
+
     // --- bean wiring -------------------------------------------------------------
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
