@@ -223,7 +223,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // PB-13/D7: null tossup lists are treated as empty, and an empty packet
         // can't be played (there's nothing for AdvanceRound to advance through).
-        List<ContainsTossup> incomingTossups = packet.getTossups() == null ? List.of() : packet.getTossups();
+        // Null elements are skipped (M3V1-G-03), so a list of only nulls is empty too.
+        List<ContainsTossup> incomingTossups = sortedByOrder(packet.getTossups(), ContainsTossup::getOrder);
         if (incomingTossups.isEmpty()) {
             return ProcessError.coded(message, PACKET_EMPTY, "Packet has no tossups");
         }
@@ -257,31 +258,25 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // list may be immutable (e.g. built with List.of/List.copyOf), so a
         // shuffled wire order never determines play order regardless of how
         // the packet was assembled.
-        List<ContainsTossup> tossups = new ArrayList<>(incomingTossups);
-        tossups.sort(Comparator.comparingInt(ContainsTossup::getOrder));
-        packet.setTossups(tossups);
+        packet.setTossups(incomingTossups);
 
         // Sort bonuses by order, then each bonus's parts by order, dropping any
         // bonus left with 0 parts (D7: bonuses pair with tossups by index, so a
         // dropped bonus mid-packet is logged as a data-quality warning). A null
         // bonus list means "no bonuses", not an error.
-        List<ContainsBonus> bonuses = packet.getBonuses() == null ? List.of() : packet.getBonuses();
-        List<ContainsBonus> sortedBonuses = new ArrayList<>(bonuses);
-        sortedBonuses.sort(Comparator.comparingInt(ContainsBonus::getOrder));
+        List<ContainsBonus> sortedBonuses = sortedByOrder(packet.getBonuses(), ContainsBonus::getOrder);
 
         List<ContainsBonus> playableBonuses = new ArrayList<>(sortedBonuses.size());
         for (ContainsBonus containsBonus : sortedBonuses) {
             Bonus bonus = containsBonus.getBonus();
-            List<HasBonusPart> parts = bonus == null || bonus.getBonusParts() == null
-                    ? List.of() : bonus.getBonusParts();
+            List<HasBonusPart> parts = bonus == null
+                    ? List.of() : sortedByOrder(bonus.getBonusParts(), HasBonusPart::getOrder);
             if (parts.isEmpty()) {
                 log.warn("SetMatchPacket {} for session {}: dropping bonus {} with no parts",
                         message.getPacketId(), gameSession.getId(), bonus == null ? null : bonus.getId());
                 continue;
             }
-            List<HasBonusPart> sortedParts = new ArrayList<>(parts);
-            sortedParts.sort(Comparator.comparingInt(HasBonusPart::getOrder));
-            bonus.setBonusParts(sortedParts);
+            bonus.setBonusParts(parts);
             playableBonuses.add(containsBonus);
         }
         packet.setBonuses(playableBonuses);
@@ -580,5 +575,32 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                 .sockbowlOutMessage(update)
                 .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).bonusCount(0).build())
                 .build();
+    }
+
+    /**
+     * A new mutable list of the non-null elements of {@code items}, sorted by
+     * their {@code order}. An element whose order is null sorts by its list
+     * position instead, the same rule as {@code GameSanitizer.readingKey}
+     * (M3V1-G-03); the sort is stable, so equal keys keep their wire order.
+     * A null list gives an empty list.
+     */
+    static <T> List<T> sortedByOrder(List<T> items, java.util.function.Function<T, Integer> order) {
+        if (items == null) {
+            return new ArrayList<>();
+        }
+        List<int[]> keyed = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            T item = items.get(i);
+            if (item != null) {
+                Integer o = order.apply(item);
+                keyed.add(new int[]{o != null ? o : i, i});
+            }
+        }
+        keyed.sort(Comparator.comparingInt(k -> k[0]));
+        List<T> sorted = new ArrayList<>(keyed.size());
+        for (int[] k : keyed) {
+            sorted.add(items.get(k[1]));
+        }
+        return sorted;
     }
 }
