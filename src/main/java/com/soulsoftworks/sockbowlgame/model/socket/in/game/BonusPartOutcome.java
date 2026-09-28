@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public class BonusPartOutcome extends SockbowlInMessage {
 
-    int partIndex;  // 0, 1, or 2
+    int partIndex;  // 0 to (number of bonus parts - 1); a bonus has 1 to 6 parts
     boolean correct;
 
     @Override

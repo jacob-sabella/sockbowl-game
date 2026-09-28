@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -268,6 +270,76 @@ class FullGameAutoProctorTest {
 
             assertEquals(RoundState.COMPLETED, round().getRoundState());
             assertNull(round().getCurrentBonus());
+        }
+    }
+
+    /**
+     * M3V1-G-01: an auto-judged bonus is played for exactly as many parts as
+     * it has, and each answer is judged against that part, never a part that
+     * does not exist.
+     */
+    @Nested
+    @DisplayName("Bonus part count (M3V1-G-01)")
+    class BonusPartCount {
+
+        private Bonus nPartBonus(int n) {
+            List<HasBonusPart> parts = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                parts.add(part(i, "<u>word" + (char) ('a' + i) + "</u>"));
+            }
+            return Bonus.builder().preamble("A " + n + "-part bonus.").bonusParts(parts).build();
+        }
+
+        private void startWithBonus(int n) {
+            session.getGameSettings().setBonusesEnabled(true);
+            Packet packet = twoTossupPacket(false, false);
+            packet.getBonuses().get(0).setBonus(nPartBonus(n));
+            session.getCurrentMatch().setPacket(packet);
+            startMatch();
+            buzz(p1);
+            submit(p1, "Napoleon");
+            assertEquals(RoundState.BONUS_PENDING, round().getRoundState());
+            startBonus(p1);
+            assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+        }
+
+        @ParameterizedTest(name = "{0}-part bonus asks exactly {0} parts")
+        @ValueSource(ints = {1, 2, 4, 5})
+        void asksExactlyEveryPart(int n) {
+            startWithBonus(n);
+            for (int i = 0; i < n; i++) {
+                assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState(), "before part " + i);
+                assertEquals(i, round().getCurrentBonusPartIndex());
+                submit(p1, "word" + (char) ('a' + i));
+            }
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(n, round().getBonusPartAnswers().size());
+            assertEquals(n * 10, round().getBonusPoints());
+        }
+
+        @Test
+        @DisplayName("A 2-part bonus asks exactly 2 parts and scores at most 20")
+        void twoPartBonusMaxTwenty() {
+            startWithBonus(2);
+            submit(p1, "worda");
+            assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+            submit(p1, "wordb");
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(20, round().getBonusPoints());
+            assertEquals(2, round().getBonusPartAnswers().size());
+        }
+
+        @Test
+        @DisplayName("A 4-part bonus asks all 4 parts, each judged against its own answer")
+        void fourPartBonusAsksAllFour() {
+            startWithBonus(4);
+            submit(p1, "worda");
+            submit(p1, "wrong");
+            submit(p1, "wordc");
+            assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+            submit(p1, "wordd");
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(30, round().getBonusPoints());
         }
     }
 }
