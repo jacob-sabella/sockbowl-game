@@ -119,6 +119,54 @@ class RequestGuardFilterTest {
     }
 
     @Test
+    void aRouteCanOptOutOfTheFallbackPolicy() {
+        RateLimitProperties.Route coarse = new RateLimitProperties.Route();
+        coarse.setMethod("POST");
+        coarse.setPattern("/api/v1/coarse");
+        coarse.setPolicies(List.of("coarse-cap"));
+        coarse.setFallback(false);
+        List<RateLimitProperties.Route> routes = new java.util.ArrayList<>(properties.getRoutes());
+        routes.add(coarse);
+        properties.setRoutes(routes);
+
+        assertThat(filter.policiesFor("POST", "/api/v1/coarse", LimitSubject.guest("1.2.3.4")))
+                .as("a route with fallback=false is not shadowed by the default")
+                .containsExactly("coarse-cap");
+        assertThat(filter.policiesFor("POST", "/api/v1/coarse", new LimitSubject("svc", "1.2.3.4", Tier.SERVICE)))
+                .as("fallback=false also suppresses the service fallback")
+                .containsExactly("coarse-cap");
+    }
+
+    @Test
+    void unmatchedRequestsOnlyChargeTheDefault() {
+        assertThat(filter.policiesFor("GET", "/api/v1/nothing-here", LimitSubject.guest("1.2.3.4")))
+                .as("the default case: no route matches, so only the fallback is charged")
+                .containsExactly("default");
+    }
+
+    @Test
+    void mixedMatchingRoutesSuppressTheFallbackIfAnyOptsOut() {
+        RateLimitProperties.Route always = new RateLimitProperties.Route();
+        always.setPattern("/api/v1/mixed/**");
+        always.setPolicies(List.of("mixed-a"));
+        RateLimitProperties.Route optOut = new RateLimitProperties.Route();
+        optOut.setPattern("/api/v1/mixed/coarse");
+        optOut.setPolicies(List.of("mixed-b"));
+        optOut.setFallback(false);
+        List<RateLimitProperties.Route> routes = new java.util.ArrayList<>(properties.getRoutes());
+        routes.add(always);
+        routes.add(optOut);
+        properties.setRoutes(routes);
+
+        assertThat(filter.policiesFor("GET", "/api/v1/mixed/coarse", LimitSubject.guest("1.2.3.4")))
+                .as("both routes match; one opts out, so the fallback is suppressed for the pair")
+                .containsExactly("mixed-a", "mixed-b");
+        assertThat(filter.policiesFor("GET", "/api/v1/mixed/other", LimitSubject.guest("1.2.3.4")))
+                .as("only the always-fallback route matches here, so the default is still charged")
+                .containsExactly("mixed-a", "default");
+    }
+
+    @Test
     void serviceTierIsChargedServiceNeverDefault() throws Exception {
         authenticate("svc", "sockbowl-game-backend");
         run(request("GET", "/api/v1/auth/status"), new MockHttpServletResponse());

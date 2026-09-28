@@ -67,6 +67,13 @@ public class RateLimitProperties {
         /** Ant path pattern. */
         private String pattern;
         private List<String> policies = new ArrayList<>();
+        /**
+         * Whether a request matching this route is also charged the fallback
+         * policy ({@code default}, or {@code service} for the SERVICE tier). Set
+         * {@code false} for a route whose own policy is the coarse cap, so a
+         * lower-capacity {@code default} does not shadow it.
+         */
+        private boolean fallback = true;
     }
 
     @Data

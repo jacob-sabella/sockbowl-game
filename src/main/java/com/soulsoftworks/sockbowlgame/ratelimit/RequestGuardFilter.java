@@ -34,7 +34,8 @@ import java.util.List;
  *   <li>When {@code sockbowl.ratelimit.enabled}: every matching
  *       {@code sockbowl.ratelimit.routes} policy is charged in order (all must
  *       pass), then the fallback: {@code service} for the SERVICE tier,
- *       otherwise {@code default}. A request is never charged both
+ *       otherwise {@code default}, unless a matching route sets
+ *       {@code fallback=false}. A request is never charged both
  *       {@code default} and {@code service}, and a rejected route policy stops
  *       the chain before the fallback is charged.</li>
  *   <li>{@link UsageTouchTracker#touch} for an authenticated subject.</li>
@@ -138,12 +139,15 @@ public class RequestGuardFilter extends OncePerRequestFilter {
 
     /**
      * The policies charged for a request, in order: every matching route's
-     * policies, then {@code service} (SERVICE tier) or {@code default}.
+     * policies, then {@code service} (SERVICE tier) or {@code default} unless a
+     * matching route opts out of the fallback.
      */
     List<String> policiesFor(String method, String path, LimitSubject subject) {
         List<String> policies = new ArrayList<>();
+        boolean chargeFallback = true;
         for (RateLimitProperties.Route route : properties.getRoutes()) {
             if (matches(route, method, path)) {
+                chargeFallback &= route.isFallback();
                 for (String policy : route.getPolicies()) {
                     if (!policies.contains(policy)) {
                         policies.add(policy);
@@ -154,7 +158,9 @@ public class RequestGuardFilter extends OncePerRequestFilter {
         String fallback = subject.tier() == Tier.SERVICE ? SERVICE_POLICY : DEFAULT_POLICY;
         policies.remove(DEFAULT_POLICY);
         policies.remove(SERVICE_POLICY);
-        policies.add(fallback);
+        if (chargeFallback) {
+            policies.add(fallback);
+        }
         return policies;
     }
 
