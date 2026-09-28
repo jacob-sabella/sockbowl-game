@@ -41,6 +41,8 @@ public class RateLimitProperties {
 
     private Events events = new Events();
 
+    private Stomp stomp = new Stomp();
+
     public PolicySpec policy(String name) {
         return policies.get(name);
     }
@@ -94,5 +96,18 @@ public class RateLimitProperties {
         private long maxLen = 1000;
         /** At most one event per (policy, key) in this window. */
         private Duration sampleWindow = Duration.ofSeconds(10);
+    }
+
+    @Data
+    public static class Stomp {
+        /**
+         * Hard cap on live SUBSCRIBEs per connection (G-M4-V1-03), independent
+         * of the token-bucket policies: past it, SUBSCRIBE is refused outright
+         * (RATE_LIMITED) rather than merely throttled. Decremented on
+         * UNSUBSCRIBE, reset to 0 when the connection closes. The real game
+         * flows use at most a handful (the game queue, the player queue,
+         * errors and heartbeat), so the default leaves generous headroom.
+         */
+        private int maxSubscriptionsPerConnection = 16;
     }
 }

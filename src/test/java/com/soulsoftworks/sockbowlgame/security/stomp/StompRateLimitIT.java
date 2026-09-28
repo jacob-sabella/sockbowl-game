@@ -121,6 +121,44 @@ class StompRateLimitIT extends StompSecurityITSupport {
         assertThat(c.isConnected()).isTrue();
     }
 
+    /**
+     * G-M4-V1-02: Spring's {@code AntPathMatcher}-based {@code @MessageMapping}
+     * routing ignores empty path segments, so a SEND to either alias still
+     * reached the buzz handler while matching neither {@code stomp-buzz}'s nor
+     * {@link StompDestinationGuard}'s exact-string checks - a free pass around
+     * the {@code stomp-buzz} limiter. Both aliases must now be rejected
+     * outright, and the canonical destination must still be limited exactly
+     * as before (5 processed of 20, then a throttled notice).
+     */
+    @Test
+    void buzzDestinationAliasesAreRejectedButTheCanonicalOneIsStillRateLimited() throws Exception {
+        StompTestClient.Connection doubleSlashAfterGame = connectAlice();
+        doubleSlashAfterGame.send("/app/game//player-incoming-buzz", "{}");
+        assertFatal(doubleSlashAfterGame, StompErrorCode.FORBIDDEN_DESTINATION);
+
+        CLOCK.advance(Duration.ofSeconds(1));
+        StompTestClient.Connection doubleSlashAfterApp = connectAlice();
+        doubleSlashAfterApp.send("/app//game/player-incoming-buzz", "{}");
+        assertFatal(doubleSlashAfterApp, StompErrorCode.FORBIDDEN_DESTINATION);
+
+        CLOCK.advance(Duration.ofSeconds(1));
+        StompTestClient.Connection c = connectAlice();
+        BlockingQueue<String> mine = c.subscribe(aliceQueue());
+        BlockingQueue<String> errors = c.subscribe("/user/queue/errors");
+        awaitSubscribed(aliceQueue(), 1);
+        awaitSubscribed("/user/queue/errors", 1);
+
+        for (int i = 0; i < 20; i++) {
+            c.send(StompRateLimitGuard.BUZZ_DESTINATION, "{}");
+        }
+        List<JsonObject> replies = drain(mine, 5);
+        assertThat(replies).hasSize(5);
+
+        JsonObject notice = poll(errors);
+        assertThat(notice.get("code").getAsString()).isEqualTo("RATE_LIMITED");
+        assertThat(notice.get("policy").getAsString()).isEqualTo(StompRateLimitGuard.STOMP_BUZZ);
+    }
+
     @Test
     void floodClosesTheSocketWithAStompFloodErrorFrame() throws Exception {
         StompTestClient.Connection c = connectAlice();
@@ -142,6 +180,29 @@ class StompRateLimitIT extends StompSecurityITSupport {
         awaitSubscribed(aliceQueue(), 1);
         JsonObject update = json(requestUntilReply(fresh, "/app/game/config/get-game", "{}", mine));
         assertThat(update.get("messageContentType").getAsString()).isEqualTo("GameSessionUpdate");
+    }
+
+    /**
+     * G-M4-V1-03: before this fix only CONNECT and SEND were throttled, so a
+     * burst of SUBSCRIBE frames (each one a JWT decode plus a ban lookup, and
+     * a new broker subscription that every later game event fans out to) was
+     * completely unthrottled.
+     */
+    @Test
+    void subscribeFloodIsRateLimitedAndNeverRegistersEveryAttempt() throws Exception {
+        StompTestClient.Connection c = connectAlice();
+        for (int i = 0; i < 2000 && c.isConnected(); i++) {
+            try {
+                c.subscribe(aliceQueue());
+            } catch (RuntimeException closed) {
+                break;
+            }
+        }
+        assertFatal(c, StompErrorCode.RATE_LIMITED);
+
+        long registered = userRegistry.findSubscriptions(s -> aliceQueue().equals(s.getDestination())).size();
+        assertThat(registered).as("2000 SUBSCRIBEs must not all be registered with the broker")
+                .isLessThan(2000);
     }
 
     @Test

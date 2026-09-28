@@ -96,7 +96,7 @@ class StompRateLimitGuardTest {
             lastBanLookup.set(raw);
             return ipBan.get();
         };
-        guard = new StompRateLimitGuard(service, buckets, checker, notifier, recorder, clock);
+        guard = new StompRateLimitGuard(service, buckets, checker, notifier, recorder, properties, clock);
     }
 
     @AfterEach
@@ -390,13 +390,105 @@ class StompRateLimitGuardTest {
         assertThat(rejection(() -> connect("c99", ip)).getCode()).isEqualTo(StompErrorCode.IP_BANNED);
     }
 
+    /**
+     * G-M4-V1-03: before this fix, only SEND was charged, so a SUBSCRIBE (or
+     * UNSUBSCRIBE/ACK/NACK/BEGIN/COMMIT/ABORT) flood was completely free -
+     * unlike this test's old name and assertion claimed.
+     */
     @Test
-    void otherFramesAreNotCharged() {
+    void nonSendCommandsShareTheSameConnectionSendBucketAsSend() {
         String ip = nextIp();
-        for (int i = 0; i < 100; i++) {
-            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/heartbeat"), guest))
+        // ACK carries no destination and has no subscription cap of its own,
+        // so it can safely exhaust the whole 40-token stomp-send bucket alone.
+        for (int i = 1; i <= 40; i++) {
+            assertThat(guard.check(frame(StompCommand.ACK, "c1", ip, null), guest)).as("ack %d", i)
                     .isEqualTo(StompGuardResult.PASS);
         }
-        assertThat(send("c1", ip, BUZZ)).isEqualTo(StompGuardResult.PASS);
+        assertThat(send("c1", ip, GET_GAME)).as("the bucket is shared with SEND").isEqualTo(StompGuardResult.DROP);
+
+        clock.advance(Duration.ofSeconds(1));
+        assertThat(guard.check(frame(StompCommand.NACK, "c1", ip, null), guest)).isEqualTo(StompGuardResult.PASS);
+    }
+
+    @Test
+    void heartbeatsAreNeverChargedOrCapped() {
+        String ip = nextIp();
+        StompHeaderAccessor heartbeat = StompHeaderAccessor.createForHeartbeat();
+        heartbeat.setSessionId("c1");
+        Map<String, Object> attributes = new HashMap<>();
+        attributes.put(ClientIpHandshakeInterceptor.CLIENT_IP, ip);
+        attributes.put(ClientIpHandshakeInterceptor.CLIENT_IP_RAW, ip);
+        heartbeat.setSessionAttributes(attributes);
+        for (int i = 0; i < 100; i++) {
+            assertThat(guard.check(heartbeat, guest)).isEqualTo(StompGuardResult.PASS);
+        }
+        // The stomp-send bucket (40) is still full.
+        for (int i = 1; i <= 40; i++) {
+            assertThat(send("c1", ip, GET_GAME)).as("send %d", i).isEqualTo(StompGuardResult.PASS);
+        }
+    }
+
+    /* --------------------------- subscription cap --------------------------- */
+
+    @Test
+    void subscribesUpToTheDefaultCapOfSixteenAllPass() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
+                    .as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
+        }
+    }
+
+    @Test
+    void seventeenthSubscribeOnOneConnectionIsRejectedFatally() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+        }
+        StompRejectedException rejected = rejection(() ->
+                guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g17"), guest));
+        assertThat(rejected.getCode()).isEqualTo(StompErrorCode.RATE_LIMITED);
+        assertThat(rejected.getPolicy()).isEqualTo(StompRateLimitGuard.STOMP_SUBSCRIPTIONS);
+        verify(recorder).record(eq(StompRateLimitGuard.STOMP_SUBSCRIPTIONS), eq(RateLimitEventRecorder.KIND_RATE),
+                any(LimitSubject.class), eq("/queue/event/g17"));
+
+        // Another connection is unaffected.
+        assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c2", ip, "/queue/event/g1"), guest))
+                .isEqualTo(StompGuardResult.PASS);
+    }
+
+    @Test
+    void unsubscribeFreesASlotUnderTheCap() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+        }
+        assertThat(guard.check(frame(StompCommand.UNSUBSCRIBE, "c1", ip, null), guest))
+                .isEqualTo(StompGuardResult.PASS);
+        assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g17"), guest))
+                .as("a freed slot admits one more").isEqualTo(StompGuardResult.PASS);
+    }
+
+    @Test
+    void disconnectResetsTheSubscriptionCount() {
+        String ip = nextIp();
+        for (int i = 1; i <= 16; i++) {
+            guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest);
+        }
+        guard.check(frame(StompCommand.DISCONNECT, "c1", ip, null), guest);
+        for (int i = 1; i <= 16; i++) {
+            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
+                    .as("reconnect %d", i).isEqualTo(StompGuardResult.PASS);
+        }
+    }
+
+    @Test
+    void subscriptionCapIsSkippedWhenRateLimitingIsDisabled() {
+        properties.setEnabled(false);
+        String ip = nextIp();
+        for (int i = 1; i <= 30; i++) {
+            assertThat(guard.check(frame(StompCommand.SUBSCRIBE, "c1", ip, "/queue/event/g" + i), guest))
+                    .as("subscribe %d", i).isEqualTo(StompGuardResult.PASS);
+        }
     }
 }
