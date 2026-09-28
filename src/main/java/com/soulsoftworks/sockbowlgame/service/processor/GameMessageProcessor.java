@@ -396,6 +396,12 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         int idx = round.getCurrentBonusPartIndex();
+        if (idx >= round.bonusPartCount()) {
+            // Unreachable while the round is awaiting a bonus answer: the bonus
+            // completes as soon as its last part is judged (M3V1-G-01).
+            return ProcessError.builder().recipient(playerId)
+                    .error("The bonus has no part " + idx).build();
+        }
         boolean correct = answerJudgeService.judge(bonusPartAnswerAt(round, idx), submitAnswer.getAnswerText()).isAccept();
         round.processBonusPartAnswer(idx, correct);
         round.advanceToNextBonusPart();
@@ -416,10 +422,14 @@ public class GameMessageProcessor extends MessageProcessor {
         }
     }
 
-    /** The answer of the bonus part at the given index (by order, falling back to list position). */
+    /**
+     * The answer of the bonus part at the given index (by order, falling back to list position).
+     * Only ever asked for a part that exists: the bonus ends once every part is judged
+     * (M3V1-G-01), so {@code idx < round.bonusPartCount()} here.
+     */
     private static String bonusPartAnswerAt(Round round, int idx) {
-        if (round.getCurrentBonus() == null || round.getCurrentBonus().getBonusParts() == null) {
-            return "";
+        if (idx < 0 || idx >= round.bonusPartCount()) {
+            throw new IllegalStateException("No bonus part " + idx + " in a " + round.bonusPartCount() + "-part bonus");
         }
         java.util.List<com.soulsoftworks.sockbowlquestions.models.relationships.HasBonusPart> parts =
                 round.getCurrentBonus().getBonusParts();
@@ -792,8 +802,9 @@ public class GameMessageProcessor extends MessageProcessor {
                     .build();
         }
 
-        // Validate part index
-        if (bonusPartOutcome.getPartIndex() < 0 || bonusPartOutcome.getPartIndex() > 2) {
+        // Validate part index against the bonus's real part count (M3V1-G-01)
+        int partCount = gameSession.getCurrentRound().bonusPartCount();
+        if (bonusPartOutcome.getPartIndex() < 0 || bonusPartOutcome.getPartIndex() >= partCount) {
             return ProcessError.builder()
                     .recipient(bonusPartOutcomeMsg.getOriginatingPlayerId())
                     .error("Invalid bonus part index: " + bonusPartOutcome.getPartIndex())

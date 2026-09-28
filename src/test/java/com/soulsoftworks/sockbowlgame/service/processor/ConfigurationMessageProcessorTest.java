@@ -429,6 +429,108 @@ public class ConfigurationMessageProcessorTest {
             assertEquals("bonus-2", stored.getBonuses().get(0).getBonus().getId());
         }
 
+        // ---- M3V1-G-03: null orders and null elements never break the sort ----
+
+        private SockbowlOutMessage load(Packet packet) {
+            when(packetClient.getPacketById(packet.getId())).thenReturn(Mono.just(packet));
+            return processor.setPacketForMatch(SetMatchPacket.builder()
+                    .gameSession(mockGameSession)
+                    .originatingPlayerId(gameOwner.getPlayerId())
+                    .packetId(packet.getId())
+                    .build());
+        }
+
+        @Test
+        @DisplayName("A null order on a tossup, bonus or bonus part sorts by list position instead of throwing")
+        void setPacketForMatch_NullOrders_FallBackToListPosition() {
+            // Wire order t-a (order null, position 0), t-c (order 2), t-b (order 1):
+            // keys 0, 2, 1 -> t-a, t-b, t-c.
+            ContainsTossup ta = PacketBuilderHelper.createTossup(1L, 0, tossup("t-a", "A"));
+            ta.setOrder(null);
+            ContainsTossup tc = PacketBuilderHelper.createTossup(3L, 2, tossup("t-c", "C"));
+            ContainsTossup tb = PacketBuilderHelper.createTossup(2L, 1, tossup("t-b", "B"));
+
+            // Bonuses: b-y (order 1), b-x (order null, position 1 -> key 1 as well, stable after b-y)
+            // and b-w (order 0).
+            ContainsBonus by = PacketBuilderHelper.createBonus(2L, 1, threePartBonus("b-y", "Y"));
+            ContainsBonus bx = PacketBuilderHelper.createBonus(3L, 0, threePartBonus("b-x", "X"));
+            bx.setOrder(null);
+            ContainsBonus bw = PacketBuilderHelper.createBonus(1L, 0, threePartBonus("b-w", "W"));
+
+            // Parts of b-w: (order 1, "b"), (order null at position 1 -> key 1, stable after "b"),
+            // (order 0, "a").
+            bw.getBonus().setBonusParts(new ArrayList<>(List.of(
+                    new HasBonusPart(null, 1, part("b")),
+                    new HasBonusPart(null, null, part("n")),
+                    new HasBonusPart(null, 0, part("a")))));
+
+            Packet packet = PacketBuilderHelper.createPacket("null-orders", "Null Orders", null,
+                    new ArrayList<>(List.of(ta, tc, tb)), new ArrayList<>(List.of(by, bx, bw)));
+
+            SockbowlOutMessage result = assertDoesNotThrow(() -> load(packet));
+
+            MatchPacketUpdate update = loaderUpdate(result, gameOwner.getPlayerId());
+            assertEquals(3, update.getTossupCount());
+            assertEquals(3, update.getBonusCount());
+
+            Packet stored = mockGameSession.getCurrentMatch().getPacket();
+            assertEquals(List.of("t-a", "t-b", "t-c"),
+                    stored.getTossups().stream().map(t -> t.getTossup().getId()).toList());
+            assertEquals(List.of("b-w", "b-y", "b-x"),
+                    stored.getBonuses().stream().map(b -> b.getBonus().getId()).toList());
+            assertEquals(List.of("part-a", "part-b", "part-n"),
+                    stored.getBonuses().get(0).getBonus().getBonusParts().stream()
+                            .map(p -> p.getBonusPart().getId()).toList());
+        }
+
+        @Test
+        @DisplayName("Null tossup, bonus and bonus-part elements are skipped instead of throwing")
+        void setPacketForMatch_NullElements_AreSkipped() {
+            ContainsTossup t2 = PacketBuilderHelper.createTossup(2L, 1, tossup("t2", "Second"));
+            ContainsTossup t1 = PacketBuilderHelper.createTossup(1L, 0, tossup("t1", "First"));
+            Bonus bonus = threePartBonus("bonus-1", "First bonus");
+            List<HasBonusPart> parts = new ArrayList<>(bonus.getBonusParts());
+            parts.add(1, null);
+            bonus.setBonusParts(parts);
+            ContainsBonus b1 = PacketBuilderHelper.createBonus(1L, 0, bonus);
+
+            List<ContainsTossup> tossups = new ArrayList<>();
+            tossups.add(t2);
+            tossups.add(null);
+            tossups.add(t1);
+            List<ContainsBonus> bonuses = new ArrayList<>();
+            bonuses.add(null);
+            bonuses.add(b1);
+            Packet packet = PacketBuilderHelper.createPacket("null-elements", "Null Elements", null,
+                    tossups, bonuses);
+
+            SockbowlOutMessage result = assertDoesNotThrow(() -> load(packet));
+
+            MatchPacketUpdate update = loaderUpdate(result, gameOwner.getPlayerId());
+            assertEquals(2, update.getTossupCount());
+            assertEquals(1, update.getBonusCount());
+
+            Packet stored = mockGameSession.getCurrentMatch().getPacket();
+            assertEquals(List.of("t1", "t2"),
+                    stored.getTossups().stream().map(t -> t.getTossup().getId()).toList());
+            assertEquals(List.of("part-a", "part-b", "part-c"),
+                    stored.getBonuses().get(0).getBonus().getBonusParts().stream()
+                            .map(p -> p.getBonusPart().getId()).toList());
+        }
+
+        @Test
+        @DisplayName("A tossup list holding only nulls is rejected with PACKET_EMPTY")
+        void setPacketForMatch_OnlyNullTossups_ReturnsPacketEmpty() {
+            List<ContainsTossup> tossups = new ArrayList<>();
+            tossups.add(null);
+            Packet packet = PacketBuilderHelper.createPacket("only-nulls", "Only Nulls", null, tossups, null);
+
+            SockbowlOutMessage result = assertDoesNotThrow(() -> load(packet));
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals(ConfigurationMessageProcessor.PACKET_EMPTY, ((ProcessError) result).getCode());
+        }
+
     }
 
     @Nested

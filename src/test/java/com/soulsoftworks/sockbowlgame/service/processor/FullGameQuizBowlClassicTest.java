@@ -22,6 +22,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.soulsoftworks.sockbowlgame.model.socket.out.error.ProcessError;
 import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
@@ -312,6 +315,130 @@ class FullGameQuizBowlClassicTest {
             judge(false);
             assertEquals(RoundState.COMPLETED, round().getRoundState());
             assertNull(round().getCurrentBonus());
+        }
+    }
+
+    /**
+     * M3V1-G-01: a bonus is played for exactly as many parts as it has. Packets
+     * from the builder or an import may carry 1 to 6 parts (D7 only warns when
+     * the count is not 3), so the game must never assume three.
+     */
+    @Nested
+    @DisplayName("Bonus part count (M3V1-G-01)")
+    class BonusPartCount {
+
+        private Bonus nPartBonus(int n) {
+            List<HasBonusPart> parts = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                parts.add(part(i, "<u>part" + i + "</u>"));
+            }
+            return Bonus.builder().preamble("A " + n + "-part bonus.").bonusParts(parts).build();
+        }
+
+        private void startWithBonus(int n) {
+            session.getGameSettings().setBonusesEnabled(true);
+            Packet packet = twoTossupPacket(false, false);
+            packet.getBonuses().get(0).setBonus(nPartBonus(n));
+            session.getCurrentMatch().setPacket(packet);
+            startMatch();
+            finishedReading();
+            buzz(p1);
+            judge(true);
+            assertEquals(RoundState.BONUS_READING_PREAMBLE, round().getRoundState());
+            finishedReadingBonusPreamble();
+        }
+
+        @ParameterizedTest(name = "{0}-part bonus asks exactly {0} parts")
+        @ValueSource(ints = {1, 2, 4, 5})
+        void asksExactlyEveryPart(int n) {
+            startWithBonus(n);
+            for (int i = 0; i < n; i++) {
+                assertEquals(RoundState.BONUS_READING_PART, round().getRoundState(), "before part " + i);
+                assertEquals(i, round().getCurrentBonusPartIndex());
+                finishedReadingBonusPart();
+                assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+                SockbowlOutMessage result = bonusPartAnswer(i, true);
+                assertFalse(result instanceof ProcessError, "part " + i + " of " + n + " was rejected");
+            }
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(n, round().getBonusPartAnswers().size());
+            assertEquals(n * 10, round().getBonusPoints());
+        }
+
+        @Test
+        @DisplayName("A 2-part bonus asks exactly 2 parts, scores at most 20 and refuses a third answer")
+        void twoPartBonusMaxTwenty() {
+            startWithBonus(2);
+            finishedReadingBonusPart();
+            bonusPartAnswer(0, true);
+            finishedReadingBonusPart();
+            bonusPartAnswer(1, true);
+
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(20, round().getBonusPoints());
+            assertInstanceOf(ProcessError.class, bonusPartAnswer(2, true));
+            assertEquals(20, round().getBonusPoints());
+            assertEquals(2, round().getBonusPartAnswers().size());
+        }
+
+        @Test
+        @DisplayName("A 4-part bonus asks all 4 parts before the round completes")
+        void fourPartBonusAsksAllFour() {
+            startWithBonus(4);
+            for (int i = 0; i < 3; i++) {
+                finishedReadingBonusPart();
+                bonusPartAnswer(i, i % 2 == 0);
+                assertEquals(RoundState.BONUS_READING_PART, round().getRoundState(), "after part " + i);
+            }
+            finishedReadingBonusPart();
+            bonusPartAnswer(3, true);
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(30, round().getBonusPoints());
+        }
+
+        @ParameterizedTest(name = "partIndex {1} on a {0}-part bonus is rejected")
+        @org.junit.jupiter.params.provider.CsvSource({"1,1", "2,2", "3,3", "4,4", "2,5", "2,-1"})
+        void partIndexOutsideThePartsIsRejected(int n, int badIndex) {
+            startWithBonus(n);
+            finishedReadingBonusPart();
+            SockbowlOutMessage result = bonusPartAnswer(badIndex, true);
+
+            assertInstanceOf(ProcessError.class, result);
+            assertEquals(RoundState.BONUS_AWAITING_ANSWER, round().getRoundState());
+            assertEquals(0, round().getBonusPartAnswers().size());
+            assertEquals(0, round().getCurrentBonusPartIndex());
+        }
+
+        @Test
+        @DisplayName("A bonus with no parts is never started: the round completes on the tossup")
+        void zeroPartBonusIsSkipped() {
+            session.getGameSettings().setBonusesEnabled(true);
+            Packet packet = twoTossupPacket(false, false);
+            packet.getBonuses().get(0).setBonus(nPartBonus(0));
+            session.getCurrentMatch().setPacket(packet);
+            startMatch();
+            finishedReading();
+            buzz(p1);
+            judge(true);
+
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertNull(round().getCurrentBonus());
+            assertEquals(0, round().getBonusPoints());
+        }
+
+        @Test
+        @DisplayName("Timing out every part of a 2-part bonus completes the round after 2 parts")
+        void timeoutsHonourPartCount() {
+            startWithBonus(2);
+            for (int i = 0; i < 2; i++) {
+                finishedReadingBonusPart();
+                assertFalse(gameProcessor.timeoutBonusPart(TimeoutBonusPart.builder()
+                        .gameSession(session).originatingPlayerId(proctor.getPlayerId()).build())
+                        instanceof ProcessError);
+            }
+            assertEquals(RoundState.COMPLETED, round().getRoundState());
+            assertEquals(2, round().getBonusPartAnswers().size());
+            assertEquals(0, round().getBonusPoints());
         }
     }
 

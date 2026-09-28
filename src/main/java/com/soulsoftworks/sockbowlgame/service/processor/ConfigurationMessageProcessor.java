@@ -223,7 +223,8 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
 
         // PB-13/D7: null tossup lists are treated as empty, and an empty packet
         // can't be played (there's nothing for AdvanceRound to advance through).
-        List<ContainsTossup> incomingTossups = packet.getTossups() == null ? List.of() : packet.getTossups();
+        // Null elements are skipped (M3V1-G-03), so a list of only nulls is empty too.
+        List<ContainsTossup> incomingTossups = sortedByOrder(packet.getTossups(), ContainsTossup::getOrder);
         if (incomingTossups.isEmpty()) {
             return ProcessError.coded(message, PACKET_EMPTY, "Packet has no tossups");
         }
@@ -257,31 +258,25 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         // list may be immutable (e.g. built with List.of/List.copyOf), so a
         // shuffled wire order never determines play order regardless of how
         // the packet was assembled.
-        List<ContainsTossup> tossups = new ArrayList<>(incomingTossups);
-        tossups.sort(Comparator.comparingInt(ContainsTossup::getOrder));
-        packet.setTossups(tossups);
+        packet.setTossups(incomingTossups);
 
         // Sort bonuses by order, then each bonus's parts by order, dropping any
         // bonus left with 0 parts (D7: bonuses pair with tossups by index, so a
         // dropped bonus mid-packet is logged as a data-quality warning). A null
         // bonus list means "no bonuses", not an error.
-        List<ContainsBonus> bonuses = packet.getBonuses() == null ? List.of() : packet.getBonuses();
-        List<ContainsBonus> sortedBonuses = new ArrayList<>(bonuses);
-        sortedBonuses.sort(Comparator.comparingInt(ContainsBonus::getOrder));
+        List<ContainsBonus> sortedBonuses = sortedByOrder(packet.getBonuses(), ContainsBonus::getOrder);
 
         List<ContainsBonus> playableBonuses = new ArrayList<>(sortedBonuses.size());
         for (ContainsBonus containsBonus : sortedBonuses) {
             Bonus bonus = containsBonus.getBonus();
-            List<HasBonusPart> parts = bonus == null || bonus.getBonusParts() == null
-                    ? List.of() : bonus.getBonusParts();
+            List<HasBonusPart> parts = bonus == null
+                    ? List.of() : sortedByOrder(bonus.getBonusParts(), HasBonusPart::getOrder);
             if (parts.isEmpty()) {
                 log.warn("SetMatchPacket {} for session {}: dropping bonus {} with no parts",
                         message.getPacketId(), gameSession.getId(), bonus == null ? null : bonus.getId());
                 continue;
             }
-            List<HasBonusPart> sortedParts = new ArrayList<>(parts);
-            sortedParts.sort(Comparator.comparingInt(HasBonusPart::getOrder));
-            bonus.setBonusParts(sortedParts);
+            bonus.setBonusParts(parts);
             playableBonuses.add(containsBonus);
         }
         packet.setBonuses(playableBonuses);
@@ -306,13 +301,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * another game and read its answers there.
      */
     static SockbowlOutMessage packetUpdateFor(Packet packet, String loaderId, GameSession gameSession) {
-        int tossupCount = packet.getTossups() == null ? 0 : packet.getTossups().size();
-        int bonusCount = packet.getBonuses() == null ? 0 : packet.getBonuses().size();
         MatchPacketUpdate full = MatchPacketUpdate.builder()
                 .packetId(packet.getId())
                 .packetName(packet.getName())
-                .tossupCount(tossupCount)
-                .bonusCount(bonusCount)
+                .tossupCount(tossupCount(packet))
+                .bonusCount(bonusCount(packet))
                 .recipient(loaderId)
                 .build();
         List<String> others = gameSession.getPlayerList().stream()
@@ -327,13 +320,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
         return SockbowlMultiOutMessage.builder()
                 .sockbowlOutMessage(full)
-                .sockbowlOutMessage(MatchPacketUpdate.builder()
-                        .packetId(null)
-                        .packetName(packet.getName())
-                        .tossupCount(tossupCount)
-                        .bonusCount(bonusCount)
-                        .recipients(others)
-                        .build())
+                .sockbowlOutMessage(publicPacketUpdate(packet, others))
                 .build();
     }
 
@@ -439,7 +426,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * <p>
      * This method retrieves the current game session from the incoming message, determines the player mode
      * of the player who sent the message, and then sanitizes the game session based on that player mode.
-     * A sanitized game session update is then sent back to the originating player.
+     * A sanitized game session update is then sent back to the originating player. A non-proctor
+     * with a packet loaded also gets an id-free {@link MatchPacketUpdate} (name and counts only),
+     * because their sanitized view carries no questions to count (R4-NG-02).
      *
      * @param sockbowlInMessage The incoming message containing the player's ID and the current game session.
      *                          This is used to determine the player's mode and retrieve the relevant game session.
@@ -455,8 +444,46 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         PlayerMode playerMode = gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId());
 
         // Sanitize and return the session
+        String recipient = sockbowlInMessage.getOriginatingPlayerId();
         GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, playerMode);
-        return GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
+        GameSessionUpdate update = GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(recipient).build();
+
+        // A non-proctor's view carries no tossups or bonuses (and no packet
+        // id), so a player who joins or reloads after the packet was loaded
+        // would never learn its counts (R4-NG-02). They also get the id-free
+        // MatchPacketUpdate the load sent everyone else, after the session so
+        // it applies to the match it describes. The proctor's view already
+        // holds the whole packet.
+        Packet loaded = gameSession.loadedPacketId() == null ? null : gameSession.getCurrentMatch().getPacket();
+        if (loaded == null || playerMode == PlayerMode.PROCTOR) {
+            return update;
+        }
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(update)
+                .sockbowlOutMessage(publicPacketUpdate(loaded, List.of(recipient)))
+                .build();
+    }
+
+    /**
+     * The id-free MatchPacketUpdate every non-proctor receives for a loaded
+     * packet (R3-G-01): name and counts only, never the id or any question.
+     */
+    private static MatchPacketUpdate publicPacketUpdate(Packet packet, List<String> recipients) {
+        return MatchPacketUpdate.builder()
+                .packetId(null)
+                .packetName(packet.getName())
+                .tossupCount(tossupCount(packet))
+                .bonusCount(bonusCount(packet))
+                .recipients(recipients)
+                .build();
+    }
+
+    private static int tossupCount(Packet packet) {
+        return packet.getTossups() == null ? 0 : packet.getTossups().size();
+    }
+
+    private static int bonusCount(Packet packet) {
+        return packet.getBonuses() == null ? 0 : packet.getBonuses().size();
     }
 
     /**
@@ -548,5 +575,32 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
                 .sockbowlOutMessage(update)
                 .sockbowlOutMessage(MatchPacketUpdate.builder().packetId(null).packetName(null).tossupCount(0).bonusCount(0).build())
                 .build();
+    }
+
+    /**
+     * A new mutable list of the non-null elements of {@code items}, sorted by
+     * their {@code order}. An element whose order is null sorts by its list
+     * position instead, the same rule as {@code GameSanitizer.readingKey}
+     * (M3V1-G-03); the sort is stable, so equal keys keep their wire order.
+     * A null list gives an empty list.
+     */
+    static <T> List<T> sortedByOrder(List<T> items, java.util.function.Function<T, Integer> order) {
+        if (items == null) {
+            return new ArrayList<>();
+        }
+        List<int[]> keyed = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            T item = items.get(i);
+            if (item != null) {
+                Integer o = order.apply(item);
+                keyed.add(new int[]{o != null ? o : i, i});
+            }
+        }
+        keyed.sort(Comparator.comparingInt(k -> k[0]));
+        List<T> sorted = new ArrayList<>(keyed.size());
+        for (int[] k : keyed) {
+            sorted.add(items.get(k[1]));
+        }
+        return sorted;
     }
 }

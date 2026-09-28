@@ -56,8 +56,10 @@ public class GameSession {
      * packet was loaded in this session, and so could read its answers
      * (R3-G2-03). None of them may play a match on that packet: they are
      * refused a team seat while it is loaded, and a match on it cannot start
-     * while one of them is on a team. Server-side only: every client view
-     * drops it ({@link GameSanitizer}).
+     * while one of them is on a team. A signed-in proctor is also recorded by
+     * Keycloak subject ({@code kc:<sub>}, R4-G-01), so rejoining under a new
+     * player id does not reset it. Server-side only: every client view drops
+     * it ({@link GameSanitizer}), which also keeps those subjects off the wire.
      */
     @Builder.Default
     private Map<String, List<String>> proctorsByPacketId = new HashMap<>();
@@ -211,8 +213,21 @@ public class GameSession {
     }
 
     /**
+     * Prefix of the {@link #proctorsByPacketId} entries that hold a Keycloak
+     * subject rather than a per-join player id (R4-G-01). Player ids are
+     * UUIDs, so the prefix never collides with one, and the map keeps its
+     * {@code Map<String, List<String>>} shape for the Redis round trip.
+     */
+    public static final String KEYCLOAK_PROCTOR_PREFIX = "kc:";
+
+    /**
      * Record that {@code playerId} held the proctor seat while {@code packetId}
-     * was loaded (see {@link #proctorsByPacketId}). No-op for a blank id.
+     * was loaded (see {@link #proctorsByPacketId}). When the player is signed
+     * in, their Keycloak subject is recorded too ({@code kc:<sub>}), so the
+     * same user rejoining under a new player id is still refused a team seat
+     * for the packet (R4-G-01). A guest has no durable identity, so only the
+     * player id is recorded (the accepted residual in PROGRESS.md D20). No-op
+     * for a blank id.
      */
     public void recordPacketProctor(String packetId, String playerId) {
         if (packetId == null || packetId.isBlank() || playerId == null) {
@@ -225,15 +240,44 @@ public class GameSession {
         if (!proctors.contains(playerId)) {
             proctors.add(playerId);
         }
+        String keycloakEntry = keycloakProctorEntry(playerId);
+        if (keycloakEntry != null && !proctors.contains(keycloakEntry)) {
+            proctors.add(keycloakEntry);
+        }
     }
 
-    /** Whether {@code playerId} held the proctor seat while {@code packetId} was loaded. */
+    /**
+     * Whether {@code playerId} held the proctor seat while {@code packetId} was
+     * loaded, either under this player id or, for a signed-in player, under
+     * any player id with the same Keycloak subject (R4-G-01).
+     */
     public boolean hasProctoredPacket(String packetId, String playerId) {
         if (packetId == null || packetId.isBlank() || playerId == null || proctorsByPacketId == null) {
             return false;
         }
         List<String> proctors = proctorsByPacketId.get(packetId);
-        return proctors != null && proctors.contains(playerId);
+        if (proctors == null) {
+            return false;
+        }
+        if (proctors.contains(playerId)) {
+            return true;
+        }
+        String keycloakEntry = keycloakProctorEntry(playerId);
+        return keycloakEntry != null && proctors.contains(keycloakEntry);
+    }
+
+    /** The {@code kc:<sub>} entry for a signed-in player in this session, or null for a guest or unknown id. */
+    private String keycloakProctorEntry(String playerId) {
+        if (playerList == null) {
+            return null;
+        }
+        return playerList.stream()
+                .filter(p -> playerId.equals(p.getPlayerId()))
+                .map(Player::getKeycloakId)
+                .filter(sub -> sub != null && !sub.isBlank())
+                .findFirst()
+                .map(sub -> KEYCLOAK_PROCTOR_PREFIX + sub)
+                .orElse(null);
     }
 
     /** The id of the packet loaded in the current match, or null when none is. Not a bean getter, so no serializer picks it up. */
