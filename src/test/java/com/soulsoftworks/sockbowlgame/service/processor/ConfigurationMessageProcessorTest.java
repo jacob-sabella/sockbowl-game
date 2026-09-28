@@ -232,6 +232,30 @@ public class ConfigurationMessageProcessorTest {
     @DisplayName("PacketTests")
     class PacketTests {
 
+        /**
+         * The loader's full MatchPacketUpdate out of a SetMatchPacket reply. Since the
+         * M2 fixes (R3-G-01) the reply is per recipient: every other copy must carry no
+         * packet id but the same name and (M3, PB-13) the same tossup and playable-bonus
+         * counts.
+         */
+        private MatchPacketUpdate loaderUpdate(SockbowlOutMessage result, String loaderId) {
+            List<SockbowlOutMessage> frames = result instanceof SockbowlMultiOutMessage multi
+                    ? multi.getSockbowlOutMessages() : List.of(result);
+            frames.forEach(frame -> assertInstanceOf(MatchPacketUpdate.class, frame));
+            MatchPacketUpdate full = frames.stream().map(MatchPacketUpdate.class::cast)
+                    .filter(u -> u.getRecipients().contains(loaderId)).findFirst().orElseThrow();
+            assertEquals(List.of(loaderId), full.getRecipients());
+            assertNotNull(full.getPacketId());
+            frames.stream().map(MatchPacketUpdate.class::cast).filter(u -> u != full).forEach(u -> {
+                assertNull(u.getPacketId());
+                assertFalse(u.getRecipients().contains(loaderId));
+                assertEquals(full.getPacketName(), u.getPacketName());
+                assertEquals(full.getTossupCount(), u.getTossupCount());
+                assertEquals(full.getBonusCount(), u.getBonusCount());
+            });
+            return full;
+        }
+
         @Test
         @DisplayName("Proctor sets the match packet successfully")
         void setPacketForMatch_ProctorSetsPacket_SuccessfullySetsPacket() {
@@ -323,8 +347,7 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);
 
-            assertInstanceOf(MatchPacketUpdate.class, result);
-            MatchPacketUpdate update = (MatchPacketUpdate) result;
+            MatchPacketUpdate update = loaderUpdate(result, gameOwner.getPlayerId());
             assertEquals(2, update.getTossupCount());
             assertEquals(2, update.getBonusCount());
 
@@ -398,8 +421,7 @@ public class ConfigurationMessageProcessorTest {
 
             SockbowlOutMessage result = processor.setPacketForMatch(message);
 
-            assertInstanceOf(MatchPacketUpdate.class, result);
-            MatchPacketUpdate update = (MatchPacketUpdate) result;
+            MatchPacketUpdate update = loaderUpdate(result, gameOwner.getPlayerId());
             assertEquals(1, update.getBonusCount());
 
             Packet stored = mockGameSession.getCurrentMatch().getPacket();

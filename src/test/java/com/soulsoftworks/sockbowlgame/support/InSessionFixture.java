@@ -226,6 +226,37 @@ public final class InSessionFixture {
                 PacketBuilderHelper.createDifficulty("D1", "Regionals"), tossups, bonuses);
     }
 
+    /**
+     * The fixture packet in the shape M3's SetMatchPacket normalizes (PB-13, D7):
+     * tossups, bonuses and bonus parts arrive in shuffled wire order, the
+     * collections are immutable, and a third bonus has no parts (dropped on
+     * load). Same id, name and answers as {@link #packet()}; 2 tossups and 2
+     * playable bonuses once loaded.
+     */
+    public static Packet m3ShapedPacket() {
+        List<ContainsTossup> tossups = List.of(
+                PacketBuilderHelper.createTossup(2, 1,
+                        Tossup.builder().question("This English playwright wrote Hamlet.")
+                                .answer("<b><u>Shakespeare</u></b>").build()),
+                PacketBuilderHelper.createTossup(1, 0,
+                        Tossup.builder().question("This French emperor lost at Waterloo.")
+                                .answer("<b><u>Napoleon</u></b> Bonaparte").build()));
+        Bonus noParts = Bonus.builder().preamble("A bonus with no parts.").bonusParts(List.of()).build();
+        List<ContainsBonus> bonuses = List.of(
+                PacketBuilderHelper.createBonus(2, 2, shuffledThreePartBonus()),
+                PacketBuilderHelper.createBonus(3, 1, noParts),
+                PacketBuilderHelper.createBonus(1, 0, shuffledThreePartBonus()));
+        return PacketBuilderHelper.createPacket(PACKET_ID, "Fixture Packet",
+                PacketBuilderHelper.createDifficulty("D1", "Regionals"), tossups, bonuses);
+    }
+
+    private static Bonus shuffledThreePartBonus() {
+        return Bonus.builder()
+                .preamble("A three-part bonus.")
+                .bonusParts(List.of(part(2, "<u>gamma</u>"), part(0, "<u>alpha</u>"), part(1, "<u>beta</u>")))
+                .build();
+    }
+
     private static Bonus threePartBonus() {
         return Bonus.builder()
                 .preamble("A three-part bonus.")

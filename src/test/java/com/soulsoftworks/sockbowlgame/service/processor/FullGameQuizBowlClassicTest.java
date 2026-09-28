@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service.processor;
 
+import com.soulsoftworks.sockbowlgame.support.InMemoryEphemeralPacketBindings;
+import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlMultiOutMessage;
 import com.soulsoftworks.sockbowlgame.client.PacketClient;
 import com.soulsoftworks.sockbowlgame.model.socket.in.config.SetMatchPacket;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.*;
@@ -351,7 +353,8 @@ class FullGameQuizBowlClassicTest {
             PacketClient packetClient = mock(PacketClient.class);
             when(packetClient.getPacketById("SHUFFLED")).thenReturn(Mono.just(shuffledBonusPacket()));
             ConfigurationMessageProcessor configProcessor =
-                    new ConfigurationMessageProcessor(packetClient, new GameAuthorizationPolicy(false, null));
+                    new ConfigurationMessageProcessor(packetClient, new GameAuthorizationPolicy(false, null),
+                            new InMemoryEphemeralPacketBindings());
             return configProcessor.setPacketForMatch(SetMatchPacket.builder()
                     .gameSession(session).originatingPlayerId(proctor.getPlayerId()).packetId("SHUFFLED").build());
         }
@@ -362,8 +365,20 @@ class FullGameQuizBowlClassicTest {
             session.getGameSettings().setBonusesEnabled(true);
 
             SockbowlOutMessage setResult = setShuffledPacket();
-            assertInstanceOf(MatchPacketUpdate.class, setResult);
-            assertEquals(2, ((MatchPacketUpdate) setResult).getBonusCount());
+            // Per-recipient reply (R3-G-01): the proctor's copy has the id, the
+            // players' copies don't; every copy counts the 2 playable bonuses.
+            List<SockbowlOutMessage> frames = setResult instanceof SockbowlMultiOutMessage multi
+                    ? multi.getSockbowlOutMessages() : List.of(setResult);
+            assertEquals(1, frames.stream().filter(frame -> frame.getRecipients().contains(proctor.getPlayerId())).count());
+            for (SockbowlOutMessage frame : frames) {
+                MatchPacketUpdate update = assertInstanceOf(MatchPacketUpdate.class, frame);
+                assertEquals(2, update.getBonusCount());
+                if (update.getRecipients().contains(proctor.getPlayerId())) {
+                    assertEquals("SHUFFLED", update.getPacketId());
+                } else {
+                    assertNull(update.getPacketId());
+                }
+            }
 
             startMatch();
 

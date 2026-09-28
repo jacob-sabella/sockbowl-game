@@ -343,6 +343,64 @@ class PacketIdExposureAuthTest {
         }
     }
 
+    /* ------------------------------------------------------------------ */
+    /* M3 packet shapes (merge-forward of M2 into M3)                     */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    @DisplayName("M3: a shuffled packet with a 0-part bonus still reaches non-proctors without its id, with the playable counts")
+    void m3NormalizedPacketUpdateIsPerRecipient() {
+        InSessionFixture fx = new InSessionFixture();
+        when(fx.packetClient.getPacketById(any())).thenAnswer(inv -> Mono.just(InSessionFixture.m3ShapedPacket()));
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        String proctor = room.teammate();
+        assertFalse(claim(fx, room, proctor) instanceof ProcessError);
+
+        SockbowlOutMessage out = load(fx, room, proctor, InSessionFixture.PACKET_ID);
+
+        List<MatchPacketUpdate> updates = flat(out).stream()
+                .map(m -> assertInstanceOf(MatchPacketUpdate.class, m)).toList();
+        assertEquals(2, updates.size());
+        for (MatchPacketUpdate u : updates) {
+            assertFalse(u.getRecipients().isEmpty(), "no MatchPacketUpdate may be a broadcast: " + u);
+            assertEquals(2, u.getTossupCount());
+            assertEquals(2, u.getBonusCount(), "the 0-part bonus is not counted");
+            String json = wire(u);
+            assertNoAnswers(json);
+            assertEquals(u.getRecipients().equals(List.of(proctor)), json.contains(InSessionFixture.PACKET_ID), json);
+        }
+        for (Player p : room.session().getPlayerList()) {
+            String view = getGameJson(fx, room, p.getPlayerId());
+            assertEquals(p.getPlayerId().equals(proctor), view.contains(InSessionFixture.PACKET_ID),
+                    p.getName() + "'s get-game: " + view);
+            if (!p.getPlayerId().equals(proctor)) {
+                assertNoAnswers(view);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("M3: an empty EPHEMERAL packet is PACKET_EMPTY to the sender only and is never bound to the game")
+    void m3EmptyEphemeralPacketIsRefusedBeforeBinding() {
+        InSessionFixture fx = new InSessionFixture();
+        when(fx.packetClient.getPacketById(any())).thenAnswer(inv -> {
+            Packet p = InSessionFixture.packet();
+            p.setTossups(new ArrayList<>());
+            p.setVisibility(PacketVisibility.EPHEMERAL);
+            return Mono.just(p);
+        });
+        Room room = fx.room(Creator.GUEST, GameMode.AUTO_PROCTOR);
+
+        SockbowlOutMessage out = load(fx, room, room.owner(), InSessionFixture.PACKET_ID);
+
+        ProcessError error = assertInstanceOf(ProcessError.class, out);
+        assertEquals(ConfigurationMessageProcessor.PACKET_EMPTY, error.getCode());
+        assertEquals(List.of(room.owner()), error.getRecipients());
+        assertNull(room.session().loadedPacketId());
+        assertNull(fx.ephemeralBindings.boundGame(InSessionFixture.PACKET_ID),
+                "a refused packet must not claim the EPHEMERAL binding");
+    }
+
     @Test
     @DisplayName("No view carries the proctorsByPacketId bookkeeping")
     void noViewCarriesProctorBookkeeping() {
