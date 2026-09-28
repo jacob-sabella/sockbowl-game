@@ -369,6 +369,12 @@ class SessionOwnershipAuthTest {
                 ? multi.getSockbowlOutMessages() : List.of(out);
         List<GameSessionUpdate> updates = new ArrayList<>();
         for (SockbowlOutMessage m : all) {
+            // A non-proctor's get-game with a packet loaded also carries the
+            // id-free counts (R4-NG-02); it holds no identity or answers.
+            if (m instanceof com.soulsoftworks.sockbowlgame.model.socket.out.config.MatchPacketUpdate counts) {
+                assertNull(counts.getPacketId(), "unexpected " + m);
+                continue;
+            }
             assertInstanceOf(GameSessionUpdate.class, m, "unexpected " + m);
             updates.add((GameSessionUpdate) m);
         }
@@ -773,6 +779,72 @@ class SessionOwnershipAuthTest {
         assertFalse(loadPacketById(fx, room, proctor, "PKT-OTHER") instanceof ProcessError);
         SockbowlOutMessage started = fx.dispatch(InSessionFixture.message(START_MATCH, room.session(), proctor, null));
         assertFalse(started instanceof ProcessError, "start refused: " + started);
+    }
+
+    @Test
+    @DisplayName("R4-G-01: the same Keycloak user rejoining under a new player id is still refused a team seat and start-match")
+    void sameKeycloakUserRejoiningUnderANewPlayerIdCannotPlayAPacketTheyProctored() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        GameSession session = room.session();
+        String owner = room.owner();
+        String other = room.nonOwners().get(1);
+        assertEquals(InSessionFixture.OTHER_SUB, room.player(other).getKeycloakId());
+        String team1 = session.getTeamList().get(0).getTeamId();
+        String team2 = session.getTeamList().get(1).getTeamId();
+
+        // kc-other proctors and loads the packet, reads it, then steps down (the packet goes with the seat).
+        assertFalse(claimProctor(fx, room, other, other) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, other) instanceof ProcessError);
+        assertTrue(getGameJson(fx, room, other).contains("Napoleon"), "as proctor kc-other reads the packet");
+        assertFalse(moveToTeam(fx, room, other, other, Team.SPECTATOR_TEAM) instanceof ProcessError);
+        assertNull(packetId(room));
+
+        // The same Keycloak user joins again: a fresh player id, and with no
+        // packet loaded they may take a team seat.
+        Player alt = session.addPlayer(JoinGameRequest.builder().playerSessionId("other-again").name("other-again")
+                .joinCode("JOIN").build(), InSessionFixture.OTHER_SUB);
+        alt.setPlayerMode(PlayerMode.SPECTATOR);
+        assertNotEquals(other, alt.getPlayerId());
+        assertFalse(moveToTeam(fx, room, alt.getPlayerId(), alt.getPlayerId(), team2) instanceof ProcessError);
+
+        // The owner takes the seat and loads the same packet.
+        assertFalse(claimProctor(fx, room, owner, owner) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, owner) instanceof ProcessError);
+        assertEquals(InSessionFixture.PACKET_ID, packetId(room));
+        assertTrue(session.hasProctoredPacket(InSessionFixture.PACKET_ID, alt.getPlayerId()),
+                "the second player id carries kc-other's record");
+
+        // The match cannot start with the second identity on a team...
+        assertAnswersSeen(fx.dispatch(InSessionFixture.message(START_MATCH, session, owner, null)), owner);
+        assertEquals(MatchState.CONFIG, session.getCurrentMatch().getMatchState());
+        // ...nor may either player id of kc-other take a team seat for it.
+        assertAnswersSeen(moveToTeam(fx, room, alt.getPlayerId(), alt.getPlayerId(), team1), alt.getPlayerId());
+        assertAnswersSeen(moveToTeam(fx, room, owner, other, team1), owner);
+
+        // A different signed-in user and a guest are unaffected.
+        String guest = room.nonOwners().get(0);
+        assertFalse(session.hasProctoredPacket(InSessionFixture.PACKET_ID, guest));
+        assertFalse(session.hasProctoredPacket(InSessionFixture.PACKET_ID, room.teammate()));
+    }
+
+    @Test
+    @DisplayName("R4-G-01: the Keycloak proctor record keeps the Map<String, List<String>> shape through the Redis (Gson) round trip")
+    void keycloakProctorRecordSurvivesTheRedisRoundTrip() {
+        InSessionFixture fx = new InSessionFixture();
+        Room room = fx.room(Creator.AUTHENTICATED, GameMode.QUIZ_BOWL_CLASSIC);
+        String other = room.nonOwners().get(1);
+        assertFalse(claimProctor(fx, room, other, other) instanceof ProcessError);
+        assertFalse(loadPacket(fx, room, other) instanceof ProcessError);
+        assertEquals(List.of(other, GameSession.KEYCLOAK_PROCTOR_PREFIX + InSessionFixture.OTHER_SUB),
+                room.session().getProctorsByPacketId().get(InSessionFixture.PACKET_ID));
+
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        GameSession restored = gson.fromJson(gson.toJson(room.session()), GameSession.class);
+        assertEquals(room.session().getProctorsByPacketId(), restored.getProctorsByPacketId());
+        Player alt = restored.addPlayer(JoinGameRequest.builder().playerSessionId("other-again").name("other-again")
+                .joinCode("JOIN").build(), InSessionFixture.OTHER_SUB);
+        assertTrue(restored.hasProctoredPacket(InSessionFixture.PACKET_ID, alt.getPlayerId()));
     }
 
     @Test

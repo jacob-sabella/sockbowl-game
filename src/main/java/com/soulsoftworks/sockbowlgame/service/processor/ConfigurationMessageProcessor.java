@@ -306,13 +306,11 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * another game and read its answers there.
      */
     static SockbowlOutMessage packetUpdateFor(Packet packet, String loaderId, GameSession gameSession) {
-        int tossupCount = packet.getTossups() == null ? 0 : packet.getTossups().size();
-        int bonusCount = packet.getBonuses() == null ? 0 : packet.getBonuses().size();
         MatchPacketUpdate full = MatchPacketUpdate.builder()
                 .packetId(packet.getId())
                 .packetName(packet.getName())
-                .tossupCount(tossupCount)
-                .bonusCount(bonusCount)
+                .tossupCount(tossupCount(packet))
+                .bonusCount(bonusCount(packet))
                 .recipient(loaderId)
                 .build();
         List<String> others = gameSession.getPlayerList().stream()
@@ -327,13 +325,7 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         }
         return SockbowlMultiOutMessage.builder()
                 .sockbowlOutMessage(full)
-                .sockbowlOutMessage(MatchPacketUpdate.builder()
-                        .packetId(null)
-                        .packetName(packet.getName())
-                        .tossupCount(tossupCount)
-                        .bonusCount(bonusCount)
-                        .recipients(others)
-                        .build())
+                .sockbowlOutMessage(publicPacketUpdate(packet, others))
                 .build();
     }
 
@@ -439,7 +431,9 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
      * <p>
      * This method retrieves the current game session from the incoming message, determines the player mode
      * of the player who sent the message, and then sanitizes the game session based on that player mode.
-     * A sanitized game session update is then sent back to the originating player.
+     * A sanitized game session update is then sent back to the originating player. A non-proctor
+     * with a packet loaded also gets an id-free {@link MatchPacketUpdate} (name and counts only),
+     * because their sanitized view carries no questions to count (R4-NG-02).
      *
      * @param sockbowlInMessage The incoming message containing the player's ID and the current game session.
      *                          This is used to determine the player's mode and retrieve the relevant game session.
@@ -455,8 +449,46 @@ public class ConfigurationMessageProcessor extends MessageProcessor {
         PlayerMode playerMode = gameSession.getPlayerModeById(sockbowlInMessage.getOriginatingPlayerId());
 
         // Sanitize and return the session
+        String recipient = sockbowlInMessage.getOriginatingPlayerId();
         GameSession gameSessionSanitized = GameSanitizer.sanitizeGameSession(gameSession, playerMode);
-        return GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(sockbowlInMessage.getOriginatingPlayerId()).build();
+        GameSessionUpdate update = GameSessionUpdate.builder().gameSession(gameSessionSanitized).recipient(recipient).build();
+
+        // A non-proctor's view carries no tossups or bonuses (and no packet
+        // id), so a player who joins or reloads after the packet was loaded
+        // would never learn its counts (R4-NG-02). They also get the id-free
+        // MatchPacketUpdate the load sent everyone else, after the session so
+        // it applies to the match it describes. The proctor's view already
+        // holds the whole packet.
+        Packet loaded = gameSession.loadedPacketId() == null ? null : gameSession.getCurrentMatch().getPacket();
+        if (loaded == null || playerMode == PlayerMode.PROCTOR) {
+            return update;
+        }
+        return SockbowlMultiOutMessage.builder()
+                .sockbowlOutMessage(update)
+                .sockbowlOutMessage(publicPacketUpdate(loaded, List.of(recipient)))
+                .build();
+    }
+
+    /**
+     * The id-free MatchPacketUpdate every non-proctor receives for a loaded
+     * packet (R3-G-01): name and counts only, never the id or any question.
+     */
+    private static MatchPacketUpdate publicPacketUpdate(Packet packet, List<String> recipients) {
+        return MatchPacketUpdate.builder()
+                .packetId(null)
+                .packetName(packet.getName())
+                .tossupCount(tossupCount(packet))
+                .bonusCount(bonusCount(packet))
+                .recipients(recipients)
+                .build();
+    }
+
+    private static int tossupCount(Packet packet) {
+        return packet.getTossups() == null ? 0 : packet.getTossups().size();
+    }
+
+    private static int bonusCount(Packet packet) {
+        return packet.getBonuses() == null ? 0 : packet.getBonuses().size();
     }
 
     /**
