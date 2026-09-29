@@ -7,6 +7,7 @@ import com.soulsoftworks.sockbowlgame.repository.UserGameHistoryRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserRepository;
 import com.soulsoftworks.sockbowlgame.repository.UserStatsRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -51,23 +52,40 @@ public class UserService {
      * Find or create a user by their Keycloak ID.
      * If the user doesn't exist, creates a new user record.
      *
+     * <p>The profile page (and any other caller that fans out several
+     * {@code /api/v1/user/*} requests at once for the same signed-in user,
+     * e.g. Angular's {@code forkJoin} of profile+stats+history) can call this
+     * concurrently before any row exists yet. Both calls see no row, both try
+     * to {@code INSERT}, and the loser hits the {@code users} table's unique
+     * constraint on {@code keycloak_id}/{@code email} instead of returning a
+     * user -- so this treats that race as "someone else just created it" and
+     * re-reads the row the winner committed, rather than letting the
+     * constraint violation escape as a request failure.
+     *
      * @param keycloakId the Keycloak user ID (JWT sub claim)
      * @param email the user's email from Keycloak
      * @param name the user's name from Keycloak
      * @return The user (existing or newly created)
      */
     public User findOrCreateUser(String keycloakId, String email, String name) {
-        return userRepository.findByKeycloakId(keycloakId)
-            .orElseGet(() -> {
-                User newUser = User.builder()
-                    .keycloakId(keycloakId)
-                    .email(email)
-                    .name(name)
-                    .createdAt(Instant.now())
-                    .lastLoginAt(Instant.now())
-                    .build();
-                return userRepository.save(newUser);
-            });
+        Optional<User> existing = userRepository.findByKeycloakId(keycloakId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        User newUser = User.builder()
+            .keycloakId(keycloakId)
+            .email(email)
+            .name(name)
+            .createdAt(Instant.now())
+            .lastLoginAt(Instant.now())
+            .build();
+        try {
+            return userRepository.save(newUser);
+        } catch (DataIntegrityViolationException raceLost) {
+            return userRepository.findByKeycloakId(keycloakId)
+                .orElseThrow(() -> raceLost);
+        }
     }
 
     /**
