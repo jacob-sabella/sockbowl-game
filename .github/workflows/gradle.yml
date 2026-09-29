@@ -4,30 +4,24 @@ on:
   push:
     branches:
       - "main"
+      - "goal/**"
       - "release/**"
     tags:
       - "v*"
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Credentials for resolving the sockbowlquestions-models artifact from GitHub
-# Packages (game's build.gradle reads these). The default GITHUB_TOKEN works
-# once the package grants sockbowl-game read access; otherwise set a
-# PACKAGES_TOKEN secret (a PAT with read:packages).
-#
 # gradle/actions is pinned at v5, not the latest v6: v6 extracts its caching
 # functionality into a separate `gradle-actions-caching` component under a
 # proprietary commercial license (see
 # https://blog.gradle.org/github-actions-for-gradle-v6), while v5 is a
 # straightforward, MIT-licensed Node-24 bump from v4. Revisit if/when that
 # licensing changes or the caching component is specifically wanted.
-env:
-  GITHUB_ACTOR: ${{ github.actor }}
-  GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
 
 jobs:
   test:
@@ -35,11 +29,27 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+
+      - name: Read sockbowlQuestionsRef from gradle.properties
+        id: questions-ref
+        run: |
+          REF=$(grep -E '^sockbowlQuestionsRef=' gradle.properties | cut -d= -f2-)
+          if [ -z "$REF" ]; then
+            echo "sockbowlQuestionsRef not set in gradle.properties" >&2
+            exit 1
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout sockbowl-questions (public, for the models jar)
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: jacob-sabella/sockbowl-questions
+          ref: ${{ steps.questions-ref.outputs.ref }}
+          path: sockbowl-questions
 
       - name: Set up JDK 25
         uses: actions/setup-java@v6.0.1
@@ -51,13 +61,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      # Avoids the GitHub Packages 401 in CI: build the models jar from source
+      # (at gradle.properties' sockbowlQuestionsRef) and publish it to this
+      # runner's mavenLocal instead of resolving it from GitHub Packages. The
+      # build-and-publish job below is unaffected and keeps the Packages path.
+      - name: Publish sockbowlquestions-models to mavenLocal
+        working-directory: sockbowl-questions
+        run: |
+          chmod +x gradlew
+          ./gradlew publishToMavenLocal
+
       - name: Run tests
         run: |
           chmod +x gradlew
-          ./gradlew test
+          ./gradlew test -PsockbowlUseMavenLocal=true
 
       - name: Publish test results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@v2.24.0
         if: always()
         with:
           files: |
@@ -66,9 +86,20 @@ jobs:
   build-and-publish:
     needs: test
     runs-on: ubuntu-latest
+    # GHCR push only happens from main or a version tag; a goal/** or
+    # release/** branch run, or a PR, never tries to push.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       packages: write
+
+    # Credentials for resolving the sockbowlquestions-models artifact from
+    # GitHub Packages (game's build.gradle reads these). The default
+    # GITHUB_TOKEN works once the package grants sockbowl-game read access;
+    # otherwise set a PACKAGES_TOKEN secret (a PAT with read:packages).
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout
@@ -91,8 +122,8 @@ jobs:
         id: ver
         run: |
           chmod +x gradlew
-          echo "VERSION=$(./gradlew -q printVersion)" >> $GITHUB_ENV
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$(./gradlew -q printVersion)" >> "$GITHUB_ENV"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image with Spring Boot (pack)
         run: ./gradlew bootBuildImage
@@ -111,6 +142,9 @@ jobs:
 
   dependency-submission:
     runs-on: ubuntu-latest
+    # Submitting the dependency graph is a write action; only do it from main
+    # or a version tag, same as build-and-publish.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
