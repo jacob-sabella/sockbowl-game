@@ -135,6 +135,10 @@ public class GameMessageProcessor extends MessageProcessor {
         // Auto-proctor: no proctor to receive a full-context copy — broadcast the buzz to
         // everyone with the question visible and the answer hidden.
         if (gameSession.getGameSettings().isAutoJudgedMultiplayer()) {
+            // The buzzer gets a fixed, server-timed window to answer (GameTimerService
+            // marks it wrong on expiry), so no one player can hold the game.
+            gameSession.getCurrentRound().startAnswerTimer(
+                    gameSession.getGameSettings().getTimerSettings().getAnswerTimerSeconds());
             PlayerBuzzed buzzed = PlayerBuzzed.builder()
                     .playerId(playerBuzz.getOriginatingPlayerId())
                     .teamId(teamId)
@@ -349,6 +353,7 @@ public class GameMessageProcessor extends MessageProcessor {
                     .error("Only the buzzed-in player may answer").build();
         }
 
+        round.clearAnswerTimer();
         String eligibleTeam = round.getCurrentBuzz().getTeamId();
         boolean correct = answerJudgeService.judge(round.getAnswer(), submitAnswer.getAnswerText()).isAccept();
 
@@ -395,6 +400,7 @@ public class GameMessageProcessor extends MessageProcessor {
                     .error("Only the team that won the tossup may answer the bonus").build();
         }
 
+        round.clearBonusTimer();
         int idx = round.getCurrentBonusPartIndex();
         if (idx >= round.bonusPartCount()) {
             // Unreachable while the round is awaiting a bonus answer: the bonus
@@ -409,16 +415,23 @@ public class GameMessageProcessor extends MessageProcessor {
         if (round.getRoundState() == RoundState.BONUS_COMPLETED) {
             gameSession.getCurrentMatch().completeRound();
         } else {
-            autoBonusReady(round);
+            autoBonusReady(gameSession);
         }
         return createProctorlessAnswerUpdate(gameSession, correct);
     }
 
-    /** Collapse the proctor-read bonus states straight to "awaiting answer" — there's no proctor. */
-    private void autoBonusReady(Round round) {
+    /**
+     * Collapse the proctor-read bonus states straight to "awaiting answer" — there's no
+     * proctor — and start the server-timed window for the part now being answered.
+     */
+    private void autoBonusReady(GameSession gameSession) {
+        Round round = gameSession.getCurrentRound();
         RoundState s = round.getRoundState();
         if (s == RoundState.BONUS_READING_PREAMBLE || s == RoundState.BONUS_READING_PART) {
             round.setRoundState(RoundState.BONUS_AWAITING_ANSWER);
+        }
+        if (round.getRoundState() == RoundState.BONUS_AWAITING_ANSWER) {
+            round.startBonusTimer(gameSession.getGameSettings().getTimerSettings().getBonusTimerSeconds());
         }
     }
 
@@ -664,6 +677,7 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Enter the bonus exactly where autoBonusReady would have left it: part 0, awaiting answer.
         round.setRoundState(RoundState.BONUS_AWAITING_ANSWER);
+        autoBonusReady(gameSession);
 
         return createProctorlessAnswerUpdate(gameSession, true);
     }
@@ -919,6 +933,12 @@ public class GameMessageProcessor extends MessageProcessor {
     public SockbowlOutMessage timeoutBonusPart(SockbowlInMessage message) {
         GameSession gameSession = message.getGameSession();
 
+        // Auto-judged multiplayer: the server's bonus timer expired (sent as the owner,
+        // see GameTimerService#timerExpiryOriginatorId). Same outcome as a wrong answer.
+        if (gameSession.getGameSettings().isAutoJudgedMultiplayer()) {
+            return autoTimeoutBonusPart(gameSession, message);
+        }
+
         // Check if the player is the proctor
         if (gameSession.getPlayerModeById(message.getOriginatingPlayerId()) != PlayerMode.PROCTOR) {
             return ProcessError.accessDeniedMessage(message);
@@ -947,6 +967,28 @@ public class GameMessageProcessor extends MessageProcessor {
 
         // Return bonus update message
         return createBonusUpdateMessages(gameSession, currentPartIndex, false);
+    }
+
+    /** {@link #timeoutBonusPart} for AUTO_PROCTOR / FREE_FOR_ALL: owner only, marks the part wrong. */
+    private SockbowlOutMessage autoTimeoutBonusPart(GameSession gameSession, SockbowlInMessage message) {
+        if (!authorizationPolicy.isSessionOwner(gameSession, message.getOriginatingPlayerId())) {
+            return ProcessError.accessDeniedMessage(message);
+        }
+        Round round = gameSession.getCurrentRound();
+        if (round.getRoundState() != RoundState.BONUS_AWAITING_ANSWER) {
+            return ProcessError.builder()
+                    .recipient(message.getOriginatingPlayerId())
+                    .error("Timeout bonus part message processed when not awaiting answer")
+                    .build();
+        }
+        round.clearBonusTimer();
+        round.timeoutBonusPart();
+        if (round.getRoundState() == RoundState.BONUS_COMPLETED) {
+            gameSession.getCurrentMatch().completeRound();
+        } else {
+            autoBonusReady(gameSession);
+        }
+        return createProctorlessAnswerUpdate(gameSession, false);
     }
 
     /**

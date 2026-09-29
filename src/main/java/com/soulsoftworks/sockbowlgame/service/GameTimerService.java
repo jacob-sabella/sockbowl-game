@@ -1,5 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.ReadingUpdate;
@@ -154,8 +156,68 @@ public class GameTimerService {
             }
         }
 
+        if (gameMode != null && gameMode.isAutoJudgedMultiplayer()) {
+            processAutoJudgedTimers(session, currentRound, timerSettings);
+        }
+
         // Save updated session back to Redis
         sessionService.saveGameSession(session);
+    }
+
+    /**
+     * AUTO_PROCTOR / FREE_FOR_ALL only: the two waits that used to depend on one
+     * player. The buzzed-in player's answer window (expiry submits an empty answer
+     * on their behalf, judged wrong exactly like a wrong guess), and the pause on a
+     * finished round, after which the server advances on its own instead of waiting
+     * for the host's browser. Both tick here, so every player sees the same clock.
+     */
+    private void processAutoJudgedTimers(GameSession session, Round round, TimerSettings timerSettings) {
+        if (round.isAnswerTimerActive() && round.getRoundState() == RoundState.AWAITING_ANSWER) {
+            int remaining = round.getRemainingAnswerTimerSeconds() - 1;
+            round.setRemainingAnswerTimerSeconds(remaining);
+            broadcastTimerUpdate(session, "ANSWER", remaining);
+            if (remaining <= 0) {
+                round.clearAnswerTimer();
+                if (round.getCurrentBuzz() != null) {
+                    messageService.sendMessage(SubmitAnswer.builder()
+                            .gameSessionId(session.getId())
+                            .originatingPlayerId(round.getCurrentBuzz().getPlayerId())
+                            .answerText("")
+                            .build());
+                    log.debug("Answer window expired in session {}", session.getId());
+                }
+            }
+        }
+
+        if (round.getRoundState() != RoundState.COMPLETED) {
+            return;
+        }
+        if (!round.isAutoAdvanceArmed()) {
+            round.armAutoAdvance(Math.max(1, timerSettings.getAdvanceDelaySeconds()));
+            broadcastTimerUpdate(session, "ADVANCE", round.getRemainingAdvanceSeconds());
+            return;
+        }
+        Integer left = round.getRemainingAdvanceSeconds();
+        if (left == null) {
+            return; // already fired; waiting for the AdvanceRound to be processed
+        }
+        int remaining = left - 1;
+        if (remaining > 0) {
+            round.setRemainingAdvanceSeconds(remaining);
+            broadcastTimerUpdate(session, "ADVANCE", remaining);
+            return;
+        }
+        round.clearAutoAdvance();
+        broadcastTimerUpdate(session, "ADVANCE", 0);
+        String owner = timerExpiryOriginatorId(session);
+        if (owner != null) {
+            // AdvanceRound only acts on a COMPLETED round, so a host who already
+            // clicked Next makes this a harmless no-op.
+            messageService.sendMessage(AdvanceRound.builder()
+                    .gameSessionId(session.getId())
+                    .originatingPlayerId(owner)
+                    .build());
+        }
     }
 
     /**

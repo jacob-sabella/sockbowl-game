@@ -44,4 +44,22 @@ public class TimerSettings {
      */
     @Builder.Default
     private int readingWordsPerSecond = 4;
+
+    /**
+     * Auto-judged multiplayer (AUTO_PROCTOR / FREE_FOR_ALL): seconds the buzzed-in
+     * player has to submit an answer before the server marks it wrong. Server-driven,
+     * identical for every player.
+     * Default: 10 seconds
+     */
+    @Builder.Default
+    private int answerTimerSeconds = 10;
+
+    /**
+     * Auto-judged multiplayer: seconds the result of a finished round stays up
+     * before the server advances to the next tossup on its own (the host can
+     * still advance sooner).
+     * Default: 6 seconds
+     */
+    @Builder.Default
+    private int advanceDelaySeconds = 6;
 }

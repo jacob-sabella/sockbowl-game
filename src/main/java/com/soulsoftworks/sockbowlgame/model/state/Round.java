@@ -37,6 +37,12 @@ public class Round {
     // Timer-related fields
     private Integer remainingTossupTimerSeconds;  // null = no active timer
     private Integer remainingBonusTimerSeconds;   // null = no active timer
+    // Auto-judged multiplayer only: the buzzed-in player's answer window, and the
+    // pause on a finished round before the server advances (null = not running).
+    private Integer remainingAnswerTimerSeconds;
+    private Integer remainingAdvanceSeconds;
+    // Set once the advance pause has been armed for this round, so it never re-arms.
+    private boolean autoAdvanceArmed = false;
     private Long timerStartedAtMillis;            // timestamp when timer started
 
     // Reveal-related fields (AUTO_PROCTOR only; unused/zero for other modes)
@@ -270,6 +276,29 @@ public class Round {
     public void startBonusTimer(int durationSeconds) {
         this.remainingBonusTimerSeconds = durationSeconds;
         this.timerStartedAtMillis = System.currentTimeMillis();
+    }
+
+    /** Starts the buzzed-in player's answer window (auto-judged multiplayer). */
+    public void startAnswerTimer(int durationSeconds) {
+        this.remainingAnswerTimerSeconds = durationSeconds;
+    }
+
+    public void clearAnswerTimer() {
+        this.remainingAnswerTimerSeconds = null;
+    }
+
+    public boolean isAnswerTimerActive() {
+        return remainingAnswerTimerSeconds != null && remainingAnswerTimerSeconds > 0;
+    }
+
+    /** Arms the pause before the server advances a finished round; only ever once per round. */
+    public void armAutoAdvance(int delaySeconds) {
+        this.autoAdvanceArmed = true;
+        this.remainingAdvanceSeconds = delaySeconds;
+    }
+
+    public void clearAutoAdvance() {
+        this.remainingAdvanceSeconds = null;
     }
 
     /**

@@ -2,6 +2,7 @@ package com.soulsoftworks.sockbowlgame.service.processor;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.PlayerIncomingBuzz;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
 import com.soulsoftworks.sockbowlgame.model.socket.out.SockbowlOutMessage;
@@ -255,5 +256,71 @@ class AutoProctorTossupTest {
         SockbowlOutMessage result = timeout(p1);
         assertInstanceOf(ProcessError.class, result);
         assertEquals(RoundState.AWAITING_BUZZ, round().getRoundState());
+    }
+
+    /* ------------------------- server-timed windows ------------------------ */
+
+    private SockbowlOutMessage timeoutBonus(Player p) {
+        return processor.timeoutBonusPart(TimeoutBonusPart.builder()
+                .gameSession(session).originatingPlayerId(p.getPlayerId()).isAutoTimeout(true).build());
+    }
+
+    @Test
+    @DisplayName("A buzz starts the server's answer window; answering stops it")
+    void buzzStartsAnswerWindow() {
+        session.getGameSettings().getTimerSettings().setAnswerTimerSeconds(7);
+        buzz(p1);
+        assertEquals(7, round().getRemainingAnswerTimerSeconds());
+
+        submit(p1, "Hitler");
+        assertNull(round().getRemainingAnswerTimerSeconds());
+    }
+
+    @Test
+    @DisplayName("The empty answer the server submits on expiry counts as a wrong buzz")
+    void expiredAnswerIsWrong() {
+        buzz(p1);
+        AnswerUpdate update = (AnswerUpdate) ((SockbowlMultiOutMessage) submit(p1, ""))
+                .getSockbowlOutMessages().get(0);
+        assertFalse(update.isCorrect());
+        assertNotEquals(RoundState.AWAITING_ANSWER, round().getRoundState());
+        assertTrue(round().hasTeamBuzzed("TEST-TEAM-1"));
+    }
+
+    @Test
+    @DisplayName("Each bonus part gets the server's bonus timer; a timeout marks it wrong and moves on")
+    void bonusPartsAreTimed() {
+        attachBonus();
+        session.getGameSettings().getTimerSettings().setBonusTimerSeconds(9);
+        buzz(p1);
+        submit(p1, "Napoleon");
+        assertNull(round().getRemainingBonusTimerSeconds(), "no timer while the bonus is pending");
+
+        startBonus(p1);
+        assertEquals(9, round().getRemainingBonusTimerSeconds());
+
+        submit(p1, "alpha");
+        assertEquals(1, round().getCurrentBonusPartIndex());
+        assertEquals(9, round().getRemainingBonusTimerSeconds(), "re-armed for the next part");
+
+        assertInstanceOf(SockbowlMultiOutMessage.class, timeoutBonus(p1));
+        assertEquals(2, round().getCurrentBonusPartIndex());
+        assertFalse(round().getBonusPartAnswers().get(1).isCorrect());
+
+        timeoutBonus(p1);
+        assertEquals(RoundState.COMPLETED, round().getRoundState());
+        assertEquals(10, round().getBonusPoints());
+    }
+
+    @Test
+    @DisplayName("Only the owner (the server's stand-in) may time out a bonus part")
+    void nonOwnerBonusTimeoutRejected() {
+        attachBonus();
+        buzz(p1);
+        submit(p1, "Napoleon");
+        startBonus(p1);
+
+        assertInstanceOf(ProcessError.class, timeoutBonus(p2));
+        assertEquals(0, round().getCurrentBonusPartIndex());
     }
 }
