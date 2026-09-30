@@ -112,6 +112,17 @@ class AutoProctorTossupTest {
     }
 
     @Test
+    @DisplayName("What each player typed is kept with their buzz")
+    void typedAnswersAreRecorded() {
+        buzz(p1);
+        submit(p1, "Hitler");
+        buzz(p2);
+        submit(p2, "napolean");
+        assertEquals("Hitler", round().getBuzzList().get(0).getAnswerText());
+        assertEquals("napolean", round().getBuzzList().get(1).getAnswerText());
+    }
+
+    @Test
     @DisplayName("Only the buzzed-in player may answer")
     void onlyBuzzerAnswers() {
         buzz(p1);

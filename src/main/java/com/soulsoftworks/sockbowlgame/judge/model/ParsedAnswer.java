@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.judge.model;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -15,6 +16,9 @@ import java.util.Set;
  * @param rejected       explicitly disallowed answers ("do not accept steel")
  * @param clarifications parentheticals kept for display, ignored for matching
  * @param display        a human-readable rendering of the answer line
+ * @param required       for each accepted answer with underlining, its underlined (required)
+ *                       words, e.g. "Heinrich Theodor Böll" → "Böll"; absent when unmarked, so
+ *                       a missing entry means the line doesn't say what is required
  */
 public record ParsedAnswer(
         String primary,
@@ -23,5 +27,6 @@ public record ParsedAnswer(
         Set<String> promptable,
         Set<String> rejected,
         List<String> clarifications,
-        String display
+        String display,
+        Map<String, String> required
 ) {}

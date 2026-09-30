@@ -9,8 +9,10 @@ class TimerSettingsDefaultsTest {
     @Test
     void newTimerFieldsKeepTheirDefaultsWithoutTheBuilder() {
         TimerSettings s = new TimerSettings();
-        assertEquals(10, s.getAnswerTimerSeconds());
-        assertEquals(6, s.getAdvanceDelaySeconds());
-        assertEquals(5, s.getBonusTimerSeconds());
+        assertEquals(15, s.getAnswerTimerSeconds());
+        assertEquals(10, s.getAdvanceDelaySeconds());
+        assertEquals(15, s.getBonusTimerSeconds());
+        assertEquals(8, s.getTossupTimerSeconds());
+        assertEquals(3, s.getReadingWordsPerSecond());
     }
 }

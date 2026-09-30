@@ -4,6 +4,7 @@ import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.ReadingUpdate;
+import com.soulsoftworks.sockbowlgame.util.QuestionTokenizer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.TimerUpdate;
 import com.soulsoftworks.sockbowlgame.model.state.Buzz;
 import com.soulsoftworks.sockbowlgame.model.state.GameMode;
@@ -83,20 +84,45 @@ class GameTimerServiceTest {
     }
 
     @Test
-    void revealAdvancesByWordsPerSecondEachTick() {
+    void revealSpendsOneSecondOfReadingPerTick() {
+        // 4 words/s is 250ms for an average word; these short words cost 187-203ms each,
+        // so one second buys five of them, and the ~48ms left carries into the next tick.
         GameSession session = buildSession(GameMode.AUTO_PROCTOR, RoundState.PROCTOR_READING, 0, 20, 4);
 
         gameTimerService.processTimers();
 
         Round round = session.getCurrentRound();
-        assertEquals(4, round.getRevealedWordCount());
+        assertEquals(5, round.getRevealedWordCount());
+        assertEquals(47, round.getReadingCarryMillis());
 
         ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
         verify(messagingTemplate).convertAndSend(anyString(), captor.capture());
         ReadingUpdate update = (ReadingUpdate) captor.getValue();
-        assertEquals(4, update.getRevealedWordCount());
+        assertEquals(5, update.getRevealedWordCount());
         assertEquals(20, update.getTotalWordCount());
-        assertEquals("one two three four", update.getRevealedText());
+        assertEquals("one two three four five", update.getRevealedText());
+    }
+
+    @Test
+    void sentenceEndsAndLongWordsTakeLongerToRead() {
+        GameSession session = buildSession(GameMode.AUTO_PROCTOR, RoundState.PROCTOR_READING, 0, 6, 4);
+        session.getCurrentRound().setQuestion("Extraordinarily, the <b>cat</b> sat. Then slept.");
+
+        gameTimerService.processTimers();
+        // "Extraordinarily," 1.35+0.5 → 462ms; "the" 187; "cat" 187; "sat." 437 doesn't fit.
+        assertEquals(3, session.getCurrentRound().getRevealedWordCount());
+
+        gameTimerService.processTimers();
+        assertEquals(6, session.getCurrentRound().getRevealedWordCount());
+        assertEquals(5, session.getCurrentRound().getRemainingTossupTimerSeconds()); // fully read: the buzz window starts
+    }
+
+    @Test
+    void wordWeightsFollowLengthAndPunctuation() {
+        assertEquals(0.75, QuestionTokenizer.wordWeight("the"), 1e-9);
+        assertEquals(1.35, QuestionTokenizer.wordWeight("extraordinarily"), 1e-9);
+        assertEquals(1.25, QuestionTokenizer.wordWeight("cat,"), 1e-9);
+        assertEquals(1.75, QuestionTokenizer.wordWeight("cat.\u201D"), 1e-9);
     }
 
     @Test

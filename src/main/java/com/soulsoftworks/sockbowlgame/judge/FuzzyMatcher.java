@@ -26,11 +26,15 @@ public final class FuzzyMatcher {
         if (a.equals(b)) {
             return 1.0;
         }
-        double jw = jaroWinkler.apply(a, b);
         int dist = levenshtein.apply(a, b);
         int maxLen = Math.max(a.length(), b.length());
         double levRatio = maxLen == 0 ? 0.0 : 1.0 - ((double) dist / maxLen);
-        return Math.max(jw, levRatio);
+        // Jaro-Winkler rewards a shared prefix, so "philips cdi" scores ~0.93 against
+        // "philips". Only trust it for typos, where the lengths are close.
+        if (Math.min(a.length(), b.length()) < 0.8 * maxLen) {
+            return levRatio;
+        }
+        return Math.max(jaroWinkler.apply(a, b), levRatio);
     }
 
     /** True when two strings encode to the same English phonetic key (both non-empty). */

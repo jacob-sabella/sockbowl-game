@@ -308,6 +308,7 @@ public class GameMessageProcessor extends MessageProcessor {
         // Register the buzz (moves the round to AWAITING_ANSWER) and stop the timer.
         gameSession.getCurrentRound().processBuzz(message.getOriginatingPlayerId(), teamId);
         gameSession.getCurrentRound().clearTossupTimer();
+        gameSession.getCurrentRound().getCurrentBuzz().setAnswerText(submitAnswer.getAnswerText());
 
         // Judge the guess against the tossup's answer line.
         JudgeResult verdict = answerJudgeService.judge(
@@ -354,6 +355,7 @@ public class GameMessageProcessor extends MessageProcessor {
         }
 
         round.clearAnswerTimer();
+        round.getCurrentBuzz().setAnswerText(submitAnswer.getAnswerText());
         String eligibleTeam = round.getCurrentBuzz().getTeamId();
         boolean correct = answerJudgeService.judge(round.getAnswer(), submitAnswer.getAnswerText()).isAccept();
 
@@ -409,7 +411,7 @@ public class GameMessageProcessor extends MessageProcessor {
                     .error("The bonus has no part " + idx).build();
         }
         boolean correct = answerJudgeService.judge(bonusPartAnswerAt(round, idx), submitAnswer.getAnswerText()).isAccept();
-        round.processBonusPartAnswer(idx, correct);
+        round.processBonusPartAnswer(idx, correct, submitAnswer.getAnswerText());
         round.advanceToNextBonusPart();
 
         if (round.getRoundState() == RoundState.BONUS_COMPLETED) {

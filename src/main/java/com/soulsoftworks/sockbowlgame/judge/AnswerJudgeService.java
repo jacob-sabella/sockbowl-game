@@ -5,7 +5,9 @@ import com.soulsoftworks.sockbowlgame.judge.model.ParsedAnswer;
 import com.soulsoftworks.sockbowlgame.judge.model.Verdict;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -80,12 +82,18 @@ public class AnswerJudgeService {
         Match bestAccept = null;
         Match bestSubsetPrompt = null;
         for (String target : acceptTargets) {
-            Match m = classify(guess, target);
+            Match m = coversRequiredPart(guess, target, parsed.required().get(target));
+            if (m == null) {
+                m = classify(guess, target);
+            }
             if (m.verdict == Verdict.ACCEPT && (bestAccept == null || m.confidence > bestAccept.confidence)) {
                 bestAccept = m;
             } else if (m.verdict == Verdict.PROMPT && (bestSubsetPrompt == null || m.confidence > bestSubsetPrompt.confidence)) {
                 bestSubsetPrompt = m;
             }
+        }
+        if (bestAccept == null && coversWithClarifications(guess, parsed)) {
+            bestAccept = new Match(Verdict.ACCEPT, 0.9, parsed.primary());
         }
         if (bestAccept != null) {
             return new JudgeResult(Verdict.ACCEPT, bestAccept.confidence, bestAccept.target,
@@ -103,13 +111,55 @@ public class AnswerJudgeService {
 
     private record Match(Verdict verdict, double confidence, String target) {}
 
+    /**
+     * ACCEPT when the guess is part of {@code targetRaw} and includes everything the line
+     * requires: its underlined words when it has any ("Heinrich Böll" for "Heinrich Theodor
+     * <u>Böll</u>"), otherwise the last word, when it is distinctive or with at least half the
+     * words (a surname, or "CD-i" for "Philips CD-i"; AI-written lines carry no underlining). Null when this
+     * rule doesn't apply, so {@link #classify} decides.
+     */
+    private Match coversRequiredPart(String guess, String targetRaw, String requiredRaw) {
+        List<String> targetWords = new ArrayList<>(normalizer.significantTokens(targetRaw));
+        Set<String> guessWords = normalizer.significantTokens(guess);
+        if (guessWords.isEmpty() || targetWords.isEmpty() || !targetWords.containsAll(guessWords)
+                || guessWords.size() == targetWords.size()) {
+            return null;
+        }
+        boolean covered;
+        if (requiredRaw != null && !requiredRaw.isBlank()) {
+            Set<String> requiredWords = normalizer.significantTokens(requiredRaw);
+            covered = !requiredWords.isEmpty() && guessWords.containsAll(requiredWords);
+        } else {
+            // The last word (a surname, usually) carries it when it's distinctive, so
+            // "Mozart" covers "Wolfgang Amadeus Mozart" but "city" doesn't cover "New York City".
+            String last = targetWords.getLast();
+            covered = guessWords.contains(last) && (guessWords.size() * 2 >= targetWords.size() || last.length() >= 5);
+        }
+        return covered ? new Match(Verdict.ACCEPT, 0.9, targetRaw) : null;
+    }
+
+    /**
+     * The full answer plus words from its parenthetical, e.g. "Sonobe Kyoto" for
+     * "Sonobe (Kyoto Prefecture)": the clarification is optional, so saying it is fine.
+     */
+    private boolean coversWithClarifications(String guess, ParsedAnswer parsed) {
+        Set<String> guessWords = normalizer.significantTokens(guess);
+        Set<String> primaryWords = normalizer.significantTokens(parsed.primary());
+        if (primaryWords.isEmpty() || parsed.clarifications().isEmpty() || !guessWords.containsAll(primaryWords)) {
+            return false;
+        }
+        Set<String> allowed = new LinkedHashSet<>(primaryWords);
+        parsed.clarifications().forEach(c -> allowed.addAll(normalizer.significantTokens(c)));
+        return allowed.containsAll(guessWords);
+    }
+
     /** Classifies a normalized guess against one target answer string. */
     private Match classify(String guess, String targetRaw) {
         String target = normalizer.normalize(targetRaw);
         if (target.isEmpty()) {
             return new Match(Verdict.REJECT, 0.0, targetRaw);
         }
-        if (guess.equals(target)) {
+        if (guess.equals(target) || guess.replace(" ", "").equals(target.replace(" ", ""))) {
             return new Match(Verdict.ACCEPT, 1.0, targetRaw);
         }
 

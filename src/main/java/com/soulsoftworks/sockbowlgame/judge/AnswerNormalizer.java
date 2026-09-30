@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 public final class AnswerNormalizer {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
+    /** Hyphens join rather than split, so "CD-i" is "cdi" and "BS-X" is "bsx". */
+    private static final Pattern HYPHEN = Pattern.compile("[-\u2010\u2011\u2012\u2013]");
     private static final Pattern NON_ALNUM = Pattern.compile("[^a-z0-9 ]");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern LEADING_ARTICLE = Pattern.compile("^(a|an|the)\\s+");
@@ -31,6 +33,7 @@ public final class AnswerNormalizer {
         String s = Normalizer.normalize(raw, Normalizer.Form.NFD);
         s = DIACRITICS.matcher(s).replaceAll("");
         s = s.toLowerCase();
+        s = HYPHEN.matcher(s).replaceAll("");
         s = NON_ALNUM.matcher(s).replaceAll(" ");
         s = WHITESPACE.matcher(s).replaceAll(" ").trim();
         // Strip a single leading article (repeat to be safe on "the a ..." oddities).

@@ -10,4 +10,6 @@ import lombok.Data;
 public class BonusPartAnswer {
     private int partIndex;  // 0 to (number of bonus parts - 1); a bonus has 1 to 6 parts
     private boolean correct;
+    /** What the team typed, in auto-judged modes (null when a proctor judged it aloud). */
+    private String answerText;
 }

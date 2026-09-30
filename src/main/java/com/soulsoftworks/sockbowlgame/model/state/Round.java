@@ -51,6 +51,8 @@ public class Round {
     // Reveal-related fields (AUTO_PROCTOR only; unused/zero for other modes)
     private int revealedWordCount = 0;
     private int totalWordCount = 0;
+    /** Reading time (ms) left over from the last reveal tick, spent on the next word. */
+    private int readingCarryMillis = 0;
 
     /**
      * Processes a buzz action. Adds the current buzz to the buzz list if it exists,
@@ -132,6 +134,7 @@ public class Round {
 	this.category = category;
 	this.subcategory = subcategory;
         this.revealedWordCount = 0;
+        this.readingCarryMillis = 0;
         this.totalWordCount = QuestionTokenizer.tokenize(question).size();
     }
 
@@ -177,9 +180,15 @@ public class Round {
      * @param correct Whether the answer was correct
      */
     public void processBonusPartAnswer(int partIndex, boolean correct) {
+        processBonusPartAnswer(partIndex, correct, null);
+    }
+
+    /** As above, keeping what the team typed (auto-judged modes). */
+    public void processBonusPartAnswer(int partIndex, boolean correct, String answerText) {
         BonusPartAnswer bonusPartAnswer = new BonusPartAnswer();
         bonusPartAnswer.setPartIndex(partIndex);
         bonusPartAnswer.setCorrect(correct);
+        bonusPartAnswer.setAnswerText(answerText);
         bonusPartAnswers.add(bonusPartAnswer);
     }
 

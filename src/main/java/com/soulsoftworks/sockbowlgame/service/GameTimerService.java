@@ -135,16 +135,31 @@ public class GameTimerService {
             boolean revealable = state == RoundState.PROCTOR_READING || state == RoundState.AWAITING_BUZZ;
 
             if (revealable && currentRound.getRevealedWordCount() < currentRound.getTotalWordCount()) {
+                // Each tick buys one second of reading, spent word by word at the host's pace
+                // with a human cadence (QuestionTokenizer.wordWeight); what's left carries over.
                 int wordsPerSecond = Math.max(1, Math.min(10, timerSettings.getReadingWordsPerSecond()));
-                int newRevealed = Math.min(
-                        currentRound.getTotalWordCount(),
-                        currentRound.getRevealedWordCount() + wordsPerSecond);
-                currentRound.setRevealedWordCount(newRevealed);
+                double msPerWord = 1000.0 / wordsPerSecond;
+                List<String> words = QuestionTokenizer.tokenize(currentRound.getQuestion());
+                double budget = 1000.0 + currentRound.getReadingCarryMillis();
+                int newRevealed = currentRound.getRevealedWordCount();
+                while (newRevealed < Math.min(words.size(), currentRound.getTotalWordCount())) {
+                    double cost = msPerWord * QuestionTokenizer.wordWeight(words.get(newRevealed));
+                    if (cost > budget) {
+                        break;
+                    }
+                    budget -= cost;
+                    newRevealed++;
+                }
+                currentRound.setReadingCarryMillis((int) budget);
+                // A long pause can reveal nothing this second; the carry spends it next tick.
+                boolean advanced = newRevealed > currentRound.getRevealedWordCount();
+                if (advanced) {
+                    currentRound.setRevealedWordCount(newRevealed);
+                    String revealedText = QuestionTokenizer.truncate(currentRound.getQuestion(), newRevealed);
+                    broadcastReadingUpdate(session, revealedText, newRevealed, currentRound.getTotalWordCount());
+                }
 
-                String revealedText = QuestionTokenizer.truncate(currentRound.getQuestion(), newRevealed);
-                broadcastReadingUpdate(session, revealedText, newRevealed, currentRound.getTotalWordCount());
-
-                if (newRevealed >= currentRound.getTotalWordCount()) {
+                if (advanced && newRevealed >= currentRound.getTotalWordCount()) {
                     // Reveal complete: arm the existing tossup timer exactly as finishedReading()
                     // does in classic mode. From here on, the existing tick/expiry/auto-timeout
                     // machinery (the block above, gated on isTossupTimerActive() && AWAITING_BUZZ)

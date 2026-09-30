@@ -4,8 +4,10 @@ import com.soulsoftworks.sockbowlgame.judge.model.ParsedAnswer;
 import org.apache.commons.text.StringEscapeUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,6 +27,10 @@ import java.util.regex.Pattern;
 public final class AnswerLineParser {
 
     private static final Pattern UNDERLINE = Pattern.compile("<u\\b[^>]*>(.*?)</u>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    /** Brackets the underlined (required) words through parsing; normalization drops them. */
+    private static final char REQ_OPEN = '\u27E6';
+    private static final char REQ_CLOSE = '\u27E7';
+    private static final Pattern REQUIRED_SPAN = Pattern.compile(REQ_OPEN + "([^" + REQ_CLOSE + "]*)" + REQ_CLOSE);
     private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
     private static final Pattern ANSWER_PREFIX = Pattern.compile("^\\s*answers?\\s*:?\\s*", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAREN = Pattern.compile("\\(([^)]*)\\)");
@@ -34,7 +40,7 @@ public final class AnswerLineParser {
 
     public ParsedAnswer parse(String rawAnswer) {
         if (rawAnswer == null || rawAnswer.isBlank()) {
-            return new ParsedAnswer("", "", Set.of(), Set.of(), Set.of(), List.of(), "");
+            return new ParsedAnswer("", "", Set.of(), Set.of(), Set.of(), List.of(), "", Map.of());
         }
 
         String unescaped = StringEscapeUtils.unescapeHtml4(rawAnswer);
@@ -46,7 +52,9 @@ public final class AnswerLineParser {
             core = stripTags(u.group(1)).trim();
         }
 
-        String plain = stripTags(unescaped);
+        // Keep every underline as a marked span, so each alternate knows its own required words.
+        String plain = stripTags(UNDERLINE.matcher(unescaped)
+                .replaceAll(m -> Matcher.quoteReplacement(REQ_OPEN + stripTags(m.group(1)) + REQ_CLOSE)));
         plain = ANSWER_PREFIX.matcher(plain).replaceFirst("").trim();
 
         // Pull parentheticals out as clarifications (ignored for matching).
@@ -94,7 +102,38 @@ public final class AnswerLineParser {
             display = primary;
         }
 
-        return new ParsedAnswer(primary, core, accepted, promptable, rejected, clarifications, display);
+        // Split each marked answer into its plain full form and its required words.
+        Map<String, String> required = new LinkedHashMap<>();
+        Set<String> plainAccepted = new LinkedHashSet<>();
+        for (String a : accepted) {
+            String full = unmark(a).trim().replaceAll("\\s+", " ");
+            if (full.isEmpty()) {
+                continue;
+            }
+            plainAccepted.add(full);
+            Matcher r = REQUIRED_SPAN.matcher(a);
+            StringBuilder req = new StringBuilder();
+            while (r.find()) {
+                req.append(req.isEmpty() ? "" : " ").append(r.group(1).trim());
+            }
+            // A fully underlined answer maps to itself: every word is required.
+            if (!req.isEmpty()) {
+                required.putIfAbsent(full, req.toString());
+            }
+        }
+
+        return new ParsedAnswer(unmark(primary).trim(), unmark(core).trim(), plainAccepted, unmarkAll(promptable),
+                unmarkAll(rejected), clarifications, unmark(display).trim(), required);
+    }
+
+    private static String unmark(String s) {
+        return s.replace(String.valueOf(REQ_OPEN), "").replace(String.valueOf(REQ_CLOSE), "");
+    }
+
+    private static Set<String> unmarkAll(Set<String> set) {
+        Set<String> out = new LinkedHashSet<>();
+        set.forEach(s -> out.add(unmark(s).trim()));
+        return out;
     }
 
     /** Splits the head on the first directive keyword, routing the tail to the right bucket. */

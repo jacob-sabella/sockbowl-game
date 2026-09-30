@@ -15,6 +15,11 @@ class AnswerJudgeServiceTest {
 
     private final AnswerJudgeService judge = new AnswerJudgeService();
 
+    private static final String BREAD = "loaves of <b><u>bread</u></b> [or <b><u>loaves</u></b> of bread or <b><u>loaf</u></b> of bread; "
+            + "accept anything indicating <b><u>bread</u></b>; prompt on <u>food</u>] (Müller’s novel is <i>The Hunger Angel</i>.)";
+    private static final String CDI = "ANSWER: Philips CD-i [or Compact Disc Interactive; prompt on Philips; "
+            + "do not accept or prompt on \"Super Nintendo\" or \"Sony PlayStation\"]";
+
     static Stream<Arguments> cases() {
         String napoleon = "<b><u>Napoleon</u></b> Bonaparte";
         String unitedStates = "<u>United States</u> [accept USA or America]";
@@ -83,7 +88,26 @@ class AnswerJudgeServiceTest {
                         "<u>Portland</u> [accept Rose City; Oregon]", "Oregon", Verdict.ACCEPT),
                 // the genuine "or X" conjunction continuation still strips correctly
                 Arguments.of("or-conjunction continuation still works",
-                        "<u>United States</u> [accept USA; or America]", "America", Verdict.ACCEPT)
+                        "<u>United States</u> [accept USA; or America]", "America", Verdict.ACCEPT),
+
+                // --- lines from real games: more of the right answer never scores worse ---
+                Arguments.of("required part plus optional words", "Heinrich Theodor <b><u>Böll</u></b>",
+                        "Heinrich Böll", Verdict.ACCEPT),
+                Arguments.of("required part plus a wrong word", "Heinrich Theodor <b><u>Böll</u></b>",
+                        "Heinrich Mann", Verdict.REJECT),
+                Arguments.of("each alternate's own underline", BREAD, "loaves", Verdict.ACCEPT),
+                Arguments.of("each alternate's own underline, fuller", BREAD, "a loaf of bread", Verdict.ACCEPT),
+                Arguments.of("explicit prompt still prompts", BREAD, "food", Verdict.PROMPT),
+                // AI-written lines: no underlining, "ANSWER:" prefix
+                Arguments.of("hyphen folded", CDI, "cdi", Verdict.ACCEPT),
+                Arguments.of("unmarked line: distinctive last part", CDI, "CD-i", Verdict.ACCEPT),
+                Arguments.of("unmarked line: explicit prompt wins", CDI, "Philips", Verdict.PROMPT),
+                Arguments.of("unmarked line: surname", "ANSWER: Wolfgang Amadeus Mozart", "Mozart", Verdict.ACCEPT),
+                Arguments.of("unmarked line: generic last word prompts", "ANSWER: New York City", "city", Verdict.PROMPT),
+                Arguments.of("spaced letters match a hyphenated answer", "ANSWER: Satellaview [or BS-X]", "bs x", Verdict.ACCEPT),
+                Arguments.of("optional parenthetical may be said", "ANSWER: Sonobe (Kyoto Prefecture) [prompt on Kyoto Prefecture]",
+                        "Sonobe Kyoto", Verdict.ACCEPT),
+                Arguments.of("longer guess sharing a prefix isn't a typo", "<u>Philips</u>", "philips cdi", Verdict.REJECT)
         );
     }
 

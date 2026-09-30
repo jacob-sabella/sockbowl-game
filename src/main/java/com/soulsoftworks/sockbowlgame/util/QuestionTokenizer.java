@@ -25,6 +25,32 @@ public final class QuestionTokenizer {
         return Arrays.asList(stripped.split("\\s+"));
     }
 
+    /**
+     * How long a word takes to read relative to an average word (about 1.0), so the reveal
+     * sounds like a person reading: longer words take longer, and there's a beat after a
+     * comma and a longer one at the end of a sentence. The client paces its display with
+     * the same weights (reading-cadence.ts), so keep the two in step.
+     */
+    public static double wordWeight(String word) {
+        if (word == null || word.isEmpty()) {
+            return 0.75;
+        }
+        int letters = 0;
+        for (int i = 0; i < word.length(); i++) {
+            if (Character.isLetterOrDigit(word.charAt(i))) {
+                letters++;
+            }
+        }
+        double weight = 0.75 + Math.min(0.6, 0.06 * Math.max(0, letters - 4));
+        String end = word.replaceAll("[\"'\u201D\u2019)\\]]+$", "");
+        if (end.endsWith(".") || end.endsWith("?") || end.endsWith("!")) {
+            weight += 1.0;
+        } else if (end.endsWith(",") || end.endsWith(";") || end.endsWith(":")) {
+            weight += 0.5;
+        }
+        return weight;
+    }
+
     /** Joins the first {@code wordCount} tokens back into a plain-text string. */
     public static String truncate(String questionHtml, int wordCount) {
         List<String> tokens = tokenize(questionHtml);
