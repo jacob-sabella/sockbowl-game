@@ -56,8 +56,9 @@ public class TimerSettings {
 
     /**
      * Auto-judged multiplayer: seconds the result of a finished round stays up
-     * before the server advances to the next tossup on its own (the host can
-     * still advance sooner).
+     * before the server advances to the next tossup on its own, and likewise the
+     * pause on a won tossup before the server starts its bonus (players can
+     * still start either sooner).
      * Default: 6 seconds
      */
     @Builder.Default

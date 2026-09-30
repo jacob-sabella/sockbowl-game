@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutBonusPart;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.TimeoutRound;
@@ -83,10 +84,11 @@ public class GameTimerService {
      * Processes timers for a single game session.
      * Handles both tossup and bonus timers.
      *
-     * Invariant: BONUS_PENDING is intentionally excluded from every gate below (tossup timer
-     * requires AWAITING_BUZZ, bonus timer requires BONUS_AWAITING_ANSWER, reveal requires
-     * PROCTOR_READING/AWAITING_BUZZ). A round paused in BONUS_PENDING must never have a timer
-     * ticked or armed — do not add a BONUS_PENDING case to any branch here.
+     * Invariant: BONUS_PENDING is intentionally excluded from the tossup, bonus and reveal
+     * gates below (tossup timer requires AWAITING_BUZZ, bonus timer requires
+     * BONUS_AWAITING_ANSWER, reveal requires PROCTOR_READING/AWAITING_BUZZ). The only clock
+     * that runs in BONUS_PENDING is the auto-judged bonus-start pause in
+     * {@link #processAutoJudgedTimers}, which ends by starting the bonus.
      *
      * @param session GameSession to process
      */
@@ -189,6 +191,10 @@ public class GameTimerService {
             }
         }
 
+        if (round.getRoundState() == RoundState.BONUS_PENDING) {
+            processBonusStartPause(session, round, timerSettings);
+            return;
+        }
         if (round.getRoundState() != RoundState.COMPLETED) {
             return;
         }
@@ -214,6 +220,38 @@ public class GameTimerService {
             // AdvanceRound only acts on a COMPLETED round, so a host who already
             // clicked Next makes this a harmless no-op.
             messageService.sendMessage(AdvanceRound.builder()
+                    .gameSessionId(session.getId())
+                    .originatingPlayerId(owner)
+                    .build());
+        }
+    }
+
+    /**
+     * The pause on a won tossup before its bonus: shown to everyone, then the server
+     * starts the bonus itself (StartBonus as the owner, idempotent if the team or the
+     * host already started it), so the winning team can't hold the game.
+     */
+    private void processBonusStartPause(GameSession session, Round round, TimerSettings timerSettings) {
+        if (!round.isBonusStartArmed()) {
+            round.armBonusStart(Math.max(1, timerSettings.getAdvanceDelaySeconds()));
+            broadcastTimerUpdate(session, "BONUS_START", round.getRemainingBonusStartSeconds());
+            return;
+        }
+        Integer left = round.getRemainingBonusStartSeconds();
+        if (left == null) {
+            return; // already fired; waiting for the StartBonus to be processed
+        }
+        int remaining = left - 1;
+        if (remaining > 0) {
+            round.setRemainingBonusStartSeconds(remaining);
+            broadcastTimerUpdate(session, "BONUS_START", remaining);
+            return;
+        }
+        round.clearBonusStart();
+        broadcastTimerUpdate(session, "BONUS_START", 0);
+        String owner = timerExpiryOriginatorId(session);
+        if (owner != null) {
+            messageService.sendMessage(StartBonus.builder()
                     .gameSessionId(session.getId())
                     .originatingPlayerId(owner)
                     .build());

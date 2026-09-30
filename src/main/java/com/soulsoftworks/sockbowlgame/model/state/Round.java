@@ -43,6 +43,9 @@ public class Round {
     private Integer remainingAdvanceSeconds;
     // Set once the advance pause has been armed for this round, so it never re-arms.
     private boolean autoAdvanceArmed = false;
+    // The same, for the pause on a won tossup (BONUS_PENDING) before the server starts the bonus.
+    private Integer remainingBonusStartSeconds;
+    private boolean bonusStartArmed = false;
     private Long timerStartedAtMillis;            // timestamp when timer started
 
     // Reveal-related fields (AUTO_PROCTOR only; unused/zero for other modes)
@@ -299,6 +302,16 @@ public class Round {
 
     public void clearAutoAdvance() {
         this.remainingAdvanceSeconds = null;
+    }
+
+    /** Arms the pause before the server starts a pending bonus; only ever once per round. */
+    public void armBonusStart(int delaySeconds) {
+        this.bonusStartArmed = true;
+        this.remainingBonusStartSeconds = delaySeconds;
+    }
+
+    public void clearBonusStart() {
+        this.remainingBonusStartSeconds = null;
     }
 
     /**

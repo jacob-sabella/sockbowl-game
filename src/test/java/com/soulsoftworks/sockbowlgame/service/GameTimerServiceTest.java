@@ -1,6 +1,7 @@
 package com.soulsoftworks.sockbowlgame.service;
 
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.AdvanceRound;
+import com.soulsoftworks.sockbowlgame.model.socket.in.game.StartBonus;
 import com.soulsoftworks.sockbowlgame.model.socket.in.game.SubmitAnswer;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.ReadingUpdate;
 import com.soulsoftworks.sockbowlgame.model.socket.out.game.TimerUpdate;
@@ -249,5 +250,27 @@ class GameTimerServiceTest {
         }
         verify(messageService, never()).sendMessage(any());
         assertFalse(session.getCurrentRound().isAutoAdvanceArmed());
+    }
+
+    @Test
+    void pendingBonusStartsOnTheServerAfterTheDelayExactlyOnce() {
+        GameSession session = autoSession(GameMode.FREE_FOR_ALL, RoundState.BONUS_PENDING);
+
+        gameTimerService.processTimers(); // arms: 3
+        gameTimerService.processTimers(); // 2
+        gameTimerService.processTimers(); // 1
+        verify(messageService, never()).sendMessage(any());
+
+        gameTimerService.processTimers(); // fires
+        ArgumentCaptor<StartBonus> sent = ArgumentCaptor.forClass(StartBonus.class);
+        verify(messageService).sendMessage(sent.capture());
+        assertEquals("owner", sent.getValue().getOriginatingPlayerId());
+
+        gameTimerService.processTimers();
+        verify(messageService, times(1)).sendMessage(any());
+        assertEquals(List.of(3, 2, 1, 0), timerUpdates("BONUS_START").stream().map(TimerUpdate::getRemainingSeconds).toList());
+        // No other clock runs while the bonus is pending.
+        assertEquals(null, session.getCurrentRound().getRemainingBonusTimerSeconds());
+        assertEquals(null, session.getCurrentRound().getRemainingTossupTimerSeconds());
     }
 }
