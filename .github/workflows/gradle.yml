@@ -59,7 +59,7 @@ jobs:
           cache: 'gradle'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       # Avoids the GitHub Packages 401 in CI: build the models jar from source
       # (at gradle.properties' sockbowlQuestionsRef) and publish it to this
@@ -116,7 +116,7 @@ jobs:
           cache: 'gradle'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Compute project version
         id: ver
@@ -189,4 +189,4 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
       - name: Generate and submit dependency graph
-        uses: gradle/actions/dependency-submission@v5
+        uses: gradle/actions/dependency-submission@v6
