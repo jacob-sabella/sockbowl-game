@@ -45,7 +45,7 @@ dependencyManagement {
         // Same story for lettuce-core: managed by the Boot BOM via
         // spring-boot-starter-data-redis, so override the managed version
         // here rather than via `constraints{}` (which the BOM would outrank).
-        dependency 'io.lettuce:lettuce-core:7.8.0.RELEASE'
+        dependency 'io.lettuce:lettuce-core:7.9.0.RELEASE'
     }
 }
 
