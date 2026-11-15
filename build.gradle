@@ -132,7 +132,7 @@ dependencies {
     // caffeine versions are managed by the Spring Boot BOM so they stay in step
     // with spring-data-redis.
     implementation 'com.bucket4j:bucket4j_jdk17-core:8.20.0'
-    implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.20.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.22.0'
     implementation 'io.lettuce:lettuce-core'
     implementation 'com.github.ben-manes.caffeine:caffeine'
     implementation 'org.projectlombok:lombok:1.18.48'
